@@ -485,17 +485,7 @@ class EnhancedVisionAgent:
 
         # Build auth headers
         headers = {"Content-Type": "application/json"}
-        if use_managed_identity or not api_key:
-            try:
-                from cloud_config import cloud_cfg
-                credential = DefaultAzureCredential()
-                token = credential.get_token(cloud_cfg.cognitive_services_scope)
-                headers["Authorization"] = f"Bearer {token.token}"
-            except Exception as auth_err:
-                logger.error(f"Fallback auth failed: {auth_err}")
-                return None
-        else:
-            headers["api-key"] = api_key
+        headers["api-key"] = api_key
 
         # Build context
         context_parts = []
