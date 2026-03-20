@@ -1566,7 +1566,8 @@ async def unified_query_processor(request: Request):
         if semantic_translator:
             semantic_translator.set_model(selected_model)
         else:
-            logger.warning("[WARN] semantic_translator is None - AI functionality disabled")
+            logger.critical("[CRITICAL] semantic_translator is None - AI functionality DISABLED. Check LLM API keys and configuration.")
+            raise HTTPException(status_code=500, detail="AI functionality is disabled: LLM API keys/configuration missing or invalid.")
         
         # [MICRO] Generate unique pipeline session ID for tracing
         import uuid
