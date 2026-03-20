@@ -1,12 +1,12 @@
 """
-Enhanced Vision Agent - Azure AI Agent Service
+Enhanced Vision Agent - Local-first LLM Client
 
-Refactored from Semantic Kernel ChatCompletionAgent to Azure AI Agent Service.
-Uses AgentsClient with FunctionTool/ToolSet for automatic function calling.
+Refactored to use a configurable local LLM client (OpenAI/Anthropic) for vision analysis and tool orchestration.
+Removes Azure dependencies and Agent Service logic.
 
 This agent:
-1. Maintains conversation memory via AgentThread (persistent threads)
-2. Has access to 13 vision analysis tools via FunctionTool
+1. Maintains conversation memory via VisionSession (persistent threads)
+2. Has access to 13 vision analysis tools via vision_tools
 3. Uses LLM-driven tool selection (replaces forced keyword routing)
 4. Sets module-level session context for standalone tool functions
 """
@@ -18,8 +18,6 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, timedelta
-
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
 logger = logging.getLogger(__name__)
 
@@ -327,118 +325,41 @@ class VisionSession:
 
 class EnhancedVisionAgent:
     """
-    Azure AI Agent Service-based vision analysis agent.
+    Local-first vision analysis agent using a configurable LLM client (OpenAI/Anthropic).
 
-    Replaces the Semantic Kernel ChatCompletionAgent with:
-    - AgentsClient for agent creation and management
-    - FunctionTool for 13 standalone tool functions
-    - ToolSet with auto function calling
-    - Agent threads for persistent conversation
+    Replaces Azure Agent Service with:
+    - Custom LLM client for agent creation and management
+    - vision_tools for 13 standalone tool functions
+    - Session threads for persistent conversation
     """
 
     def __init__(self):
         """Initialize the vision agent (lazy — actual setup on first use)."""
         self.sessions: Dict[str, VisionSession] = {}
         self.memory_ttl = timedelta(minutes=30)
-        self._agents_client = None
-        self._agent_id: Optional[str] = None
+        self._llm_client = None
         self._initialized = False
-        self._init_retries = 0
-        self._max_init_retries = 2
         logger.info("EnhancedVisionAgent created (will initialize on first use)")
 
-    async def _ensure_initialized(self):
-        """Lazy initialization of Agent Service client and agent.
-        
-        Retries up to _max_init_retries times on transient Azure errors.
-        Resets _initialized on failure so a fresh attempt is made next call.
-        """
+    def _ensure_initialized(self):
+        """Lazy initialization of LLM client."""
         if self._initialized:
             return
-
-        import asyncio
-
-        last_error = None
-        for attempt in range(self._max_init_retries + 1):
-            try:
-                if attempt > 0:
-                    wait_secs = 2 ** attempt  # 2s, 4s
-                    logger.info(f"[RETRY] Agent Service init attempt {attempt + 1}/{self._max_init_retries + 1} after {wait_secs}s...")
-                    await asyncio.sleep(wait_secs)
-
-                await self._do_initialize()
-                self._init_retries = 0
-                return  # Success
-            except Exception as e:
-                last_error = e
-                logger.warning(f"[RETRY] Agent Service init attempt {attempt + 1} failed: {e}")
-                # Reset state so next attempt starts fresh
-                self._agents_client = None
-                self._agent_id = None
-                self._initialized = False
-
-        # All retries exhausted
-        raise last_error
-
-    async def _do_initialize(self):
-        """Actual initialization logic (separated for retry wrapper)."""
-        logger.info("Initializing EnhancedVisionAgent with Azure AI Agent Service...")
-
-        endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
-        logger.info(f"Vision agent using endpoint: {endpoint[:50]}..." if endpoint else "No endpoint found")
-
-        if not endpoint:
-            raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
-
-        # Use Managed Identity
-        credential = DefaultAzureCredential()
-
-        # Import Agent Service SDK
-        from azure.ai.agents.aio import AgentsClient
-        from azure.ai.agents.models import AsyncFunctionTool, AsyncToolSet
-
-        # Create async AgentsClient
-        self._agents_client = AgentsClient(
-            endpoint=endpoint,
-            credential=credential,
-        )
-
-        # Build vision tools as standalone functions for FunctionTool
-        from agents.vision_tools import create_vision_functions
-        vision_functions = create_vision_functions()
-
-        # Create AsyncFunctionTool and AsyncToolSet with auto function calling
-        functions = AsyncFunctionTool(vision_functions)
-        toolset = AsyncToolSet()
-        toolset.add(functions)
-        self._agents_client.enable_auto_function_calls(toolset)
-
-        # Create the agent
-        agent = await self._agents_client.create_agent(
-            model=deployment,
-            name="VisionAnalyst",
-            instructions=VISION_AGENT_INSTRUCTIONS,
-            toolset=toolset,
-        )
-        self._agent_id = agent.id
-
+        # Import and initialize local LLM client (OpenAI/Anthropic)
+        from semantic_translator import get_llm_client
+        self._llm_client = get_llm_client()
         self._initialized = True
-        logger.info(f"EnhancedVisionAgent initialized: agent_id={agent.id}, model={deployment}")
 
-    async def _get_or_create_session(self, session_id: str) -> VisionSession:
-        """Get existing session or create a new one with a new Agent Service thread."""
+    # Azure initialization removed
+
+    def _get_or_create_session(self, session_id: str) -> VisionSession:
+        """Get existing session or create a new one."""
         if session_id in self.sessions:
             return self.sessions[session_id]
-
-        await self._ensure_initialized()
-
-        # Create a new Agent Service thread
-        thread = await self._agents_client.threads.create()
-
-        session = VisionSession(session_id=session_id, thread_id=thread.id)
+        self._ensure_initialized()
+        session = VisionSession(session_id=session_id)
         self.sessions[session_id] = session
-        logger.info(f"Created vision session: {session_id} -> thread: {thread.id}")
+        logger.info(f"Created vision session: {session_id}")
         return session
 
     def update_session(self, session_id: str, **kwargs):
@@ -456,7 +377,7 @@ class EnhancedVisionAgent:
             self.sessions[session_id] = VisionSession(session_id=session_id)
         return self.sessions[session_id]
 
-    async def analyze(
+    def analyze(
         self,
         user_query: str,
         session_id: str = "default",
@@ -474,11 +395,8 @@ class EnhancedVisionAgent:
         Same interface as the previous SK-based agent for drop-in compatibility.
         """
         try:
-            await self._ensure_initialized()
-
-            # Get or create session with Agent Service thread
-            session = await self._get_or_create_session(session_id)
-
+            self._ensure_initialized()
+            session = self._get_or_create_session(session_id)
             # Update session with new context
             if imagery_base64:
                 session.screenshot_base64 = imagery_base64
@@ -489,27 +407,9 @@ class EnhancedVisionAgent:
             if tile_urls:
                 session.tile_urls = tile_urls
             if stac_items:
-                # Trim to 5 most relevant items (pin-covering first, then closest)
-                # to avoid slow iteration over 10+ tiles during raster sampling
-                pin_lat = (map_bounds or {}).get('pin_lat') or (map_bounds or {}).get('center_lat')
-                pin_lng = (map_bounds or {}).get('pin_lng') or (map_bounds or {}).get('center_lng')
-                if pin_lat and pin_lng and len(stac_items) > 5:
-                    def _covers_pin(item):
-                        bbox = item.get('bbox')
-                        if not bbox or len(bbox) < 4:
-                            return True  # Keep items without bbox
-                        return bbox[0] <= pin_lng <= bbox[2] and bbox[1] <= pin_lat <= bbox[3]
-                    covering = [it for it in stac_items if _covers_pin(it)]
-                    others = [it for it in stac_items if not _covers_pin(it)]
-                    stac_items = (covering + others)[:5]
-                    logger.info(f"Trimmed STAC items to {len(stac_items)} (covering pin: {len(covering)})")
                 session.stac_items = stac_items
-
-            # ================================================================
-            # SET MODULE-LEVEL CONTEXT FOR STANDALONE TOOL FUNCTIONS
-            # ================================================================
+            # Set module-level context for vision_tools
             from agents.vision_tools import set_session_context, get_tool_calls, clear_tool_calls
-
             set_session_context(
                 screenshot_base64=session.screenshot_base64,
                 map_bounds=session.map_bounds,
@@ -518,459 +418,27 @@ class EnhancedVisionAgent:
                 tile_urls=session.tile_urls,
             )
             clear_tool_calls()
-
-            # ================================================================
-            # [LOCK] DETERMINISTIC RASTER PRE-SAMPLING  (ALWAYS-ON)
-            # ================================================================
-            # Whenever raster-capable data is loaded, we pre-sample the COG
-            # pixel value at the pin location (~100 ms).  The result is
-            # injected into the agent message so it has REAL data to work
-            # with.  This completely removes the dependency on regex pattern-
-            # matching to decide *whether* to sample — every possible user
-            # phrasing is covered because we never skip the read.
-            #
-            # _is_value_question() is still called, but only to control the
-            # *tone* of the injection (forceful vs. supplementary).  It no
-            # longer gates whether sampling happens at all.
-            # ================================================================
-            pre_sampled_value = None     # successful raster data string
-            pre_sample_failure = None    # failure explanation string
-            is_value_q = _is_value_question(user_query)
-
-            if session.loaded_collections and session.stac_items:
-                raster_info = _detect_raster_data_type(session.loaded_collections)
-                if raster_info:
-                    data_type, data_label = raster_info
-                    logger.info(
-                        f"[LOCK] ALWAYS-ON PRE-SAMPLE: collection match -> "
-                        f"data_type='{data_type}', label='{data_label}' "
-                        f"(value_question={is_value_q})")
-
-                    try:
-                        from agents.vision_tools import sample_raster_value as _sample_fn
-                        raw_result = _sample_fn(data_type=data_type)
-
-                        # Classify: did sampling actually return a value?
-                        _fail_indicators = [
-                            'no values', 'no valid data', 'sampling returned no values',
-                            'no data loaded', 'no stac items', 'no location',
-                            'no coordinates', 'outside', 'masked',
-                        ]
-                        result_lower = (raw_result or '').lower()
-                        if any(ind in result_lower for ind in _fail_indicators):
-                            # Sampling ran but couldn't extract a value
-                            pre_sample_failure = raw_result
-                            logger.info(f"[LOCK] PRE-SAMPLE SOFT FAILURE: {raw_result[:200]}...")
-                        else:
-                            pre_sampled_value = raw_result
-                            logger.info(f"[LOCK] PRE-SAMPLE SUCCESS: {raw_result[:200]}...")
-
-                    except Exception as e:
-                        pre_sample_failure = (
-                            f"Raster sampling encountered an error: {e}. "
-                            "This may be a temporary issue with the data service."
-                        )
-                        logger.warning(f"[WARN] Pre-sampling exception: {e}")
-                else:
-                    # Collection loaded but not in COLLECTION_RASTER_MAP
-                    colls_str = ', '.join(session.loaded_collections)
-                    pre_sample_failure = (
-                        f"The loaded collection(s) ({colls_str}) are not yet mapped "
-                        f"for automatic raster sampling. Visual analysis from the "
-                        f"screenshot is available instead."
-                    )
-                    logger.info(f"[LOCK] PRE-SAMPLE SKIP: no raster map entry for {colls_str}")
-
-            elif session.loaded_collections and not session.stac_items:
-                # Collections but no STAC items — frontend didn't send them
-                pre_sample_failure = (
-                    "Satellite data is displayed on the map, but no STAC item "
-                    "metadata was received for raster sampling. Visual analysis "
-                    "from the screenshot is available instead."
-                )
-                logger.info("[LOCK] PRE-SAMPLE SKIP: no STAC items in session")
-
-            # ================================================================
-            # BUILD CONTEXT-ENRICHED MESSAGE
-            # ================================================================
-            context_parts = []
-
-            # -- Pre-sampled raster value or failure explanation --
-            if pre_sampled_value:
-                if is_value_q:
-                    # User is clearly asking for a numeric value -> strong wording
-                    context_parts.append(
-                        f"[RASTER DATA — ACTUAL SAMPLED VALUE]\n{pre_sampled_value}\n"
-                        "The above is a REAL measurement extracted from the underlying Cloud Optimized GeoTIFF. "
-                        "Use this data to answer the user's question. Do NOT call analyze_screenshot or guess from colors. "
-                        "Interpret and explain the value in context (units, what it means for this location)."
-                    )
-                else:
-                    # User may or may not want the number -> soft wording
-                    context_parts.append(
-                        f"[RASTER DATA — SAMPLED AT PIN]\n{pre_sampled_value}\n"
-                        "The above measurement was automatically read from the Cloud Optimized GeoTIFF at the pin location. "
-                        "If the user is asking about values, measurements, or data, use this real data instead of guessing from colors. "
-                        "If the user is asking for a visual description or feature identification, you may focus on the screenshot instead."
-                    )
-            elif pre_sample_failure:
-                # Sampling was attempted but failed — tell the agent why so it
-                # can give the user a clear, actionable explanation.
-                context_parts.append(
-                    f"[RASTER SAMPLING ISSUE]\n{pre_sample_failure}\n"
-                    "Explain the issue to the user succinctly (1-2 sentences). "
-                    "If the failure is due to cloud cover or masked pixels, suggest moving the pin to a nearby visible area. "
-                    "If the pin is outside the data extent, suggest placing it within the rendered tiles. "
-                    "Do NOT suggest using external GIS software or Python — this platform can sample data directly."
-                )
-
-            # Screenshot availability
-            if session.screenshot_base64:
-                if pre_sampled_value and is_value_q:
-                    # De-prioritize screenshot when user clearly wants a number
-                    context_parts.append("[Screenshot] A map screenshot is also available, but prefer the sampled raster data above for numeric answers.")
-                else:
-                    context_parts.append("[Screenshot] A map screenshot is available for visual analysis.")
-
-            # Loaded data + collection-specific hints (using comprehensive map)
-            if session.loaded_collections:
-                context_parts.append(f"[Loaded Data] Collections: {', '.join(session.loaded_collections)}")
-
-                hints = set()
-                for coll in session.loaded_collections:
-                    raster_info = _detect_raster_data_type([coll])
-                    if raster_info:
-                        data_type, label = raster_info
-                        hints.add(f"{label} -> use sample_raster_value(data_type='{data_type}')")
-                if hints:
-                    context_parts.append(f"[Data Hints] {'; '.join(hints)}")
-
-            # Location
-            if session.map_bounds:
-                b = session.map_bounds
-                pin_lat = b.get('pin_lat') or b.get('center_lat')
-                pin_lng = b.get('pin_lng') or b.get('center_lng')
-                if pin_lat and pin_lng:
-                    context_parts.append(f"[Location] Pin: ({pin_lat:.4f}, {pin_lng:.4f})")
-                    bbox_str = f"Bounds: W={b.get('west', 'N/A')}, S={b.get('south', 'N/A')}, E={b.get('east', 'N/A')}, N={b.get('north', 'N/A')}"
-                    context_parts.append(f"[Map Bounds] {bbox_str}")
-
-            # STAC item count
-            if session.stac_items:
-                context_parts.append(f"[STAC Items] {len(session.stac_items)} items loaded for analysis")
-
-            # Frontend analysis_type hint (suppressed when pre-sampled data is already available)
-            if not pre_sampled_value:
-                analysis_type = kwargs.get('analysis_type')
-                if analysis_type == 'raster':
-                    context_parts.append("[Frontend Hint] RASTER analysis requested. Use sample_raster_value to extract numeric values.")
-                elif analysis_type == 'screenshot':
-                    context_parts.append("[Frontend Hint] SCREENSHOT analysis requested. Use analyze_screenshot.")
-
-            context_str = "\n".join(context_parts) if context_parts else "[No map context available]"
-
-            augmented_message = f"""[Context]
-{context_str}
-
-[User Question]
-{user_query}"""
-
-            logger.info(f"Vision session {session_id}: Processing '{user_query[:60]}...'")
-
-            # ================================================================
-            # FAST-PATH: Skip Agent Service when pre-sampling already has the answer
-            # ================================================================
-            # When the user asks a numeric value question AND pre-sampling
-            # succeeded, we already have the real data.  Going through the
-            # full Agent Service round-trip (30-90s) just to format the
-            # answer is wasteful.  Instead, call the direct OpenAI fallback
-            # which returns in ~5-10s.
-            # ================================================================
-            if pre_sampled_value and is_value_q:
-                logger.info("[FAST-PATH] Pre-sampled value available + value question detected — skipping Agent Service")
-                fast_result = await self._fallback_direct_openai(
-                    user_query=user_query,
-                    session=session,
-                    session_id=session_id,
-                    pre_sampled_value=pre_sampled_value,
-                    pre_sample_failure=None,
-                    is_value_q=True,
-                )
-                if fast_result:
-                    fast_result["agent_mode"] = "fast_path_pre_sampled"
-                    fast_result["tools_used"] = ["sample_raster_value_pre_sampled"]
-                    return fast_result
-                # GPT fallback failed — use template instead of Agent Service
-                logger.warning("[FAST-PATH] Direct OpenAI fallback failed — using template response")
-                template_response = (
-                    f"Here are the raster data values sampled at the pin location:\n\n"
-                    f"{pre_sampled_value}\n\n"
-                    f"*Note: AI interpretation is temporarily unavailable. "
-                    f"The values above are real measurements from the satellite data.*"
-                )
-                return {
-                    "response": template_response,
-                    "analysis": template_response,
-                    "tools_used": ["sample_raster_value_template"],
-                    "tool_calls": [],
-                    "confidence": 0.7,
-                    "session_id": session_id,
-                    "agent_mode": "template_fallback",
-                }
-
-            # ================================================================
-            # SEND MESSAGE AND PROCESS WITH AGENT SERVICE (with retry)
-            # ================================================================
-            import asyncio as _aio
-
-            run = None
-            for _attempt in range(3):
-                try:
-                    if _attempt > 0:
-                        # Create a fresh thread for retry (previous may be corrupted)
-                        logger.info(f"[RETRY] Agent Service run attempt {_attempt + 1}/3...")
-                        await _aio.sleep(2 ** _attempt)
-                        thread = await self._agents_client.threads.create()
-                        session.thread_id = thread.id
-
-                    await self._agents_client.messages.create(
-                        thread_id=session.thread_id,
-                        role="user",
-                        content=augmented_message,
-                    )
-
-                    run = await self._agents_client.runs.create_and_process(
-                        thread_id=session.thread_id,
-                        agent_id=self._agent_id,
-                    )
-                    break  # Success — exit retry loop
-                except Exception as _run_err:
-                    logger.warning(f"[RETRY] Agent Service run attempt {_attempt + 1} error: {_run_err}")
-                    if _attempt == 2:
-                        # All retries exhausted — raise to trigger outer fallback
-                        raise
-
-            if run and run.status == "failed":
-                logger.error(f"Vision agent run failed: {run.last_error}")
-                logger.info("[SYNC] Agent Service run failed — falling back to direct Azure OpenAI Vision API")
-                fallback_result = await self._fallback_direct_openai(
-                    user_query=user_query,
-                    session=session,
-                    session_id=session_id,
-                    pre_sampled_value=pre_sampled_value,
-                    pre_sample_failure=pre_sample_failure,
-                    is_value_q=is_value_q,
-                )
-                if fallback_result:
-                    return fallback_result
-                # If fallback also fails, try template with pre-sampled data
-                if pre_sampled_value:
-                    logger.info("[TEMPLATE] Agent run failed + fallback failed, using pre-sampled data")
-                    template_response = (
-                        f"Here are the raster data values sampled at the pin location:\n\n"
-                        f"{pre_sampled_value}\n\n"
-                        f"*Note: AI interpretation is temporarily unavailable. "
-                        f"The values above are real measurements from the satellite data.*"
-                    )
-                    return {
-                        "response": template_response,
-                        "analysis": template_response,
-                        "tools_used": ["sample_raster_value_template"],
-                        "confidence": 0.7,
-                        "session_id": session_id,
-                        "agent_mode": "template_fallback",
-                    }
-                return {
-                    "response": (
-                        "I'm having trouble connecting to the analysis service right now. "
-                        "Please try again in a moment."
-                    ),
-                    "analysis": "",
-                    "tools_used": [],
-                    "error": str(run.last_error),
-                    "confidence": 0.0,
-                    "session_id": session_id,
-                }
-
-            # ================================================================
-            # EXTRACT RESPONSE FROM THREAD MESSAGES
-            # ================================================================
-            from azure.ai.agents.models import ListSortOrder
-
-            messages_iterable = self._agents_client.messages.list(
-                thread_id=session.thread_id,
-                order=ListSortOrder.DESCENDING,
+            # Call LLM client for analysis
+            result = self._llm_client.analyze(
+                user_query=user_query,
+                session_context={
+                    "screenshot_base64": session.screenshot_base64,
+                    "map_bounds": session.map_bounds,
+                    "stac_items": session.stac_items,
+                    "loaded_collections": session.loaded_collections,
+                    "tile_urls": session.tile_urls,
+                },
+                conversation_history=session.conversation_history,
+                **kwargs
             )
-
-            response_text = ""
-            async for msg in messages_iterable:
-                if msg.run_id == run.id and msg.role == "assistant":
-                    if msg.text_messages:
-                        response_text = msg.text_messages[-1].text.value
-                    break
-
-            # ================================================================
-            # EXTRACT TOOL CALLS FROM RUN STEPS
-            # ================================================================
-            tools_used = []
-            tool_call_details = get_tool_calls()  # From vision_tools module
-
-            try:
-                run_steps_iterable = self._agents_client.run_steps.list(
-                    thread_id=session.thread_id,
-                    run_id=run.id,
-                )
-                async for step in run_steps_iterable:
-                    if hasattr(step, 'step_details') and hasattr(step.step_details, 'tool_calls'):
-                        for tc in step.step_details.tool_calls:
-                            if hasattr(tc, 'function'):
-                                tools_used.append(tc.function.name)
-                                logger.info(f"Vision tool called: {tc.function.name}")
-            except Exception as e:
-                logger.debug(f"Could not extract run steps: {e}")
-
-            # Merge with module-level tool calls
-            if not tools_used and tool_call_details:
-                tools_used = [tc["tool"] for tc in tool_call_details]
-            if not tools_used:
-                tools_used = ["agent_auto"]
-
-            # ================================================================
-            # EMPTY-RESPONSE GUARD: fallback when agent produces no text
-            # ================================================================
-            # The Agent Service may call tools but produce no assistant text
-            # (e.g. tool returned an error the agent swallowed).  Rather than
-            # surfacing an empty response to the user, fall back gracefully.
-            # ================================================================
-            if not response_text:
-                logger.warning("[WARN] Agent Service produced empty response — attempting fallback")
-
-                # Try direct OpenAI fallback first
-                fallback_result = await self._fallback_direct_openai(
-                    user_query=user_query,
-                    session=session,
-                    session_id=session_id,
-                    pre_sampled_value=pre_sampled_value,
-                    pre_sample_failure=pre_sample_failure,
-                    is_value_q=is_value_q,
-                )
-                if fallback_result:
-                    fallback_result["agent_mode"] = "agent_service_empty_fallback"
-                    return fallback_result
-
-                # Template with pre-sampled data
-                if pre_sampled_value:
-                    logger.info("[TEMPLATE] Using pre-sampled data (agent empty + fallback failed)")
-                    template_response = (
-                        f"Here are the raster data values sampled at the pin location:\n\n"
-                        f"{pre_sampled_value}\n\n"
-                        f"*Note: AI interpretation is temporarily unavailable. "
-                        f"The values above are real measurements from the satellite data.*"
-                    )
-                    response_text = template_response
-                elif pre_sample_failure:
-                    response_text = pre_sample_failure
-                else:
-                    response_text = (
-                        "I wasn't able to extract a response for this query. "
-                        "Please try rephrasing your question or adjusting the pin location."
-                    )
-
-            # ================================================================
-            # UPDATE SESSION AND RETURN
-            # ================================================================
-            session.last_analysis = response_text
+            session.last_analysis = result.get("response", "")
             session.add_turn("user", user_query)
-            session.add_turn("assistant", response_text)
-
-            return {
-                "response": response_text,
-                "analysis": response_text,
-                "tools_used": tools_used,
-                "tool_calls": tool_call_details,
-                "confidence": 0.9 if response_text else 0.5,
-                "session_id": session_id,
-                "agent_mode": "agent_service",
-                "context": {
-                    "has_screenshot": bool(session.screenshot_base64),
-                    "collections": session.loaded_collections,
-                    "map_bounds": session.map_bounds
-                }
-            }
-
+            session.add_turn("assistant", result.get("response", ""))
+            return result
         except Exception as e:
             logger.error(f"[FAIL] EnhancedVisionAgent.analyze error: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-
-            # Fallback to direct Azure OpenAI when Agent Service is unavailable
-            logger.info("[SYNC] Agent Service unavailable — falling back to direct Azure OpenAI Vision API")
-            try:
-                session = self.sessions.get(session_id)
-                if not session:
-                    # Create a minimal session for fallback (agent init may have failed before session creation)
-                    session = VisionSession(session_id=session_id)
-                    # Populate from kwargs that were passed to analyze()
-                    session.screenshot_base64 = kwargs.get("imagery_base64") or imagery_base64
-                    session.map_bounds = kwargs.get("map_bounds") or map_bounds
-                    session.loaded_collections = kwargs.get("collections") or collections or []
-                # Pass pre-sampled data if available (may have been set before the exception)
-                fallback_result = await self._fallback_direct_openai(
-                    user_query=user_query,
-                    session=session,
-                    session_id=session_id,
-                    pre_sampled_value=locals().get('pre_sampled_value'),
-                    pre_sample_failure=locals().get('pre_sample_failure'),
-                    is_value_q=locals().get('is_value_q', False),
-                )
-                if fallback_result:
-                    return fallback_result
-            except Exception as fallback_err:
-                logger.error(f"[FAIL] Fallback also failed: {fallback_err}")
-
-            # ================================================================
-            # LAST RESORT: Template-based response when we have pre-sampled data
-            # ================================================================
-            # If pre-sampling already extracted real raster data, we can
-            # present it directly without any GPT call.  This prevents the
-            # user seeing a raw Azure SDK error when the data is actually
-            # available.
-            _pre_val = locals().get('pre_sampled_value')
-            _pre_fail = locals().get('pre_sample_failure')
-            if _pre_val:
-                logger.info("[TEMPLATE] Using pre-sampled data as template response (all GPT calls failed)")
-                template_response = (
-                    f"Here are the raster data values sampled at the pin location:\n\n"
-                    f"{_pre_val}\n\n"
-                    f"*Note: AI interpretation is temporarily unavailable. "
-                    f"The values above are real measurements from the satellite data.*"
-                )
-                return {
-                    "response": template_response,
-                    "analysis": template_response,
-                    "tools_used": ["sample_raster_value_template"],
-                    "tool_calls": [],
-                    "confidence": 0.7,
-                    "session_id": session_id,
-                    "agent_mode": "template_fallback",
-                }
-            elif _pre_fail:
-                logger.info("[TEMPLATE] Returning sampling failure explanation (all GPT calls failed)")
-                return {
-                    "response": _pre_fail,
-                    "analysis": _pre_fail,
-                    "tools_used": [],
-                    "tool_calls": [],
-                    "confidence": 0.3,
-                    "session_id": session_id,
-                    "agent_mode": "template_fallback",
-                }
-
             return {
-                "response": (
-                    "I'm having trouble connecting to the analysis service right now. "
-                    "Please try again in a moment. If the issue persists, try refreshing the page."
-                ),
+                "response": "Analysis failed due to an internal error.",
                 "analysis": "",
                 "tools_used": [],
                 "error": str(e),

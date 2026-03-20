@@ -1,8 +1,8 @@
 """
-Vision Agent Tools - Standalone functions for Azure AI Agent Service FunctionTool.
+Vision Agent Tools - Standalone functions for local-first LLM client.
 
 Refactored from Semantic Kernel @kernel_function class methods on VisionAgentTools
-to standalone functions compatible with Azure AI Agent Service FunctionTool.
+to standalone functions compatible with a configurable OpenAI/Anthropic client.
 
 Each function uses docstring-based parameter descriptions and returns str.
 Session context (screenshot, STAC items, map bounds) is shared via module-level
@@ -12,7 +12,7 @@ agent invocation.
 Usage:
     from agents.vision_tools import create_vision_functions, set_session_context
     functions = create_vision_functions()
-    tool = FunctionTool(functions)
+    # Use with local LLM client
 """
 
 import logging
@@ -40,9 +40,7 @@ _session_context: Dict[str, Any] = {
     'tile_urls': [],
 }
 
-_vision_client = None
 _tool_calls: List[Dict[str, Any]] = []
-_AzureOpenAI = None
 
 
 def set_session_context(
@@ -89,37 +87,15 @@ def _log_tool_call(tool_name: str, args: Dict[str, Any], result_preview: str = "
 # VISION CLIENT (lazy singleton)
 # ============================================================================
 
-def _load_openai():
-    """Lazy load Azure OpenAI SDK."""
-    global _AzureOpenAI
-    if _AzureOpenAI is None:
-        try:
-            from openai import AzureOpenAI
-            _AzureOpenAI = AzureOpenAI
-        except ImportError as e:
-            logger.warning(f"Azure OpenAI SDK not available: {e}")
+def _get_llm_client():
+    """Get or create the local LLM client (OpenAI/Anthropic)."""
+    from semantic_translator import get_llm_client
+    return get_llm_client()
 
 
 def _get_vision_client():
-    """Get or create the Azure OpenAI client for vision and knowledge calls."""
-    global _vision_client
-    if _vision_client is None:
-        _load_openai()
-        if _AzureOpenAI is None:
-            return None
-        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-        from cloud_config import cloud_cfg
-        credential = DefaultAzureCredential()
-        token_provider = get_bearer_token_provider(
-            credential, cloud_cfg.cognitive_services_scope
-        )
-        _vision_client = _AzureOpenAI(
-            azure_ad_token_provider=token_provider,
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            timeout=120.0
-        )
-    return _vision_client
+    """Get or create the local LLM client for vision and knowledge calls."""
+    return _get_llm_client()
 
 
 # ============================================================================
@@ -338,7 +314,7 @@ def analyze_screenshot(question: str) -> str:
     try:
         client = _get_vision_client()
         if not client:
-            return "Vision analysis unavailable - Azure OpenAI client not initialized."
+            return "Vision analysis unavailable - LLM client not initialized."
 
         image_data = screenshot
         if image_data.startswith('data:image'):
@@ -364,21 +340,12 @@ Guidelines:
 - Be specific about locations and features
 - If you can't see something clearly, say so"""
 
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
-        response = client.chat.completions.create(
-            model=deployment,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": [
-                    {"type": "text", "text": question},
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:image/png;base64,{image_data}", "detail": "high"
-                    }}
-                ]}
-            ],
-            max_completion_tokens=1000, temperature=0.3
+        result = client.analyze_screenshot(
+            question=question,
+            image_data=image_data,
+            context=context_str,
+            system_prompt=system_prompt
         )
-        result = response.choices[0].message.content
         _log_tool_call("analyze_screenshot", {"question": question, "has_image": True}, result)
         return result
 
