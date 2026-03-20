@@ -10,19 +10,21 @@ FROM node:20-alpine AS frontend-build
 WORKDIR /frontend
 
 # Copy package files for dependency installation
-COPY web-ui/package*.json ./
+COPY ../web-ui/package*.json ./
 
 # Install Node.js dependencies
 RUN npm ci
 
 # Copy frontend source code
-COPY web-ui/ ./
+COPY ../web-ui/ ./web-ui/
 
 # Fix permissions and build the React application for production
-RUN chmod +x node_modules/.bin/* && npm run build
+WORKDIR /frontend/web-ui
+RUN chmod +x ../node_modules/.bin/* && npm run build
+WORKDIR /frontend
 
 # List contents of dist directory for debugging
-RUN ls -la dist/
+RUN ls -la web-ui/dist/
 
 # =============================================================================
 # STAGE 2: Python Backend with Static Files
@@ -55,9 +57,9 @@ ENV C_INCLUDE_PATH=/usr/include/gdal
 WORKDIR /app
 
 # Copy Python requirements and install dependencies
-COPY container-app/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+  pip install --no-cache-dir -r requirements.txt
 
 # Copy all Python modules
 COPY container-app/*.py ./
@@ -68,12 +70,12 @@ COPY container-app/*.json ./
 # Copy agents folder (Vision Agent and other AI agents)
 COPY container-app/agents/ ./agents/
 
-# Copy geoint folder (GEOINT agents and modules) from container-app
+# Copy geoint folder (GEOINT agents and modules)
 COPY container-app/geoint/ ./geoint/
 
 # Create static directory and copy built React app
 RUN mkdir -p /app/static
-COPY --from=frontend-build /frontend/dist/ /app/static/
+COPY --from=frontend-build /frontend/web-ui/dist/ /app/static/
 
 # Create uploads directory (if needed)
 RUN mkdir -p /app/uploads
