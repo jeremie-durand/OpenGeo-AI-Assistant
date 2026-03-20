@@ -1,43 +1,33 @@
 # FastAPI Earth Copilot API - Complete Implementation
 # Containerized version with full Earth Copilot functionality ported from Azure Functions
 
-from fastapi import FastAPI, HTTPException, Request, Body
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+import asyncio
+import hashlib
 import json
 import logging
 import os
 import sys
-import traceback
-import asyncio
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
-import aiohttp
-from pathlib import Path
-import hashlib
 import time
+import traceback
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
+import aiohttp
+from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from hybrid_rendering_system import \
+    HybridRenderingSystem  # [ART] Comprehensive rendering system
+from pydantic import BaseModel, Field
+from quickstart_cache import (  # [LAUNCH] Pre-computed cache for demo queries
+    get_quickstart_classification, get_quickstart_location,
+    get_quickstart_stats, is_quickstart_query)
+from tile_selector import \
+    TileSelector  # [TARGET] Smart tile selection and ranking
 # Import Earth Copilot modules
 from titiler_config import get_tile_scale  # Legacy tile scale function
-from hybrid_rendering_system import HybridRenderingSystem  # [ART] Comprehensive rendering system
-from tile_selector import TileSelector  # [TARGET] Smart tile selection and ranking
-from quickstart_cache import (
-    is_quickstart_query, 
-    get_quickstart_classification, 
-    get_quickstart_location,
-    get_quickstart_stats
-)  # [LAUNCH] Pre-computed cache for demo queries
-from cloud_config import cloud_cfg  # [CLOUD] Cloud environment configuration (Commercial/Government)
-
-# Microsoft Teams Bot integration (optional — requires botbuilder-core)
-try:
-    from teams_bot import EarthCopilotBot, create_bot_adapter
-    from botbuilder.schema import Activity
-    TEAMS_BOT_AVAILABLE = True
-except ImportError:
-    TEAMS_BOT_AVAILABLE = False
 
 # ============================================================================
 # � INSTANT PIPELINE TRACING - Collect steps for API response
@@ -283,12 +273,11 @@ except ImportError as e:
 
 # Import PC config loader for STAC search and rendering (single source of truth)
 try:
-    from pc_tasks_config_loader import (
-        load_pc_metadata,
-        get_collection_metadata,
-        get_pc_rendering_config as get_rendering_config,
-        get_all_collection_ids
-    )
+    from pc_tasks_config_loader import (get_all_collection_ids,
+                                        get_collection_metadata)
+    from pc_tasks_config_loader import \
+        get_pc_rendering_config as get_rendering_config
+    from pc_tasks_config_loader import load_pc_metadata
     PC_METADATA_AVAILABLE = True
     metadata = load_pc_metadata()
     total_collections = metadata.get('metadata', {}).get('total_collections', 0)
@@ -362,7 +351,7 @@ except ImportError as e:
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     from fastapi.staticfiles import StaticFiles
-    
+
     # Mount static assets at root level to match React build paths
     app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets")), name="assets")
     logger.info(f"[OK] Mounted static assets from: {os.path.join(static_dir, 'assets')}")
@@ -383,7 +372,7 @@ if os.path.exists(static_dir):
     async def serve_pc_collections_metadata():
         """Serve PC collections metadata JSON (from unified config)"""
         from fastapi.responses import JSONResponse
-        
+
         # Get data from unified JSON
         metadata = load_pc_metadata()
         
@@ -457,6 +446,7 @@ else:
 async def serve_pc_rendering_config():
     """Serve unified PC rendering config JSON (contains descriptions AND rendering params)"""
     from fastapi.responses import FileResponse
+
     # Check in current directory (where fastapi_app.py is)
     json_path = os.path.join(os.path.dirname(__file__), "pc_rendering_config.json")
     logger.info(f"[SEARCH] Looking for pc_rendering_config.json at: {json_path}")
@@ -659,7 +649,7 @@ async def startup_event():
 
     # Validate LLM configuration (non-fatal in local mode)
     try:
-        from llm_client import get_llm_client, LLMConfigurationError
+        from llm_client import LLMConfigurationError, get_llm_client
 
         client = get_llm_client()
         logger.info(f"[OK] LLM client initialized (provider={client.provider}, model={client.model})")
@@ -953,6 +943,7 @@ async def try_alternative_queries(
                         # Apply tile selection
                         if alt_features:
                             from tile_selector import TileSelector
+
                             # Use same dynamic tile limit as main query
                             fallback_max_tiles = 50  # Default for fallback queries
                             if requested_bbox and len(requested_bbox) == 4:
@@ -991,7 +982,8 @@ async def try_alternative_queries(
     logger.info(f"[DATE] RELAXATION 2: Checking date range expansion for datetime='{datetime_str}'")
     if datetime_str and "/" in datetime_str:
         try:
-            from datetime import datetime as dt, timedelta
+            from datetime import datetime as dt
+            from datetime import timedelta
             start, end = datetime_str.split("/")
             logger.info(f"[DATE] Parsed date range: start='{start}', end='{end}'")
             start_dt = dt.fromisoformat(start.replace("Z", ""))
@@ -1031,6 +1023,7 @@ async def try_alternative_queries(
                             
                             if alt_features:
                                 from tile_selector import TileSelector
+
                                 # Use same dynamic tile limit as main query
                                 fallback_max_tiles = 50
                                 if requested_bbox and len(requested_bbox) == 4:
@@ -1108,6 +1101,7 @@ async def try_alternative_queries(
                     
                     if alt_features:
                         from tile_selector import TileSelector
+
                         # Use same dynamic tile limit as main query
                         fallback_max_tiles = 50
                         if requested_bbox and len(requested_bbox) == 4:
@@ -1427,8 +1421,8 @@ def _enhance_tilejson_url(url: str, collection_id: str) -> str:
         Enhanced URL with optimal rendering parameters
     """
     try:
-        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-        
+        from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
         # Get optimal rendering configuration from HybridRenderingSystem
         render_config = HybridRenderingSystem.get_render_config(collection_id)
         
@@ -2138,7 +2132,9 @@ async def unified_query_processor(request: Request):
                         
                         if center_lat is not None and center_lng is not None:
                             import uuid as _uuid
-                            from geoint.extreme_weather_agent import get_extreme_weather_agent
+
+                            from geoint.extreme_weather_agent import \
+                                get_extreme_weather_agent
                             
                             agent = get_extreme_weather_agent()
                             climate_session_id = session_id or str(_uuid.uuid4())
@@ -2365,7 +2361,8 @@ async def unified_query_processor(request: Request):
                 # imagery has been loaded yet.
                 # ========================================================================
                 
-                from agents import get_vision_agent  # EnhancedVisionAgent with 5 tools
+                from agents import \
+                    get_vision_agent  # EnhancedVisionAgent with 5 tools
                 vision_agent = get_vision_agent()
                 conversation_history = req_body.get('conversation_history', []) or req_body.get('messages', [])
                 
@@ -2378,7 +2375,8 @@ async def unified_query_processor(request: Request):
                     logger.info("[CHART] RouterAgent classified as STAC search — skipping vision keyword detection")
                 else:
                     # STEP 2: Use keyword detector for non-STAC queries
-                    from geoint.chat_vision_analyzer import get_chat_vision_analyzer
+                    from geoint.chat_vision_analyzer import \
+                        get_chat_vision_analyzer
                     chat_vision_detector = get_chat_vision_analyzer()
                     needs_vision = chat_vision_detector.should_use_vision(natural_query, conversation_history)
                     
@@ -2886,7 +2884,8 @@ async def unified_query_processor(request: Request):
                         # where the GPT datetime_translation_agent returns None or fails.
                         # ========================================================================
                         if not stac_query.get('datetime') and natural_query:
-                            import re, calendar as cal_mod
+                            import calendar as cal_mod
+                            import re
                             query_lower = natural_query.lower()
                             month_names = {
                                 'january': 1, 'february': 2, 'march': 3, 'april': 4,
@@ -4292,9 +4291,12 @@ async def geoint_terrain_analysis(request: Request):
         # ── FALLBACK: Direct tool calls when Agent Service is blocked by PE ──
         if agent_result is None:
             logger.info(f"[MTN] [{request_id}] Using direct terrain tool fallback (PE lockdown)")
-            from geoint.terrain_tools import get_elevation_analysis, get_slope_analysis, find_flat_areas, analyze_flood_risk, analyze_environmental_sensitivity
+            from azure.identity import DefaultAzureCredential
+            from azure.identity import get_bearer_token_provider as _gbt
+            from geoint.terrain_tools import (
+                analyze_environmental_sensitivity, analyze_flood_risk,
+                find_flat_areas, get_elevation_analysis, get_slope_analysis)
             from openai import AsyncAzureOpenAI
-            from azure.identity import DefaultAzureCredential, get_bearer_token_provider as _gbt
             _aoai_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
             if not _aoai_endpoint:
                 raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
@@ -4502,7 +4504,10 @@ async def geoint_terrain_chat(request: Request):
         
         if result is None:
             logger.info(f"[MSG] [{request_id}] Using direct terrain tool fallback (PE lockdown)")
-            from geoint.terrain_tools import get_elevation_analysis, get_slope_analysis, find_flat_areas, analyze_flood_risk
+            from geoint.terrain_tools import (analyze_flood_risk,
+                                              find_flat_areas,
+                                              get_elevation_analysis,
+                                              get_slope_analysis)
             
             tool_results = {}
             for name, fn in [("elevation", get_elevation_analysis), ("slope", get_slope_analysis),
@@ -4999,8 +5004,9 @@ async def geoint_building_damage_analysis(request: Request):
         agent_start = time.time()
         
         # Create vision client for GPT-5 screenshot analysis
+        from azure.identity import DefaultAzureCredential
+        from azure.identity import get_bearer_token_provider as _gbt
         from openai import AsyncAzureOpenAI
-        from azure.identity import DefaultAzureCredential, get_bearer_token_provider as _gbt
         _aoai_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
         if not _aoai_endpoint:
             raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
@@ -5126,9 +5132,10 @@ async def geoint_building_damage_analysis(request: Request):
             logger.info("Building Damage: Using direct tool fallback (PE lockdown)")
             
             import json as json_mod
-            
+
             # 1) Run the damage assessment tool directly (uses warm vision_analyzer)
-            from geoint.building_damage_tools import _assess_damage_async, _classify_severity_async
+            from geoint.building_damage_tools import (_assess_damage_async,
+                                                      _classify_severity_async)
             
             assess_result = await _assess_damage_async(latitude, longitude, radius_miles)
             classify_result = await _classify_severity_async(latitude, longitude)
@@ -5282,9 +5289,9 @@ async def geoint_extreme_weather_analysis(request: Request):
         if is_overview_query and not request_data.get("session_id"):
             try:
                 logger.info(f"[STORM] [{request_id}] FAST PATH: Direct get_climate_overview call")
-                from geoint.extreme_weather_tools import get_climate_overview
                 from geoint.extreme_weather_agent import _reverse_geocode_cache
-                
+                from geoint.extreme_weather_tools import get_climate_overview
+
                 # Run climate overview in thread pool (it's sync code with blocking I/O)
                 loop = asyncio.get_event_loop()
                 raw_result = await asyncio.wait_for(
@@ -5318,8 +5325,10 @@ async def geoint_extreme_weather_analysis(request: Request):
                             location_name = f"({latitude:.4f}, {longitude:.4f})"
                     
                     # Single LLM call to format the raw data into prose
+                    from azure.identity import DefaultAzureCredential
+                    from azure.identity import \
+                        get_bearer_token_provider as _gbt
                     from openai import AsyncAzureOpenAI
-                    from azure.identity import DefaultAzureCredential, get_bearer_token_provider as _gbt
                     _aoai_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
                     if not _aoai_endpoint:
                         raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
@@ -5352,7 +5361,8 @@ async def geoint_extreme_weather_analysis(request: Request):
                     # "compare scenarios" question (saves ~2-5s on compare).
                     # --------------------------------------------------------
                     try:
-                        from geoint.extreme_weather_tools import _search_cmip6_items as _prewarm_stac
+                        from geoint.extreme_weather_tools import \
+                            _search_cmip6_items as _prewarm_stac
                         loop.run_in_executor(None, _prewarm_stac, latitude, longitude, 'tasmax', 'ssp245', 2030, 1)
                         logger.info(f"[STORM] [{request_id}] Pre-warming ssp245 STAC cache")
                     except Exception:
@@ -5392,9 +5402,10 @@ async def geoint_extreme_weather_analysis(request: Request):
         if is_comparison_query:
             try:
                 logger.info(f"[STORM] [{request_id}] FAST PATH COMPARE: Direct compare_climate_scenarios call")
-                from geoint.extreme_weather_tools import compare_climate_scenarios
                 from geoint.extreme_weather_agent import _reverse_geocode_cache
-                
+                from geoint.extreme_weather_tools import \
+                    compare_climate_scenarios
+
                 # Extract year from query if mentioned (e.g. "by 2050", "in 2060")
                 year_match = _re.search(r'\b(20[2-9]\d|2100)\b', message)
                 target_year = int(year_match.group()) if year_match else 2030
@@ -5431,8 +5442,10 @@ async def geoint_extreme_weather_analysis(request: Request):
                             location_name = f"({latitude:.4f}, {longitude:.4f})"
                     
                     # Single LLM call to format comparison data into prose
+                    from azure.identity import DefaultAzureCredential
+                    from azure.identity import \
+                        get_bearer_token_provider as _gbt
                     from openai import AsyncAzureOpenAI
-                    from azure.identity import DefaultAzureCredential, get_bearer_token_provider as _gbt
                     _aoai_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
                     if not _aoai_endpoint:
                         raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
@@ -5579,7 +5592,8 @@ async def geoint_extreme_weather_analysis(request: Request):
                         location_name = _reverse_geocode_cache.get(geo_key)
                         if not location_name:
                             try:
-                                from semantic_translator import geocoding_plugin
+                                from semantic_translator import \
+                                    geocoding_plugin
                                 geo_result = await geocoding_plugin.azure_maps_reverse_geocode(latitude, longitude)
                                 geo_data = json.loads(geo_result)
                                 if not geo_data.get("error"):
@@ -5594,8 +5608,10 @@ async def geoint_extreme_weather_analysis(request: Request):
                             except Exception:
                                 location_name = f"({latitude:.4f}, {longitude:.4f})"
                         
+                        from azure.identity import DefaultAzureCredential
+                        from azure.identity import \
+                            get_bearer_token_provider as _gbt
                         from openai import AsyncAzureOpenAI
-                        from azure.identity import DefaultAzureCredential, get_bearer_token_provider as _gbt
                         _aoai_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
                         if not _aoai_endpoint:
                             raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
@@ -5665,8 +5681,10 @@ async def geoint_extreme_weather_analysis(request: Request):
                         geo_key = f"{latitude:.4f}:{longitude:.4f}"
                         location_name = _reverse_geocode_cache.get(geo_key, f"({latitude:.4f}, {longitude:.4f})")
                         
+                        from azure.identity import DefaultAzureCredential
+                        from azure.identity import \
+                            get_bearer_token_provider as _gbt
                         from openai import AsyncAzureOpenAI
-                        from azure.identity import DefaultAzureCredential, get_bearer_token_provider as _gbt
                         _aoai_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
                         if not _aoai_endpoint:
                             raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
@@ -5809,8 +5827,10 @@ async def cmip6_diagnostic_test(
     Example: /api/geoint/cmip6-test?lat=42.15&lng=-100.27&variable=tasmax
     Example: /api/geoint/cmip6-test?lat=18.47&lng=-66.10&variable=pr&aggregate=annual
     """
-    from geoint.extreme_weather_tools import _search_cmip6_items, _sample_netcdf
     import time
+
+    from geoint.extreme_weather_tools import (_sample_netcdf,
+                                              _search_cmip6_items)
     
     result = {"steps": [], "success": False}
     
@@ -5979,8 +5999,12 @@ async def geoint_comparison_analysis(request: Request):
                     after_dt = datetime_result["after"]
                     
                     # Step 2: Determine collection + asset
-                    from geoint.comparison_tools import COLLECTION_MAP, ASSET_MAP, TILE_EXTRA_PARAMS, _get_scene_date, _format_date_display
-                    
+                    from geoint.comparison_tools import (ASSET_MAP,
+                                                         COLLECTION_MAP,
+                                                         TILE_EXTRA_PARAMS,
+                                                         _format_date_display,
+                                                         _get_scene_date)
+
                     # Pick primary collection from parsed collections
                     primary_collection = None
                     if collections:
@@ -5995,8 +6019,9 @@ async def geoint_comparison_analysis(request: Request):
                         primary_collection = "sentinel-2-l2a"
                     
                     # Step 3: Execute dual STAC searches
-                    from geoint.comparison_tools import _execute_stac_search
                     import asyncio as _asyncio
+
+                    from geoint.comparison_tools import _execute_stac_search
                     
                     before_result, after_result = await _asyncio.gather(
                         _execute_stac_search(primary_collection, bbox, before_dt, limit=3),
