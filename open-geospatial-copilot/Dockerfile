@@ -57,7 +57,7 @@ ENV C_INCLUDE_PATH=/usr/include/gdal
 WORKDIR /app
 
 # Copy Python requirements and install dependencies
-COPY container-app/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
   pip install --no-cache-dir -r requirements.txt
 
