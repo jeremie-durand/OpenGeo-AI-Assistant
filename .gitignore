@@ -476,3 +476,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# AI code generation files
+.claude/
+openspec/
+.github/prompts
+.github/skills
