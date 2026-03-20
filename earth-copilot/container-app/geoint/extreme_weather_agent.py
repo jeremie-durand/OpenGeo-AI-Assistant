@@ -17,9 +17,6 @@ import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-from cloud_config import cloud_cfg
-
 logger = logging.getLogger(__name__)
 
 # Reverse-geocode cache: same coordinates always return the same place name.
@@ -180,34 +177,11 @@ class ExtremeWeatherAgent:
         
         logger.info(f"ExtremeWeatherAgent using endpoint: {endpoint}, model: {deployment}")
         
-        credential = DefaultAzureCredential()
-        
-        from azure.ai.agents.aio import AgentsClient
-        from azure.ai.agents.models import AsyncFunctionTool, AsyncToolSet
-        
-        self._agents_client = AgentsClient(
-            endpoint=endpoint,
-            credential=credential,
-        )
-        
-        from geoint.extreme_weather_tools import create_extreme_weather_functions
-        climate_functions = create_extreme_weather_functions()
-        
-        functions = AsyncFunctionTool(climate_functions)
-        toolset = AsyncToolSet()
-        toolset.add(functions)
-        self._agents_client.enable_auto_function_calls(toolset)
-        
-        agent = await self._agents_client.create_agent(
-            model=deployment,
-            name="ExtremeWeatherAnalyst",
-            instructions=EXTREME_WEATHER_AGENT_INSTRUCTIONS,
-            toolset=toolset,
-        )
-        self._agent_id = agent.id
-        
+        from semantic_translator import get_llm_client
+        self._agents_client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
+        self._agent_id = self._agents_client.model
         self._initialized = True
-        logger.info(f"ExtremeWeatherAgent initialized: agent_id={agent.id}, model={deployment}")
+        logger.info(f"ExtremeWeatherAgent initialized: model={self._agent_id}")
     
     async def _get_or_create_session(
         self, 
@@ -247,21 +221,9 @@ class ExtremeWeatherAgent:
     ) -> Optional[str]:
         """Pre-analyze a map screenshot using GPT-5 Vision for climate context."""
         try:
-            from openai import AsyncAzureOpenAI
-
+            from semantic_translator import get_llm_client
             logger.info(f"Running visual analysis for climate context at ({latitude:.4f}, {longitude:.4f})")
-
-            credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(
-                credential, cloud_cfg.cognitive_services_scope
-            )
-
-            client = AsyncAzureOpenAI(
-                azure_ad_token_provider=token_provider,
-                api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
-                azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-                timeout=120.0
-            )
+            client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
 
             clean_base64 = screenshot_base64
             if screenshot_base64.startswith('data:image'):
@@ -438,10 +400,10 @@ Be specific and concise."""
                         "session_id": session_id
                     }
                 
-                from azure.ai.agents.models import ListSortOrder
+                # List messages in descending order (latest first)
                 messages_iterable = self._agents_client.messages.list(
                     thread_id=session.thread_id,
-                    order=ListSortOrder.DESCENDING,
+                    order="desc",
                 )
                 
                 response_content = ""
@@ -535,10 +497,10 @@ Be specific and concise."""
         
         try:
             await self._ensure_initialized()
-            from azure.ai.agents.models import ListSortOrder
+            # List messages in ascending order (oldest first)
             messages_iterable = self._agents_client.messages.list(
                 thread_id=session.thread_id,
-                order=ListSortOrder.ASCENDING,
+                order="asc",
             )
             
             history = []

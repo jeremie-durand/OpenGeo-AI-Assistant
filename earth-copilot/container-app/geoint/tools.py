@@ -39,8 +39,7 @@ class GeospatialTools:
     
     def __init__(self):
         """Initialize the tools with STAC endpoint."""
-        from cloud_config import cloud_cfg
-        self.stac_endpoint = cloud_cfg.stac_catalog_url
+        self.stac_endpoint = "http://localhost:8081"
         logger.info(" GeospatialTools initialized")
     
     async def calculate_terrain_slope(

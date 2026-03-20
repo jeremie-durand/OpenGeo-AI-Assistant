@@ -29,13 +29,11 @@ import time
 from typing import Dict, Any, List, Set, Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from cloud_config import cloud_cfg
-
 logger = logging.getLogger(__name__)
 
 # Module-level STAC catalog (lazy-loaded)
 _catalog = None
-_stac_endpoint = cloud_cfg.stac_catalog_url
+_stac_endpoint = "http://localhost:8081"
 
 # ============================================================
 # STAC SEARCH CACHE — avoid redundant identical STAC queries

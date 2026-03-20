@@ -17,10 +17,7 @@ import os
 import base64
 from io import BytesIO
 import aiohttp
-from openai import AzureOpenAI
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 import planetary_computer
-from cloud_config import cloud_cfg
 from datetime import datetime, timedelta
 from pystac_client import Client
 
@@ -44,32 +41,13 @@ class VisionAnalyzer:
         endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         use_managed_identity = os.getenv("AZURE_OPENAI_USE_MANAGED_IDENTITY", "").lower() == "true"
         
-        if use_managed_identity or not api_key:
-            # Use Managed Identity authentication (DefaultAzureCredential)
-            logger.info(" VisionAnalyzer: Using Managed Identity for Azure OpenAI authentication")
-            credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(
-                credential, cloud_cfg.cognitive_services_scope
-            )
-            self.client = AzureOpenAI(
-                azure_ad_token_provider=token_provider,
-                api_version=api_version,
-                azure_endpoint=endpoint,
-                timeout=180.0  # 3 minute timeout for vision API calls
-            )
-        else:
-            # Use API key authentication
-            logger.info(" VisionAnalyzer: Using API key for Azure OpenAI authentication")
-            self.client = AzureOpenAI(
-                api_key=api_key,
-                api_version=api_version,
-                azure_endpoint=endpoint,
-                timeout=180.0  # 3 minute timeout for vision API calls
-            )
+        from semantic_translator import get_llm_client
+        logger.info(" VisionAnalyzer: Using provider-agnostic vision client")
+        self.client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
         
-        # Use GPT-5 deployment name (default)
-        self.deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
-        self.stac_endpoint = cloud_cfg.stac_catalog_url
+        # Use provider-agnostic LLM model environment variable for deployment name
+        self.deployment_name = os.getenv("COPILOT_LLM_MODEL", "gpt-5")
+        self.stac_endpoint = "http://localhost:8081"
         
         # OPTIMIZATION: Simple imagery cache to avoid re-fetching same tiles
         # Key: (lat, lon, radius) rounded to 2 decimals, Value: (image_bytes, metadata, timestamp)

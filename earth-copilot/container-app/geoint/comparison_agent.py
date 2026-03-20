@@ -17,9 +17,6 @@ import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-from cloud_config import cloud_cfg
-
 logger = logging.getLogger(__name__)
 
 COMPARISON_AGENT_INSTRUCTIONS = """You are a GEOINT Temporal Comparison Agent specializing in before/after satellite imagery analysis for change detection.
@@ -157,34 +154,11 @@ class ComparisonAgent:
 
         logger.info(f"ComparisonAgent using endpoint: {endpoint}")
 
-        credential = DefaultAzureCredential()
-
-        from azure.ai.agents.aio import AgentsClient
-        from azure.ai.agents.models import AsyncFunctionTool, AsyncToolSet
-
-        self._agents_client = AgentsClient(
-            endpoint=endpoint,
-            credential=credential,
-        )
-
-        from geoint.comparison_tools import create_comparison_functions
-        comparison_functions = create_comparison_functions()
-
-        functions = AsyncFunctionTool(comparison_functions)
-        toolset = AsyncToolSet()
-        toolset.add(functions)
-        self._agents_client.enable_auto_function_calls(toolset)
-
-        agent = await self._agents_client.create_agent(
-            model=deployment,
-            name="GeointComparisonAnalyst",
-            instructions=COMPARISON_AGENT_INSTRUCTIONS,
-            toolset=toolset,
-        )
-        self._agent_id = agent.id
-
+        from semantic_translator import get_llm_client
+        self._agents_client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
+        self._agent_id = self._agents_client.model
         self._initialized = True
-        logger.info(f"ComparisonAgent initialized: agent_id={agent.id}, model={deployment}")
+        logger.info(f"ComparisonAgent initialized: model={self._agent_id}")
 
     async def _get_or_create_session(self, session_id: str) -> ComparisonSession:
         if session_id in self.sessions:
@@ -206,21 +180,9 @@ class ComparisonAgent:
     ) -> Optional[str]:
         """Pre-analyze a map screenshot using GPT-5 Vision for comparison context."""
         try:
-            from openai import AsyncAzureOpenAI
-
+            from semantic_translator import get_llm_client
             logger.info(f"Running visual analysis for comparison context at ({latitude:.4f}, {longitude:.4f})")
-
-            credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(
-                credential, cloud_cfg.cognitive_services_scope
-            )
-
-            client = AsyncAzureOpenAI(
-                azure_ad_token_provider=token_provider,
-                api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
-                azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-                timeout=120.0
-            )
+            client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
 
             clean_base64 = screenshot_base64
             if screenshot_base64.startswith('data:image'):
@@ -358,9 +320,9 @@ Be specific and concise."""
                         continue
                     return {"status": "error", "message": f"Comparison analysis error: {run.last_error}"}
 
-                from azure.ai.agents.models import ListSortOrder
+                # List messages in descending order (latest first)
                 messages_iterable = self._agents_client.messages.list(
-                    thread_id=session.thread_id, order=ListSortOrder.DESCENDING)
+                    thread_id=session.thread_id, order="desc")
 
                 response_content = ""
                 tool_calls = []

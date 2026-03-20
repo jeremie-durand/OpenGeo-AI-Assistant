@@ -23,9 +23,7 @@ from calendar import monthrange
 
 logger = logging.getLogger(__name__)
 
-from cloud_config import cloud_cfg
-
-STAC_URL = cloud_cfg.stac_catalog_url
+STAC_URL = "http://localhost:8081"
 
 # Module-level capture of the last compare_temporal_imagery result.
 # The Azure AI Agent SDK's run_steps API may not reliably expose tool outputs
@@ -469,23 +467,8 @@ def analyze_comparison_imagery(location: str, before_tile_url: str, after_tile_u
                 "analysis": f"Could not fetch preview images for visual comparison of {location}. The before/after tile URLs are available on the map for manual inspection using the BEFORE/AFTER toggle buttons."
             })
 
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
-
-        if not endpoint:
-            return json.dumps({"status": "error", "analysis": "Azure OpenAI endpoint not configured."})
-
-        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-        from openai import AzureOpenAI
-        credential = DefaultAzureCredential()
-        token_provider = get_bearer_token_provider(credential, cloud_cfg.cognitive_services_scope)
-
-        client = AzureOpenAI(
-            azure_endpoint=endpoint,
-            azure_ad_token_provider=token_provider,
-            api_version="2024-12-01-preview",
-            timeout=120.0,
-        )
+        from semantic_translator import get_llm_client
+        client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
 
         analysis_prompts = {
             "general": f"Compare these two satellite images of {location}. The first is the BEFORE image and the second is the AFTER image. Describe all visible changes: structural, vegetation, water, land use, etc.",

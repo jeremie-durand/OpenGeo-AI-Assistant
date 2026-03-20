@@ -57,8 +57,7 @@ class RasterDataFetcher:
     
     def __init__(self):
         """Initialize the raster data fetcher."""
-        from cloud_config import cloud_cfg
-        self.stac_endpoint = cloud_cfg.stac_catalog_url
+        self.stac_endpoint = "http://localhost:8081"
         self._catalog = None
         logger.info(" RasterDataFetcher initialized")
     

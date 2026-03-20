@@ -16,8 +16,6 @@ from fastapi.staticfiles import StaticFiles
 from hybrid_rendering_system import HybridRenderingSystem  # [ART] Comprehensive rendering system
 from pydantic import BaseModel, Field
 from quickstart_cache import get_quickstart_classification, get_quickstart_location, get_quickstart_stats, is_quickstart_query  # [LAUNCH] Pre-computed cache for demo queries
-# Import Earth Copilot modules
-from titiler_config import get_tile_scale  # Legacy tile scale function
 
 # ============================================================================
 # � INSTANT PIPELINE TRACING - Collect steps for API response
@@ -251,15 +249,6 @@ def build_tile_url_params(collection_id: str, query_context: str = None) -> str:
     4. Safe fallbacks for unknown collections
     """
     return HybridRenderingSystem.build_titiler_url_params(collection_id, query_context)
-
-# Import Planetary Computer authentication
-try:
-    import planetary_computer
-    PLANETARY_COMPUTER_AVAILABLE = True
-    logging.info("[OK] Planetary Computer authentication available")
-except ImportError as e:
-    PLANETARY_COMPUTER_AVAILABLE = False
-    logging.warning(f"[WARN] Planetary Computer authentication not available: {e}")
 
 # Import PC config loader for STAC search and rendering (single source of truth)
 try:
@@ -1532,38 +1521,6 @@ async def get_config():
             "baseUrl": "/api"
         }
     }
-
-@app.post("/api/sign-mosaic-url")
-async def sign_mosaic_url(request: Request):
-    """Sign a Planetary Computer mosaic URL with authentication token"""
-    try:
-        body = await request.json()
-        mosaic_url = body.get('url')
-        
-        if not mosaic_url:
-            raise HTTPException(status_code=400, detail="Missing 'url' parameter")
-        
-        if not PLANETARY_COMPUTER_AVAILABLE:
-            logger.warning("[LOCK] [SIGN-MOSAIC-URL] PC auth unavailable — returning unsigned URL")
-            return {"signed_url": mosaic_url, "authenticated": False}
-        
-        try:
-            signed_url = planetary_computer.sign(mosaic_url)
-        except Exception as sign_error:
-            logger.error(f"[LOCK] [SIGN-MOSAIC-URL] sign() failed: {sign_error}")
-            signed_url = mosaic_url
-        
-        is_titiler = 'planetarycomputer.microsoft.com/api/data/v1' in signed_url
-        has_sas = 'se=' in signed_url or 'sig=' in signed_url
-        logger.info(f"[LOCK] [SIGN-MOSAIC-URL] [OK] type={'titiler' if is_titiler else 'blob'} sas={has_sas} len={len(signed_url)}")
-        
-        return {"signed_url": signed_url, "authenticated": True}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"[LOCK] [SIGN-MOSAIC-URL] [FAIL] {type(e).__name__}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to sign URL: {str(e)}")
 
 # ============================================================================
 # COLORMAP ENDPOINTS REMOVED
@@ -4235,107 +4192,6 @@ async def geoint_terrain_analysis(request: Request):
             logger.warning(f"[MTN] [{request_id}] Agent failed ({agent_err}), falling back to direct tools")
             agent_result = None
         
-        # ── FALLBACK: Direct tool calls when Agent Service is blocked by PE ──
-        if agent_result is None:
-            logger.info(f"[MTN] [{request_id}] Using direct terrain tool fallback (PE lockdown)")
-            from azure.identity import DefaultAzureCredential
-            from azure.identity import get_bearer_token_provider as _gbt
-            from geoint.terrain_tools import (
-                analyze_environmental_sensitivity, analyze_flood_risk,
-                find_flat_areas, get_elevation_analysis, get_slope_analysis)
-            from openai import AsyncAzureOpenAI
-            _aoai_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
-            if not _aoai_endpoint:
-                raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
-            _terrain_client = AsyncAzureOpenAI(
-                azure_endpoint=_aoai_endpoint,
-                api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-                azure_ad_token_provider=_gbt(
-                    DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default"
-                ) if not os.environ.get("AZURE_OPENAI_API_KEY") else None,
-                api_version="2024-12-01-preview",
-            )
-            
-            tool_results = {}
-            tool_calls_made = []
-            
-            try:
-                tool_results["elevation"] = get_elevation_analysis(latitude, longitude, radius_km)
-                tool_calls_made.append("get_elevation_analysis")
-            except Exception as te:
-                logger.warning(f"[MTN] [{request_id}] Elevation tool failed: {te}")
-            
-            try:
-                tool_results["slope"] = get_slope_analysis(latitude, longitude, radius_km)
-                tool_calls_made.append("get_slope_analysis")
-            except Exception as te:
-                logger.warning(f"[MTN] [{request_id}] Slope tool failed: {te}")
-            
-            try:
-                tool_results["flat_areas"] = find_flat_areas(latitude, longitude, radius_km)
-                tool_calls_made.append("find_flat_areas")
-            except Exception as te:
-                logger.warning(f"[MTN] [{request_id}] Flat areas tool failed: {te}")
-            
-            try:
-                tool_results["flood_risk"] = analyze_flood_risk(latitude, longitude, radius_km)
-                tool_calls_made.append("analyze_flood_risk")
-            except Exception as te:
-                logger.warning(f"[MTN] [{request_id}] Flood risk tool failed: {te}")
-            
-            try:
-                tool_results["environment"] = analyze_environmental_sensitivity(latitude, longitude, radius_km)
-                tool_calls_made.append("analyze_environmental_sensitivity")
-            except Exception as te:
-                logger.warning(f"[MTN] [{request_id}] Environment tool failed: {te}")
-            
-            # Synthesize with _terrain_client
-            tool_summary = "\n\n".join([f"### {k.replace('_', ' ').title()}\n{v}" for k, v in tool_results.items() if v])
-            
-            visual_analysis = ""
-            if screenshot:
-                try:
-                    clean_b64 = screenshot
-                    if clean_b64.startswith('data:image'):
-                        clean_b64 = clean_b64.split(',', 1)[1]
-                    vision_resp = await _terrain_client.chat.completions.create(
-                        model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5"),
-                        messages=[
-                            {"role": "system", "content": "You are an expert terrain analyst. Analyze satellite imagery for terrain features."},
-                            {"role": "user", "content": [
-                                {"type": "text", "text": f"Analyze this satellite image at ({latitude:.4f}, {longitude:.4f}). "
-                                 f"Identify terrain features: elevation changes, slopes, water bodies, vegetation, flat areas. "
-                                 f"{'User query: ' + user_query if user_query else ''}"},
-                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{clean_b64}", "detail": "high"}}
-                            ]}
-                        ],
-                        max_completion_tokens=2000,
-                        temperature=1.0
-                    )
-                    visual_analysis = vision_resp.choices[0].message.content
-                except Exception as vis_err:
-                    logger.warning(f"[MTN] [{request_id}] Screenshot analysis failed: {vis_err}")
-            
-            # Use GPT to synthesize all tool results into a coherent response
-            synthesis_parts = []
-            if visual_analysis:
-                synthesis_parts.append(f"## Visual Analysis\n\n{visual_analysis}")
-            if tool_summary:
-                synthesis_parts.append(f"## DEM & Tool Analysis\n\n{tool_summary}")
-            
-            combined = "\n\n".join(synthesis_parts) if synthesis_parts else "Terrain analysis completed. Limited data available for this location."
-            
-            agent_result = {
-                "response": combined,
-                "analysis": combined,
-                "tool_calls": [{"tool": t} for t in tool_calls_made],
-                "message_count": 1
-            }
-            logger.info(f"[MTN] [{request_id}] Direct terrain fallback completed ({len(tool_calls_made)} tools)")
-        
-        agent_elapsed = time.time() - agent_start
-        logger.info(f"[MTN] [{request_id}] [OK] TERRAIN COMPLETED ({agent_elapsed:.2f}s)")
-        
         return {
             "status": "success",
             "result": {
@@ -4469,8 +4325,10 @@ async def geoint_terrain_chat(request: Request):
             # Synthesize with _terrain_client
             synthesis_prompt = f"User question: {message}\n\nTerrain data for ({latitude:.4f}, {longitude:.4f}):\n{tool_summary}"
             try:
+                from semantic_translator import get_llm_client
+                _terrain_client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"))
                 synth_resp = await _terrain_client.chat.completions.create(
-                    model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5"),
+                    model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"),
                     messages=[
                         {"role": "system", "content": "You are a terrain analysis expert. Synthesize the provided DEM/terrain tool data into a clear, comprehensive answer to the user's question."},
                         {"role": "user", "content": synthesis_prompt}
@@ -4950,21 +4808,9 @@ async def geoint_building_damage_analysis(request: Request):
         import time
         agent_start = time.time()
         
-        # Create vision client for GPT-5 screenshot analysis
-        from azure.identity import DefaultAzureCredential
-        from azure.identity import get_bearer_token_provider as _gbt
-        from openai import AsyncAzureOpenAI
-        _aoai_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
-        if not _aoai_endpoint:
-            raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
-        _vision_client = AsyncAzureOpenAI(
-            azure_endpoint=_aoai_endpoint,
-            api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-            azure_ad_token_provider=_gbt(
-                DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default"
-            ) if not os.environ.get("AZURE_OPENAI_API_KEY") else None,
-            api_version="2024-12-01-preview",
-        )
+        # Create vision client for GPT-5 screenshot analysis (local-first, multi-provider)
+        from semantic_translator import get_llm_client
+        _vision_client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
         
         # ── PATH 1: Screenshot provided — analyze the loaded map imagery ──
         # When the user has loaded data (NAIP, Sentinel-2, Landsat, etc.) and
@@ -5012,7 +4858,7 @@ async def geoint_building_damage_analysis(request: Request):
             
             try:
                 vision_response = await _vision_client.chat.completions.create(
-                    model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5"),
+                    model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"),
                     messages=[
                         {"role": "system", "content": "You are a GEOINT Building Damage Assessment expert. Analyze the provided imagery and give structured damage assessments."},
                         {"role": "user", "content": [
@@ -5096,7 +4942,7 @@ async def geoint_building_damage_analysis(request: Request):
                         clean_b64 = clean_b64.split(',', 1)[1]
                     
                     vision_response = await _vision_client.chat.completions.create(
-                        model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5"),
+                        model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"),
                         messages=[
                             {"role": "system", "content": "You are an expert in structural damage assessment from satellite imagery. Provide detailed, factual analysis."},
                             {"role": "user", "content": [
@@ -5272,21 +5118,8 @@ async def geoint_extreme_weather_analysis(request: Request):
                             location_name = f"({latitude:.4f}, {longitude:.4f})"
                     
                     # Single LLM call to format the raw data into prose
-                    from azure.identity import DefaultAzureCredential
-                    from azure.identity import \
-                        get_bearer_token_provider as _gbt
-                    from openai import AsyncAzureOpenAI
-                    _aoai_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
-                    if not _aoai_endpoint:
-                        raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
-                    _fmt_client = AsyncAzureOpenAI(
-                        azure_endpoint=_aoai_endpoint,
-                        api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-                        azure_ad_token_provider=_gbt(
-                            DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default"
-                        ) if not os.environ.get("AZURE_OPENAI_API_KEY") else None,
-                        api_version="2024-12-01-preview",
-                    )
+                    from semantic_translator import get_llm_client
+                    _fmt_client = get_llm_client()
                     
                     fmt_resp = await _fmt_client.chat.completions.create(
                         model=os.environ.get("AZURE_OPENAI_FAST_DEPLOYMENT", "gpt-4o-mini"),
@@ -5389,21 +5222,8 @@ async def geoint_extreme_weather_analysis(request: Request):
                             location_name = f"({latitude:.4f}, {longitude:.4f})"
                     
                     # Single LLM call to format comparison data into prose
-                    from azure.identity import DefaultAzureCredential
-                    from azure.identity import \
-                        get_bearer_token_provider as _gbt
-                    from openai import AsyncAzureOpenAI
-                    _aoai_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
-                    if not _aoai_endpoint:
-                        raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
-                    _fmt_client = AsyncAzureOpenAI(
-                        azure_endpoint=_aoai_endpoint,
-                        api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-                        azure_ad_token_provider=_gbt(
-                            DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default"
-                        ) if not os.environ.get("AZURE_OPENAI_API_KEY") else None,
-                        api_version="2024-12-01-preview",
-                    )
+                    from semantic_translator import get_llm_client
+                    _fmt_client = get_llm_client()
                     
                     fmt_resp = await _fmt_client.chat.completions.create(
                         model=os.environ.get("AZURE_OPENAI_FAST_DEPLOYMENT", "gpt-4o-mini"),
@@ -5555,21 +5375,8 @@ async def geoint_extreme_weather_analysis(request: Request):
                             except Exception:
                                 location_name = f"({latitude:.4f}, {longitude:.4f})"
                         
-                        from azure.identity import DefaultAzureCredential
-                        from azure.identity import \
-                            get_bearer_token_provider as _gbt
-                        from openai import AsyncAzureOpenAI
-                        _aoai_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
-                        if not _aoai_endpoint:
-                            raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
-                        _fmt_client = AsyncAzureOpenAI(
-                            azure_endpoint=_aoai_endpoint,
-                            api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-                            azure_ad_token_provider=_gbt(
-                                DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default"
-                            ) if not os.environ.get("AZURE_OPENAI_API_KEY") else None,
-                            api_version="2024-12-01-preview",
-                        )
+                        from semantic_translator import get_llm_client
+                        _fmt_client = get_llm_client()
                         
                         scenario_desc = "SSP2-4.5 (moderate)" if scenario == "ssp245" else "SSP5-8.5 (worst-case)"
                         combined_data = "\n\n".join(all_data_parts)
@@ -5628,21 +5435,8 @@ async def geoint_extreme_weather_analysis(request: Request):
                         geo_key = f"{latitude:.4f}:{longitude:.4f}"
                         location_name = _reverse_geocode_cache.get(geo_key, f"({latitude:.4f}, {longitude:.4f})")
                         
-                        from azure.identity import DefaultAzureCredential
-                        from azure.identity import \
-                            get_bearer_token_provider as _gbt
-                        from openai import AsyncAzureOpenAI
-                        _aoai_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
-                        if not _aoai_endpoint:
-                            raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
-                        _fmt_client = AsyncAzureOpenAI(
-                            azure_endpoint=_aoai_endpoint,
-                            api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-                            azure_ad_token_provider=_gbt(
-                                DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default"
-                            ) if not os.environ.get("AZURE_OPENAI_API_KEY") else None,
-                            api_version="2024-12-01-preview",
-                        )
+                        from semantic_translator import get_llm_client
+                        _fmt_client = get_llm_client()
                         
                         scenario_desc = "SSP2-4.5 (moderate)" if scenario == "ssp245" else "SSP5-8.5 (worst-case)"
                         fmt_resp = await _fmt_client.chat.completions.create(

@@ -17,9 +17,6 @@ import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-from cloud_config import cloud_cfg
-
 logger = logging.getLogger(__name__)
 
 BUILDING_DAMAGE_AGENT_INSTRUCTIONS = """You are a GEOINT Building Damage Assessment Agent specializing in structural damage analysis from satellite imagery.
@@ -148,34 +145,11 @@ class BuildingDamageAgent:
 
         logger.info(f"BuildingDamageAgent using endpoint: {endpoint}, model: {deployment}")
 
-        credential = DefaultAzureCredential()
-
-        from azure.ai.agents.aio import AgentsClient
-        from azure.ai.agents.models import AsyncFunctionTool, AsyncToolSet
-
-        self._agents_client = AgentsClient(
-            endpoint=endpoint,
-            credential=credential,
-        )
-
-        from geoint.building_damage_tools import create_building_damage_functions
-        damage_functions = create_building_damage_functions()
-
-        functions = AsyncFunctionTool(damage_functions)
-        toolset = AsyncToolSet()
-        toolset.add(functions)
-        self._agents_client.enable_auto_function_calls(toolset)
-
-        agent = await self._agents_client.create_agent(
-            model=deployment,
-            name="GeointBuildingDamageAnalyst",
-            instructions=BUILDING_DAMAGE_AGENT_INSTRUCTIONS,
-            toolset=toolset,
-        )
-        self._agent_id = agent.id
-
+        from semantic_translator import get_llm_client
+        self._agents_client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
+        self._agent_id = self._agents_client.model
         self._initialized = True
-        logger.info(f"BuildingDamageAgent initialized: agent_id={agent.id}, model={deployment}")
+        logger.info(f"BuildingDamageAgent initialized: model={self._agent_id}")
 
     async def _get_or_create_session(self, session_id: str, latitude: float, longitude: float) -> BuildingDamageSession:
         if session_id in self.sessions:
@@ -192,23 +166,13 @@ class BuildingDamageAgent:
     async def _analyze_screenshot_direct(self, screenshot_base64: str, latitude: float, longitude: float) -> Optional[str]:
         """Directly analyze a screenshot using GPT-5 Vision for damage."""
         try:
-            from openai import AsyncAzureOpenAI
-            credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(credential, cloud_cfg.cognitive_services_scope)
-
-            client = AsyncAzureOpenAI(
-                azure_ad_token_provider=token_provider,
-                api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
-                azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-                timeout=120.0
-            )
-
+            from semantic_translator import get_llm_client
+            client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
             clean_base64 = screenshot_base64
             if screenshot_base64.startswith('data:image'):
                 clean_base64 = screenshot_base64.split(',', 1)[1]
-
             response = await client.chat.completions.create(
-                model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5"),
+                model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"),
                 messages=[
                     {"role": "system", "content": "You are an expert in structural damage assessment from satellite imagery."},
                     {"role": "user", "content": [
@@ -330,9 +294,9 @@ class BuildingDamageAgent:
                         continue
                     return {"agent": self.name, "response": f"Error: {run.last_error}", "session_id": session_id}
 
-                from azure.ai.agents.models import ListSortOrder
+                # List messages in descending order (latest first)
                 messages_iterable = self._agents_client.messages.list(
-                    thread_id=session.thread_id, order=ListSortOrder.DESCENDING)
+                    thread_id=session.thread_id, order="desc")
 
                 response_content = ""
                 tool_calls = []

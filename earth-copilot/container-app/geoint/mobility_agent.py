@@ -17,9 +17,6 @@ import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-from cloud_config import cloud_cfg
-
 logger = logging.getLogger(__name__)
 
 # Agent system prompt
@@ -161,32 +158,23 @@ class GeointMobilityAgent:
 
         logger.info(f"GeointMobilityAgent using endpoint: {endpoint}")
 
-        credential = DefaultAzureCredential()
-
-        from azure.ai.agents.aio import AgentsClient
-        from azure.ai.agents.models import AsyncFunctionTool, AsyncToolSet
-
-        self._agents_client = AgentsClient(
-            endpoint=endpoint,
-            credential=credential,
-        )
+        from semantic_translator import get_llm_client
+        self._agents_client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
+        self._agent_id = self._agents_client.model
+        self._initialized = True
+        logger.info(f"GeointMobilityAgent initialized: model={self._agent_id}")
 
         from geoint.mobility_tools import create_mobility_functions
         mobility_functions = create_mobility_functions()
-
-        functions = AsyncFunctionTool(mobility_functions)
-        toolset = AsyncToolSet()
-        toolset.add(functions)
-        self._agents_client.enable_auto_function_calls(toolset)
+        self._agents_client.register_tools(mobility_functions)
 
         agent = await self._agents_client.create_agent(
             model=deployment,
             name="GeointMobilityAnalyst",
             instructions=MOBILITY_AGENT_INSTRUCTIONS,
-            toolset=toolset,
+            toolset=mobility_functions,
         )
         self._agent_id = agent.id
-
         self._initialized = True
         logger.info(f"GeointMobilityAgent initialized: agent_id={agent.id}, model={deployment}")
 
@@ -221,40 +209,26 @@ class GeointMobilityAgent:
         Uses low detail and tight token budget to stay under 8s.
         """
         try:
-            from openai import AsyncAzureOpenAI
-            credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(credential, cloud_cfg.cognitive_services_scope)
-
-            client = AsyncAzureOpenAI(
-                azure_ad_token_provider=token_provider,
-                api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
-                azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-                timeout=15.0
-            )
-
+            from semantic_translator import get_llm_client
+            client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
             clean_base64 = screenshot_base64
             if screenshot_base64.startswith('data:image'):
                 clean_base64 = screenshot_base64.split(',', 1)[1]
-
-            response = await client.chat.completions.create(
-                model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5"),
-                messages=[
-                    {"role": "system", "content": "You identify infrastructure in satellite imagery. Respond in JSON only."},
-                    {"role": "user", "content": [
-                        {"type": "text", "text": (
-                            f"Location: ({latitude:.4f}, {longitude:.4f}). "
-                            "List visible man-made infrastructure ONLY: roads, bridges, buildings, "
-                            "airstrips, rail lines, dams. Respond as JSON: "
-                            '{"roads": bool, "bridges": bool, "buildings": bool, '
-                            '"airstrips": bool, "other_infrastructure": ["..."], '
-                            '"summary": "one sentence"}'
-                        )},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{clean_base64}", "detail": "low"}}
-                    ]}
-                ],
-                max_completion_tokens=300
-            )
-            analysis = response.choices[0].message.content
+            vision_prompt = {
+                "system": "You identify infrastructure in satellite imagery. Respond in JSON only.",
+                "user": [
+                    {"type": "text", "text": (
+                        f"Location: ({latitude:.4f}, {longitude:.4f}). "
+                        "List visible man-made infrastructure ONLY: roads, bridges, buildings, "
+                        "airstrips, rail lines, dams. Respond as JSON: "
+                        '{"roads": bool, "bridges": bool, "buildings": bool, '
+                        '"airstrips": bool, "other_infrastructure": ["..."], '
+                        '"summary": "one sentence"}'
+                    )},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{clean_base64}", "detail": "low"}}
+                ]
+            }
+            analysis = await client.vision_analyze(prompt=vision_prompt, max_tokens=300)
             logger.info(f"Mobility vision (infrastructure) complete: {len(analysis)} chars")
             return analysis
         except Exception as e:
@@ -425,10 +399,9 @@ class GeointMobilityAgent:
                         "session_id": session_id
                     }
 
-                from azure.ai.agents.models import ListSortOrder
                 messages_iterable = self._agents_client.messages.list(
                     thread_id=session.thread_id,
-                    order=ListSortOrder.DESCENDING,
+                    order="desc",
                 )
 
                 response_content = ""

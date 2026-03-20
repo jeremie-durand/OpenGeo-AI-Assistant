@@ -25,12 +25,11 @@ import numpy as np
 import planetary_computer
 import pystac_client
 import requests
-from cloud_config import cloud_cfg
 
 logger = logging.getLogger(__name__)
 
 # Module-level constants
-STAC_ENDPOINT = cloud_cfg.stac_catalog_url
+STAC_ENDPOINT = "http://localhost:8081"
 RADIUS_MILES = 5
 SLOPE_THRESHOLD_SLOW = 15   # degrees
 SLOPE_THRESHOLD_NO_GO = 30  # degrees
@@ -522,84 +521,6 @@ def _build_elevation_transect(lat1: float, lon1: float, lat2: float, lon2: float
         }
     }
 
-
-def _get_azure_maps_route(lat1: float, lon1: float, lat2: float, lon2: float) -> Optional[Dict[str, Any]]:
-    """Call Azure Maps Route Directions API to get road route info."""
-    maps_key = os.getenv("AZURE_MAPS_SUBSCRIPTION_KEY") or os.getenv("AZURE_MAPS_KEY")
-    if not maps_key:
-        logger.warning("Azure Maps key not configured — skipping route lookup")
-        return None
-    try:
-        url = f"{cloud_cfg.azure_maps_base_url}/route/directions/json"
-        params = {
-            "api-version": "1.0",
-            "subscription-key": maps_key,
-            "query": f"{lat1},{lon1}:{lat2},{lon2}",
-            "travelMode": "car",
-            "routeType": "fastest",
-        }
-        resp = requests.get(url, params=params, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            routes = data.get("routes", [])
-            if routes:
-                summary = routes[0].get("summary", {})
-                return {
-                    "road_route_available": True,
-                    "travel_time_seconds": summary.get("travelTimeInSeconds", 0),
-                    "travel_time_minutes": round(summary.get("travelTimeInSeconds", 0) / 60, 1),
-                    "road_distance_km": round(summary.get("lengthInMeters", 0) / 1000, 2),
-                    "road_distance_miles": round(summary.get("lengthInMeters", 0) / 1609.34, 2),
-                    "traffic_delay_seconds": summary.get("trafficDelayInSeconds", 0),
-                    "departure_time": summary.get("departureTime", ""),
-                    "arrival_time": summary.get("arrivalTime", ""),
-                }
-            else:
-                return {"road_route_available": False, "reason": "No road route found between points"}
-        else:
-            logger.error(f"Azure Maps Route API returned {resp.status_code}")
-            return {"road_route_available": False, "reason": f"API error {resp.status_code}"}
-    except Exception as e:
-        logger.error(f"Azure Maps route lookup failed: {e}")
-        return None
-
-
-def _get_azure_maps_weather(lat: float, lon: float) -> Optional[Dict[str, Any]]:
-    """Call Azure Maps Weather - Current Conditions for a point."""
-    maps_key = os.getenv("AZURE_MAPS_SUBSCRIPTION_KEY") or os.getenv("AZURE_MAPS_KEY")
-    if not maps_key:
-        return None
-    try:
-        url = f"{cloud_cfg.azure_maps_base_url}/weather/currentConditions/json"
-        params = {
-            "api-version": "1.1",
-            "subscription-key": maps_key,
-            "query": f"{lat},{lon}",
-        }
-        resp = requests.get(url, params=params, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            results = data.get("results", [])
-            if results:
-                r = results[0]
-                return {
-                    "phrase": r.get("phrase", "Unknown"),
-                    "temperature_c": r.get("temperature", {}).get("value"),
-                    "humidity_pct": r.get("relativeHumidity"),
-                    "wind_speed_kmh": r.get("wind", {}).get("speed", {}).get("value"),
-                    "wind_direction": r.get("wind", {}).get("direction", {}).get("localizedDescription"),
-                    "visibility_km": r.get("visibility", {}).get("value"),
-                    "cloud_cover_pct": r.get("cloudCover"),
-                    "has_precipitation": r.get("hasPrecipitation", False),
-                    "precipitation_type": r.get("precipitationType"),
-                    "observation_time": r.get("dateTime", ""),
-                }
-        return None
-    except Exception as e:
-        logger.error(f"Azure Maps weather lookup failed: {e}")
-        return None
-
-
 # ============================================================================
 # PUBLIC TOOL FUNCTIONS (registered with AsyncFunctionTool)
 # All functions are fully synchronous — no asyncio wrappers.
@@ -1035,13 +956,10 @@ def analyze_two_point_traverse(latitude_a: float, longitude_a: float, latitude_b
         dem_items = prefetched.get("cop-dem-glo-30") or None
 
         # Run ALL analyses in PARALLEL with pre-fetched STAC data:
-        with ThreadPoolExecutor(max_workers=6 + num_waypoints) as executor:
+        with ThreadPoolExecutor(max_workers=2 + num_waypoints) as executor:
             future_a = executor.submit(_analyze_all_directions_sync, latitude_a, longitude_a, prefetched)
             future_b = executor.submit(_analyze_all_directions_sync, latitude_b, longitude_b, prefetched)
             future_transect = executor.submit(_build_elevation_transect, latitude_a, longitude_a, latitude_b, longitude_b, 10, dem_items)
-            future_route = executor.submit(_get_azure_maps_route, latitude_a, longitude_a, latitude_b, longitude_b)
-            future_weather_a = executor.submit(_get_azure_maps_weather, latitude_a, longitude_a)
-            future_weather_b = executor.submit(_get_azure_maps_weather, latitude_b, longitude_b)
             corridor_futures = [
                 executor.submit(_sample_corridor_point, wp["latitude"], wp["longitude"], prefetched)
                 for wp in waypoints
@@ -1065,9 +983,9 @@ def analyze_two_point_traverse(latitude_a: float, longitude_a: float, latitude_b
                 logger.error(f"Elevation transect failed: {e}")
                 elevation_transect = None
 
-            road_route = future_route.result(timeout=15)
-            weather_a = future_weather_a.result(timeout=10)
-            weather_b = future_weather_b.result(timeout=10)
+            road_route = None
+            weather_a = None
+            weather_b = None
 
         # Compute corridor summary
         corridor_statuses = [wp.get("status", "GO") for wp in corridor_results]

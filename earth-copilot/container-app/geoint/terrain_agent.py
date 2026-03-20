@@ -17,9 +17,6 @@ import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-from cloud_config import cloud_cfg
-
 logger = logging.getLogger(__name__)
 
 # Agent system prompt (unchanged - well-crafted for terrain analysis)
@@ -167,35 +164,21 @@ class TerrainAgent:
         
         logger.info(f"TerrainAgent using endpoint: {endpoint}")
         
-        # Use Managed Identity
-        credential = DefaultAzureCredential()
-        
-        # Import Agent Service SDK
-        from azure.ai.agents.aio import AgentsClient
-        from azure.ai.agents.models import AsyncFunctionTool, AsyncToolSet
-        
-        # Create async AgentsClient
-        self._agents_client = AgentsClient(
-            endpoint=endpoint,
-            credential=credential,
-        )
+        from semantic_translator import get_llm_client
+        self._agents_client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
         
         # Build terrain tools as standalone functions for FunctionTool
         from geoint.terrain_tools import create_terrain_functions
         terrain_functions = create_terrain_functions()
         
-        # Create AsyncFunctionTool and AsyncToolSet with auto function calling
-        functions = AsyncFunctionTool(terrain_functions)
-        toolset = AsyncToolSet()
-        toolset.add(functions)
-        self._agents_client.enable_auto_function_calls(toolset)
+        self._agents_client.register_tools(terrain_functions)
         
         # Create the agent
         agent = await self._agents_client.create_agent(
             model=deployment,
             name="TerrainAnalyst",
             instructions=TERRAIN_AGENT_INSTRUCTIONS,
-            toolset=toolset,
+            toolset=terrain_functions,
         )
         self._agent_id = agent.id
         
@@ -247,21 +230,9 @@ class TerrainAgent:
         Uses the standard OpenAI client (not Agent Service) for vision.
         """
         try:
-            from openai import AsyncAzureOpenAI
-            
+            from semantic_translator import get_llm_client
             logger.info(f"Running direct vision analysis at ({latitude:.4f}, {longitude:.4f})")
-            
-            credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(
-                credential, cloud_cfg.cognitive_services_scope
-            )
-            
-            client = AsyncAzureOpenAI(
-                azure_ad_token_provider=token_provider,
-                api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
-                azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-                timeout=120.0
-            )
+            client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
             
             # Clean base64 if needed
             clean_base64 = screenshot_base64
@@ -438,10 +409,9 @@ Be specific and quantitative where possible."""
                     }
                 
                 # Get messages from the thread (newest first)
-                from azure.ai.agents.models import ListSortOrder
                 messages_iterable = self._agents_client.messages.list(
                     thread_id=session.thread_id,
-                    order=ListSortOrder.DESCENDING,
+                    order="desc",
                 )
                 
                 # Extract the assistant's latest response
@@ -532,10 +502,9 @@ Be specific and quantitative where possible."""
         
         try:
             await self._ensure_initialized()
-            from azure.ai.agents.models import ListSortOrder
             messages_iterable = self._agents_client.messages.list(
                 thread_id=session.thread_id,
-                order=ListSortOrder.ASCENDING,
+                order="asc",
             )
             
             history = []

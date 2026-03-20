@@ -33,8 +33,6 @@ from semantic_kernel.contents.chat_history import ChatHistory
 from semantic_kernel.contents.chat_message_content import ChatMessageContent
 from semantic_kernel.contents.utils.author_role import AuthorRole
 from semantic_kernel.functions import kernel_function
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-from cloud_config import cloud_cfg
 
 # Import comprehensive collection keywords from CollectionMapper
 try:
@@ -538,27 +536,8 @@ class RouterAgent:
             
         logger.info(" Initializing RouterAgent with Semantic Kernel...")
         
-        # Set up Azure OpenAI service
-        # Use FAST deployment (gpt-4o-mini) for routing — classification/extraction
-        # tasks don't need GPT-5's deep reasoning, just fast structured output
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        deployment = os.getenv("AZURE_OPENAI_FAST_DEPLOYMENT", "gpt-4o-mini")
-        api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
-        
-        # Use Managed Identity
-        credential = DefaultAzureCredential()
-        token_provider = get_bearer_token_provider(
-            credential, cloud_cfg.cognitive_services_scope
-        )
-        
-        # Create Azure OpenAI chat completion service
-        chat_service = AzureChatCompletion(
-            deployment_name=deployment,
-            endpoint=endpoint,
-            api_version=api_version,
-            ad_token_provider=token_provider,
-            service_id="router_chat"
-        )
+        from semantic_translator import get_llm_client
+        chat_service = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-4o-mini"), vision=False)
         
         self.kernel.add_service(chat_service)
         

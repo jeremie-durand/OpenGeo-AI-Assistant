@@ -379,11 +379,7 @@ async def _download_and_visualize_raster(
         date_end = (target_date + timedelta(days=1)).isoformat()
         
         # Search STAC catalog
-        from cloud_config import cloud_cfg
-        catalog = pystac_client.Client.open(
-            cloud_cfg.stac_catalog_url,
-            modifier=planetary_computer.sign_inplace
-        )
+        catalog = pystac_client.Client.open("http://localhost:8081")
         
         search = catalog.search(
             collections=[collection_id],
@@ -734,19 +730,6 @@ How the {aspect_focus} has evolved over the {_calculate_time_span(before_date, a
         headers = {
             "Content-Type": "application/json"
         }
-        
-        if use_managed_identity or not azure_openai_key:
-            # Use Managed Identity - get bearer token
-            logger.info(" Using Managed Identity for Azure OpenAI authentication")
-            from azure.identity import DefaultAzureCredential
-            from cloud_config import cloud_cfg
-            credential = DefaultAzureCredential()
-            token = credential.get_token(cloud_cfg.cognitive_services_scope)
-            headers["Authorization"] = f"Bearer {token.token}"
-        else:
-            # Use API key
-            logger.info(" Using API key for Azure OpenAI authentication")
-            headers["api-key"] = azure_openai_key
         
         # Build image list dynamically
         user_content = [{"type": "text", "text": user_prompt}]

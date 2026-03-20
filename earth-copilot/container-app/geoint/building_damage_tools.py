@@ -57,19 +57,9 @@ def _analyze_screenshot_with_vision_sync(screenshot_base64: str, latitude: float
     Uses the high-resolution screenshot the user is actually looking at
     instead of fetching low-res Sentinel-2 imagery.
     """
-    from openai import AzureOpenAI
-    from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-    from cloud_config import cloud_cfg
 
-    credential = DefaultAzureCredential()
-    token_provider = get_bearer_token_provider(credential, cloud_cfg.cognitive_services_scope)
-
-    client = AzureOpenAI(
-        azure_ad_token_provider=token_provider,
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-        timeout=60.0,
-    )
+    from semantic_translator import get_llm_client
+    client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
 
     clean_base64 = screenshot_base64
     if screenshot_base64.startswith("data:image"):

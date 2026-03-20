@@ -18,7 +18,6 @@ import json
 from typing import Dict, Any, List, Set, Callable
 
 import numpy as np
-from cloud_config import cloud_cfg
 
 logger = logging.getLogger(__name__)
 

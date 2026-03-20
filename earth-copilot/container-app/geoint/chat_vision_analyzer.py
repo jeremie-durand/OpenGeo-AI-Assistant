@@ -27,10 +27,6 @@ import logging
 import os
 import base64
 import aiohttp
-from openai import AzureOpenAI
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-from cloud_config import cloud_cfg
-from urllib.parse import urlencode, parse_qs, urlparse
 import planetary_computer
 
 logger = logging.getLogger(__name__)
@@ -44,36 +40,10 @@ class ChatVisionAnalyzer:
     
     def __init__(self):
         """Initialize chat vision analyzer with Azure OpenAI."""
-        # Support both API key and Managed Identity authentication
-        api_key = os.getenv("AZURE_OPENAI_API_KEY")
-        api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        use_managed_identity = os.getenv("AZURE_OPENAI_USE_MANAGED_IDENTITY", "").lower() == "true"
-        
-        if use_managed_identity or not api_key:
-            # Use Managed Identity authentication (DefaultAzureCredential)
-            logger.info(" ChatVisionAnalyzer: Using Managed Identity for Azure OpenAI authentication")
-            credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(
-                credential, cloud_cfg.cognitive_services_scope
-            )
-            self.client = AzureOpenAI(
-                azure_ad_token_provider=token_provider,
-                api_version=api_version,
-                azure_endpoint=endpoint
-            )
-        else:
-            # Use API key authentication
-            logger.info(" ChatVisionAnalyzer: Using API key for Azure OpenAI authentication")
-            self.client = AzureOpenAI(
-                api_key=api_key,
-                api_version=api_version,
-                azure_endpoint=endpoint
-            )
-        
-        self.deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
-        
-        logger.info(f" ChatVisionAnalyzer initialized with deployment: {self.deployment_name}")
+        from semantic_translator import get_llm_client
+        self.client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
+        self.deployment_name = self.client.model
+        logger.info(f" ChatVisionAnalyzer initialized with model: {self.deployment_name}")
     
     def should_use_vision(self, query: str, conversation_history: Optional[List[Dict]] = None) -> bool:
         """
