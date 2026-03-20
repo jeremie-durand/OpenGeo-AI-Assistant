@@ -26,6 +26,9 @@ The project is inspired by and reuses open source patterns from [Earth Copilot](
 
 See [QUICK_DEPLOY.md](QUICK_DEPLOY.md)
 
+## Future Features
+
+The `open-geospatial-copilot/ai-search` directory contains scripts and setup for semantic (vector-based) search. These files are currently not used in the deployed application, but are retained for future development when vector AI search is implemented (e.g., with PostGIS or Parquet). For now, only the STAC API is active.
 
 ## License
 
