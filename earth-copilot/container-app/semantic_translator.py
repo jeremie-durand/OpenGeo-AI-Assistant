@@ -17,7 +17,6 @@ import traceback
 
 # Import the consolidated location resolver
 from location_resolver import EnhancedLocationResolver
-from cloud_config import cloud_cfg  # [CLOUD] Cloud environment configuration
 
 # Initialize logger first
 logger = logging.getLogger(__name__)

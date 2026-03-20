@@ -15,8 +15,6 @@ import logging
 import os
 import re
 
-from cloud_config import cloud_cfg  # [CLOUD] Cloud environment configuration
-
 # Load environment variables
 try:
     from dotenv import load_dotenv

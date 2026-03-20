@@ -1,31 +1,21 @@
 # FastAPI Earth Copilot API - Complete Implementation
 # Containerized version with full Earth Copilot functionality ported from Azure Functions
 
-import asyncio
-import hashlib
 import json
 import logging
 import os
-import sys
-import time
 import traceback
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from hybrid_rendering_system import \
-    HybridRenderingSystem  # [ART] Comprehensive rendering system
+from hybrid_rendering_system import HybridRenderingSystem  # [ART] Comprehensive rendering system
 from pydantic import BaseModel, Field
-from quickstart_cache import (  # [LAUNCH] Pre-computed cache for demo queries
-    get_quickstart_classification, get_quickstart_location,
-    get_quickstart_stats, is_quickstart_query)
-from tile_selector import \
-    TileSelector  # [TARGET] Smart tile selection and ranking
+from quickstart_cache import get_quickstart_classification, get_quickstart_location, get_quickstart_stats, is_quickstart_query  # [LAUNCH] Pre-computed cache for demo queries
 # Import Earth Copilot modules
 from titiler_config import get_tile_scale  # Legacy tile scale function
 
@@ -470,25 +460,25 @@ los_calculator = None
 geoint_utils = None
 geoint_executor = None
 
-# STAC endpoints configuration (driven by cloud_config for Commercial/Government)
+# STAC endpoints configuration
 STAC_ENDPOINTS = {
-    "planetary_computer": cloud_cfg.stac_api_url,
+    "local_stac": "http://localhost:8081/api/stac/v1/search",
     "veda": "https://openveda.cloud/api/stac/search"
 }
 
 # Feature availability flags
 SEMANTIC_KERNEL_AVAILABLE = True  # Will be updated in startup
 
-async def execute_direct_stac_search(stac_query: Dict[str, Any], stac_endpoint: str = "planetary_computer", original_query: str = None) -> Dict[str, Any]:
-    """Execute STAC search against specified endpoint (Planetary Computer or VEDA)
-    
+async def execute_direct_stac_search(stac_query: Dict[str, Any], stac_endpoint: str = "local_stac", original_query: str = None) -> Dict[str, Any]:
+    """Execute STAC search against specified endpoint (Local STAC or VEDA)
+
     Args:
         stac_query: STAC API query parameters
         stac_endpoint: Which STAC endpoint to use
         original_query: Original user query (for smart deduplication)
     """
     try:
-        stac_url = STAC_ENDPOINTS.get(stac_endpoint, STAC_ENDPOINTS["planetary_computer"])
+        stac_url = STAC_ENDPOINTS.get(stac_endpoint, STAC_ENDPOINTS["local_stac"])
         logger.info(f"[SEARCH] STAC SEARCH: {stac_endpoint} | collections={stac_query.get('collections', [])} | bbox={stac_query.get('bbox', 'NONE')} | datetime={stac_query.get('datetime', 'NONE')} | limit={stac_query.get('limit', 'default')}")
         
         # NOTE: We do NOT validate coverage proactively because STAC collection extents
@@ -671,23 +661,6 @@ async def startup_event():
     # Log quick start cache status
     qs_stats = get_quickstart_stats()
     logger.info(f"[LAUNCH] Quick Start Cache: {qs_stats['total_queries']} queries, {len(qs_stats['collections_covered'])} collections")
-
-    # Initialize Teams Bot (optional)
-    global teams_bot, teams_bot_adapter
-    if TEAMS_BOT_AVAILABLE:
-        try:
-            teams_bot = EarthCopilotBot()
-            teams_bot_adapter = create_bot_adapter()
-            app_id = os.getenv('MICROSOFT_APP_ID', '')
-            logger.info(f"[BOT] Teams Bot initialized (app_id={'configured' if app_id else 'not set — open for testing'})")
-        except Exception as e:
-            logger.warning(f"[WARN] Teams Bot init failed: {e}")
-            teams_bot = None
-            teams_bot_adapter = None
-    else:
-        teams_bot = None
-        teams_bot_adapter = None
-        logger.info("ℹ️ Teams Bot not available (botbuilder-core not installed)")
 
     logger.info("[OK] EARTH COPILOT CONTAINER READY (local mode)")
 
@@ -1506,35 +1479,6 @@ def _enhance_tilejson_url(url: str, collection_id: str) -> str:
 # ============================================================================
 # [BOT] TEAMS BOT ENDPOINT — Receives activities from Bot Framework Connector
 # ============================================================================
-@app.post("/api/messages")
-async def teams_bot_messages(request: Request):
-    """Bot Framework messaging endpoint for Microsoft Teams integration."""
-    if not TEAMS_BOT_AVAILABLE or not teams_bot or not teams_bot_adapter:
-        raise HTTPException(
-            status_code=503,
-            detail="Teams bot is not configured. Set MICROSOFT_APP_ID and install botbuilder-core.",
-        )
-    try:
-        body = await request.json()
-        activity = Activity().deserialize(body)
-        auth_header = request.headers.get("Authorization", "")
-
-        invoke_response = await teams_bot_adapter.process_activity(
-            activity, auth_header, teams_bot.on_turn
-        )
-
-        if invoke_response:
-            return JSONResponse(
-                content=invoke_response.body,
-                status_code=invoke_response.status,
-            )
-        return JSONResponse(content={}, status_code=201)
-
-    except Exception as e:
-        logger.error(f"Teams bot /api/messages error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/api/health")
 async def health_check():
     """Lightweight health check — no GPT calls, no verbose logging."""
@@ -1556,8 +1500,11 @@ async def health_check():
 
         # 2. STAC API — quick GET, no search
         try:
+            stac_url = STAC_ENDPOINTS["local_stac"]
+            # Remove trailing /search if present, get catalog root
+            catalog_url = stac_url.rsplit("/search", 1)[0]
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
-                async with session.get(cloud_cfg.stac_catalog_url + "/") as resp:
+                async with session.get(catalog_url + "/") as resp:
                     checks["stac_api"] = {"status": "connected" if resp.status == 200 else "degraded"}
         except Exception:
             checks["stac_api"] = {"status": "degraded"}

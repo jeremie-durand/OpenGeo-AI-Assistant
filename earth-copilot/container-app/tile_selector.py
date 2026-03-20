@@ -1074,9 +1074,8 @@ class TileSelector:
         """
         try:
             import requests
-            from cloud_config import cloud_cfg
             
-            stac_api = cloud_cfg.stac_catalog_url
+            stac_api = 'http://localhost:8081'
             url = f"{stac_api}/collections/{collection_id}"
             
             response = requests.get(url, timeout=10)
