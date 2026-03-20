@@ -13,9 +13,6 @@ The project is inspired by and reuses open source patterns from [Earth Copilot](
 
 ## Query Examples
 
-<details>
-<summary><b>Satellite Imagery & Visualization</b></summary>
-
 | Query |
 |-------|
 | Show me high resolution satellite imagery of Dubai urban expansion in 2020 |
