@@ -5,7 +5,7 @@ services:
     build:
       context: ./open-geospatial-copilot/
       dockerfile: Dockerfile
-    container_name: earth-copilot-backend
+    container_name: open-geospatial-copilot-complete
     ports:
       - "8000:8080"
     env_file:
