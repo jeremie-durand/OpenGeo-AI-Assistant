@@ -1,9 +1,10 @@
+
 import os
 from typing import Any, Dict, List, Optional
-
 import logging
 
 from openai import AsyncOpenAI
+from .anthropic_client import AnthropicClient
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +45,11 @@ class LLMClient:
             if org_id:
                 client_kwargs["organization"] = org_id
             self._client = AsyncOpenAI(**client_kwargs)
+        elif self.provider == "anthropic":
+            self._client = AnthropicClient(api_key=api_key, model=model, base_url=base_url)
         else:
-            # For now only OpenAI is supported; other providers can be added
             raise LLMConfigurationError(
-                f"Unsupported LLM_PROVIDER '{provider}'. Only 'openai' is currently supported."
+                f"Unsupported LLM_PROVIDER '{provider}'. Only 'openai' and 'anthropic' are supported."
             )
 
     @classmethod
@@ -101,17 +103,14 @@ class LLMClient:
             }
             if tools:
                 params["tools"] = tools
-                # Let the model choose tools automatically when provided
                 params["tool_choice"] = "auto"
-
-            # Allow callers to override or extend parameters
             params.update(kwargs)
-
             response = await self._client.chat.completions.create(**params)
-            # Return a plain dict so callers are not tied to OpenAI's types
             return response.model_dump()
-
-        # Fallback safety – should not be reachable because __init__ guards provider
+        elif self.provider == "anthropic":
+            # AnthropicClient expects OpenAI-style messages, returns Claude response
+            response = await self._client.chat(messages, **kwargs)
+            return response
         raise LLMConfigurationError(f"Unsupported provider '{self.provider}'")
 
 

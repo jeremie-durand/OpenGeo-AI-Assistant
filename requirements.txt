@@ -20,6 +20,7 @@ pandas>=1.5.0
 
 # --- AI/LLM (Core functionality) ---
 openai==1.107.2
+anthropic>=0.25.6
 semantic-kernel==1.36.2  # CRITICAL: Latest stable version with updated API
 
 # --- STAC/Earth observation (Core functionality) ---
