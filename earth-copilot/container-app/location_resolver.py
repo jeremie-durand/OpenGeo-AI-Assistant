@@ -757,64 +757,24 @@ class EnhancedLocationResolver:
         # Azure Maps authentication - supports both API key and Managed Identity
         self.azure_maps_key = os.getenv('AZURE_MAPS_SUBSCRIPTION_KEY')
         self.azure_maps_client_id = os.getenv('AZURE_MAPS_CLIENT_ID')
-        self.azure_maps_use_managed_identity = os.getenv('AZURE_MAPS_USE_MANAGED_IDENTITY', 'false').lower() == 'true'
-        
-        # Initialize token provider for Managed Identity if configured
+        self.azure_maps_use_managed_identity = False
         self._token_provider = None
-        if self.azure_maps_use_managed_identity and self.azure_maps_client_id:
-            try:
-                from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-                credential = DefaultAzureCredential()
-                self._token_provider = get_bearer_token_provider(
-                    credential,
-                    cloud_cfg.azure_maps_scope
-                )
-                self.logger.info("[OK] Azure Maps Managed Identity authentication enabled")
-            except ImportError:
-                self.logger.warning("azure-identity not installed, falling back to API key authentication")
-            except Exception as e:
-                self.logger.warning(f"Failed to initialize Managed Identity for Azure Maps: {e}")
-        
+
+        # Deprecated Azure configs kept for backward compatibility; not used in local mode
         self.mapbox_token = os.getenv('MAPBOX_ACCESS_TOKEN')
-        
-        # Azure OpenAI for intelligent location resolution
-        self.azure_openai_endpoint = os.getenv('AZURE_OPENAI_ENDPOINT')
-        self.azure_openai_api_key = os.getenv('AZURE_OPENAI_API_KEY')
+        self.azure_openai_endpoint = None
+        self.azure_openai_api_key = None
         self.model_name = os.getenv('AZURE_OPENAI_MODEL_NAME', 'gpt-4')
         
         self.logger.info(f"[OK] Enhanced Location Resolver initialized with {len(self.STORED_LOCATIONS)} stored global locations (countries, cities, landmarks, natural wonders) + dynamic API resolution")
     
     def _get_azure_maps_auth(self) -> tuple[dict, dict]:
-        """
-        Get Azure Maps authentication headers and params.
-        Returns (headers, params) for requests.
-        - If Managed Identity is enabled: returns Bearer token in headers, client-id in params
-        - If API key is available: returns subscription-key in params
-        """
-        headers = {}
-        params = {"api-version": "1.0"}
-        
-        if self.azure_maps_use_managed_identity and self._token_provider and self.azure_maps_client_id:
-            # Use Managed Identity with Bearer token
-            token = self._token_provider()
-            headers["Authorization"] = f"Bearer {token}"
-            params["x-ms-client-id"] = self.azure_maps_client_id
-            self.logger.debug("Using Managed Identity authentication for Azure Maps")
-        elif self.azure_maps_key:
-            # Use API key authentication
-            params["subscription-key"] = self.azure_maps_key
-            self.logger.debug("Using API key authentication for Azure Maps")
-        else:
-            raise ValueError("Azure Maps authentication not configured. Set either AZURE_MAPS_CLIENT_ID with Managed Identity or AZURE_MAPS_SUBSCRIPTION_KEY")
-        
-        return headers, params
-    
+        """Deprecated: Azure Maps auth is no longer used in local mode."""
+        raise RuntimeError("Azure Maps is not supported in local mode")
+
     def _is_azure_maps_configured(self) -> bool:
-        """Check if Azure Maps is configured with either authentication method"""
-        return bool(
-            (self.azure_maps_use_managed_identity and self._token_provider and self.azure_maps_client_id) or
-            self.azure_maps_key
-        )
+        """Azure Maps is not used in local mode."""
+        return False
     
     async def health_check(self) -> Dict[str, Any]:
         """
@@ -833,35 +793,12 @@ class EnhancedLocationResolver:
             "nominatim": {"status": "unknown", "message": ""}
         }
         
-        # Test Azure Maps
-        if self._is_azure_maps_configured():
-            try:
-                test_result = await self._strategy_azure_maps("New York")
-                if test_result:
-                    auth_type = "Managed Identity" if self.azure_maps_use_managed_identity else "API Key"
-                    health_status["azure_maps"] = {"status": "healthy", "message": f"Connected and working ({auth_type})"}
-                else:
-                    health_status["azure_maps"] = {"status": "degraded", "message": "Connected but test query failed"}
-            except Exception as e:
-                health_status["azure_maps"] = {"status": "unhealthy", "message": f"Connection failed: {str(e)}"}
-        else:
-            health_status["azure_maps"] = {"status": "not_configured", "message": "Set AZURE_MAPS_CLIENT_ID with Managed Identity or AZURE_MAPS_SUBSCRIPTION_KEY"}
+        # Azure Maps is not used in local mode
+        health_status["azure_maps"] = {"status": "not_applicable", "message": "Azure Maps disabled in local mode"}
         
         # Test Azure OpenAI
-        if self.azure_openai_endpoint and self.azure_openai_api_key:
-            try:
-                test_result = await self._strategy_azure_openai("New York", "city")
-                if test_result:
-                    health_status["azure_openai"] = {"status": "healthy", "message": "Connected and working"}
-                else:
-                    health_status["azure_openai"] = {"status": "degraded", "message": "Connected but test query failed"}
-            except Exception as e:
-                health_status["azure_openai"] = {"status": "unhealthy", "message": f"Connection failed: {str(e)}"}
-        else:
-            missing = []
-            if not self.azure_openai_endpoint: missing.append("AZURE_OPENAI_ENDPOINT")
-            if not self.azure_openai_api_key: missing.append("AZURE_OPENAI_API_KEY")
-            health_status["azure_openai"] = {"status": "not_configured", "message": f"Missing: {', '.join(missing)}"}
+        # Azure OpenAI is not used in local mode
+        health_status["azure_openai"] = {"status": "not_applicable", "message": "Azure OpenAI disabled in local mode"}
         
         # Test Nominatim (always available as fallback)
         try:
@@ -984,26 +921,10 @@ class EnhancedLocationResolver:
         all_queries = processed_queries + [location_name]  # Try processed queries first, then original
         
         for query in all_queries:
-            # Strategy 1: Try Azure Maps with proper administrative division handling
-            if self._is_azure_maps_configured():
-                bbox = await self._strategy_azure_maps(query, location_type)
-                if bbox:
-                    # Expand bbox for large geographic features
-                    bbox = self._expand_bbox_for_large_features(bbox, location_name)
-                    self.logger.info(f"[OK] Resolved via Azure Maps: '{query}' (original: '{location_name}')")
-                    self.cache.set(location_name, location_type, bbox)  # Cache under original name
-                    return bbox
-            
-            # Strategy 2: Try Azure OpenAI/GPT for complex queries (Microsoft native AI)
-            bbox = await self._strategy_azure_openai(query, location_type)
-            if bbox:
-                # Expand bbox for large geographic features
-                bbox = self._expand_bbox_for_large_features(bbox, location_name)
-                self.logger.info(f"[OK] Resolved via Azure OpenAI: '{query}' (original: '{location_name}')")
-                self.cache.set(location_name, location_type, bbox)
-                return bbox
-        
-        # Strategy 3: Try Mapbox (excellent for geographic regions) - ONLY if we really need it
+            # Strategy 1: (removed) Azure Maps
+            # Strategy 2: (removed) Azure OpenAI
+
+            # Strategy 3: Try Mapbox (excellent for geographic regions) - ONLY if we really need it
         # Disabled to focus on Azure ecosystem
         # if self.mapbox_token:
         #     bbox = await self._strategy_mapbox(location_name)
@@ -1013,7 +934,6 @@ class EnhancedLocationResolver:
         #         return bbox
         
 
-        
         # Strategy 5: International-focused Nominatim with smart queries
         bbox = await self._strategy_international_nominatim(location_name, location_type)
         if bbox:

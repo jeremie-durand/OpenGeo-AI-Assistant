@@ -15,14 +15,11 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 import aiohttp
-import sys
-import os
 from pathlib import Path
 import hashlib
 import time
 
 # Import Earth Copilot modules
-from semantic_translator import SemanticQueryTranslator
 from titiler_config import get_tile_scale  # Legacy tile scale function
 from hybrid_rendering_system import HybridRenderingSystem  # [ART] Comprehensive rendering system
 from tile_selector import TileSelector  # [TARGET] Smart tile selection and ranking
@@ -638,107 +635,71 @@ async def execute_direct_stac_search(stac_query: Dict[str, Any], stac_endpoint: 
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize the application components"""
+    """Initialize the application components.
+
+    For local, non-Azure runs this should succeed without any Azure-specific
+    environment variables or SDKs. Azure-backed SemanticQueryTranslator and
+    Agent Service flows are not initialized here.
+    """
     global semantic_translator, global_translator, SEMANTIC_KERNEL_AVAILABLE, router_agent
     global terrain_analyzer, mobility_classifier, los_calculator, geoint_utils, GEOINT_AVAILABLE
-    
-    logger.info("[LAUNCH] EARTH COPILOT CONTAINER STARTING UP")
-    
-    try:
-        # Initialize Semantic Translator components with environment variables
-        azure_openai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "")
-        azure_openai_api_key = os.getenv("AZURE_OPENAI_API_KEY", "")
-        azure_openai_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
-        azure_openai_fast_deployment = os.getenv("AZURE_OPENAI_FAST_DEPLOYMENT", "gpt-4o-mini")
-        use_managed_identity = os.getenv("USE_MANAGED_IDENTITY", "false").lower() == "true"
-        
-        logger.info(f"[LOCK] Environment check - Endpoint: {'[OK]' if azure_openai_endpoint else '[FAIL]'}, Key: {'[OK]' if azure_openai_api_key else '[FAIL]'}, Model: {azure_openai_deployment}, FastModel: {azure_openai_fast_deployment}, ManagedIdentity: {use_managed_identity}")
-        
-        # Initialize with API key if provided
-        if azure_openai_endpoint and azure_openai_api_key:
-            semantic_translator = SemanticQueryTranslator(
-                azure_openai_endpoint=azure_openai_endpoint,
-                azure_openai_api_key=azure_openai_api_key,
-                model_name=azure_openai_deployment
-            )
-            global_translator = semantic_translator  # For session management
-            SEMANTIC_KERNEL_AVAILABLE = True
-            logger.info("[OK] Earth Copilot API initialized successfully with Semantic Translator (API Key)")
-        # Try managed identity if endpoint provided but no API key
-        elif azure_openai_endpoint and use_managed_identity:
-            try:
-                from azure.identity import DefaultAzureCredential
-                logger.info("[KEY] Attempting managed identity authentication for Azure OpenAI...")
-                credential = DefaultAzureCredential()
-                # Get token to verify credential works
-                token = credential.get_token(cloud_cfg.cognitive_services_scope)
-                logger.info("[OK] Successfully obtained Azure AD token for Cognitive Services")
-                
-                semantic_translator = SemanticQueryTranslator(
-                    azure_openai_endpoint=azure_openai_endpoint,
-                    azure_openai_api_key=None,  # No API key - will use credential
-                    model_name=azure_openai_deployment,
-                    azure_credential=credential  # Pass credential for managed identity
-                )
-                global_translator = semantic_translator  # For session management
-                SEMANTIC_KERNEL_AVAILABLE = True
-                logger.info("[OK] Earth Copilot API initialized successfully with Semantic Translator (Managed Identity)")
-            except Exception as e:
-                logger.error(f"[FAIL] Failed to initialize with managed identity: {e}")
-                logger.warning("[WARN] Running in limited mode - no Azure OpenAI access")
-                semantic_translator = None
-                global_translator = None
-                SEMANTIC_KERNEL_AVAILABLE = False
-        else:
-            logger.warning("[WARN] Azure OpenAI credentials not provided - running in limited mode")
-            semantic_translator = None
-            global_translator = None
-            SEMANTIC_KERNEL_AVAILABLE = False
-            
-        # GEOINT endpoints use lazy imports - no initialization needed here
-        logger.info("[OK] GEOINT endpoints ready (lazy import mode)")
 
-        # Initialize RouterAgent for intelligent query classification
+    logger.info("[LAUNCH] EARTH COPILOT CONTAINER STARTING UP (local mode, no Azure LLM/Agent dependencies)")
+
+    # Do not initialize Azure OpenAI / SemanticQueryTranslator here. For the
+    # local, provider-agnostic path semantic_translator remains None and
+    # endpoints that rely on it should either be updated to use the generic
+    # LLM client or return a clear error if invoked.
+    semantic_translator = None
+    global_translator = None
+    SEMANTIC_KERNEL_AVAILABLE = False
+
+    # GEOINT endpoints use lazy imports - no initialization needed here
+    logger.info("[OK] GEOINT endpoints ready (lazy import mode)")
+
+    # Validate LLM configuration (non-fatal in local mode)
+    try:
+        from llm_client import get_llm_client, LLMConfigurationError
+
+        client = get_llm_client()
+        logger.info(f"[OK] LLM client initialized (provider={client.provider}, model={client.model})")
+    except ImportError:
+        logger.warning("[WARN] llm_client module not available; LLM-backed endpoints may be disabled")
+    except Exception as e:
+        # Do not block startup if LLM configuration is missing or invalid
+        logger.warning(f"[WARN] LLM client not fully configured: {e}")
+
+    # Initialize RouterAgent for intelligent query classification, if available.
+    try:
+        from geoint.router_agent import get_router_agent
+        router_agent = get_router_agent()
+        logger.info("[OK] RouterAgent initialized for intelligent query routing")
+    except Exception as e:
+        logger.warning(f"[WARN] RouterAgent initialization failed: {e} - will use fallback classification")
+        router_agent = None
+
+    # Log quick start cache status
+    qs_stats = get_quickstart_stats()
+    logger.info(f"[LAUNCH] Quick Start Cache: {qs_stats['total_queries']} queries, {len(qs_stats['collections_covered'])} collections")
+
+    # Initialize Teams Bot (optional)
+    global teams_bot, teams_bot_adapter
+    if TEAMS_BOT_AVAILABLE:
         try:
-            from geoint.router_agent import get_router_agent
-            router_agent = get_router_agent()
-            if global_translator:
-                router_agent.set_semantic_translator(global_translator)
-            logger.info("[OK] RouterAgent initialized for intelligent query routing")
+            teams_bot = EarthCopilotBot()
+            teams_bot_adapter = create_bot_adapter()
+            app_id = os.getenv('MICROSOFT_APP_ID', '')
+            logger.info(f"[BOT] Teams Bot initialized (app_id={'configured' if app_id else 'not set — open for testing'})")
         except Exception as e:
-            logger.warning(f"[WARN] RouterAgent initialization failed: {e} - will use fallback classification")
-            router_agent = None
-        
-        # Log quick start cache status
-        qs_stats = get_quickstart_stats()
-        logger.info(f"[LAUNCH] Quick Start Cache: {qs_stats['total_queries']} queries, {len(qs_stats['collections_covered'])} collections")
-        
-        # Initialize Teams Bot (optional)
-        global teams_bot, teams_bot_adapter
-        if TEAMS_BOT_AVAILABLE:
-            try:
-                teams_bot = EarthCopilotBot()
-                teams_bot_adapter = create_bot_adapter()
-                app_id = os.getenv('MICROSOFT_APP_ID', '')
-                logger.info(f"[BOT] Teams Bot initialized (app_id={'configured' if app_id else 'not set — open for testing'})")
-            except Exception as e:
-                logger.warning(f"[WARN] Teams Bot init failed: {e}")
-                teams_bot = None
-                teams_bot_adapter = None
-        else:
+            logger.warning(f"[WARN] Teams Bot init failed: {e}")
             teams_bot = None
             teams_bot_adapter = None
-            logger.info("ℹ️ Teams Bot not available (botbuilder-core not installed)")
+    else:
+        teams_bot = None
+        teams_bot_adapter = None
+        logger.info("ℹ️ Teams Bot not available (botbuilder-core not installed)")
 
-        logger.info("[OK] EARTH COPILOT CONTAINER READY")
-            
-    except Exception as e:
-        logger.error(f"[FAIL] Failed to initialize components: {str(e)}")
-        logger.warning("[WARN] Running in limited mode")
-        semantic_translator = None
-        global_translator = None
-        router_agent = None
-        SEMANTIC_KERNEL_AVAILABLE = False
+    logger.info("[OK] EARTH COPILOT CONTAINER READY (local mode)")
 
 # Helper functions ported from Router Function App
 def detect_collections(query: str) -> List[str]:
@@ -1587,13 +1548,16 @@ async def health_check():
         checks = {}
         all_healthy = True
 
-        # 1. Azure OpenAI — config check only (no billable test call)
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        has_auth = bool(os.getenv("AZURE_OPENAI_API_KEY")) or os.getenv("USE_MANAGED_IDENTITY", "").lower() == "true"
-        if endpoint and has_auth:
-            checks["azure_openai"] = {"status": "configured", "endpoint": endpoint}
-        else:
-            checks["azure_openai"] = {"status": "misconfigured"}
+        # 1. LLM Client — config check only (no billable test call)
+        from llm_client import LLMConfigurationError, get_llm_client
+        try:
+            client = get_llm_client()
+            checks["llm_client"] = {"status": "configured", "provider": client.provider, "model": client.model}
+        except LLMConfigurationError as e:
+            checks["llm_client"] = {"status": "misconfigured", "error": str(e)}
+            all_healthy = False
+        except Exception as e:
+            checks["llm_client"] = {"status": "error", "error": str(e)}
             all_healthy = False
 
         # 2. STAC API — quick GET, no search
@@ -1604,17 +1568,8 @@ async def health_check():
         except Exception:
             checks["stac_api"] = {"status": "degraded"}
 
-        # 3. Azure Maps — config check only
-        maps_key = os.getenv("AZURE_MAPS_SUBSCRIPTION_KEY") or os.getenv("AZURE_MAPS_KEY")
-        maps_mi = os.getenv("AZURE_MAPS_USE_MANAGED_IDENTITY", "").lower() == "true"
-        if maps_key or maps_mi:
-            checks["azure_maps"] = {"status": "configured"}
-        else:
-            checks["azure_maps"] = {"status": "misconfigured"}
-            all_healthy = False
-
         overall = "healthy" if all_healthy else "degraded"
-        logger.info(f"[BLDG] Health: {overall} | openai={checks['azure_openai']['status']} stac={checks['stac_api']['status']} maps={checks['azure_maps']['status']}")
+        logger.info(f"[BLDG] Health: {overall} | llm_client={checks['llm_client']['status']} stac={checks['stac_api']['status']}")
 
         return JSONResponse(
             content={
@@ -1630,12 +1585,8 @@ async def health_check():
 
 @app.get("/api/config")
 async def get_config():
-    """Configuration endpoint for frontend - provides Azure Maps key and other settings"""
+    """Configuration endpoint for frontend - provides backend settings"""
     return {
-        "azureMaps": {
-            "subscriptionKey": os.environ.get('AZURE_MAPS_SUBSCRIPTION_KEY', os.environ.get('AZURE_MAPS_KEY', '')),
-            "clientId": os.environ.get('AZURE_MAPS_CLIENT_ID', '')
-        },
         "api": {
             "baseUrl": "/api"
         }

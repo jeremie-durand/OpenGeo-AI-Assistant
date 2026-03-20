@@ -56,223 +56,154 @@ def log_pipeline_step(session_id: str, step_name: str, stage: str, data: dict, e
 try:
     from tile_selector import TileSelector
     TILE_SELECTOR_AVAILABLE = True
-    logger.info("[OK] TileSelector loaded - intelligent query limit calculation enabled")
-except ImportError:
-    TILE_SELECTOR_AVAILABLE = False
-    logger.warning("[WARN] TileSelector not available - using hardcoded limits")
+    class GeocodingPlugin:
+        """Semantic geocoding plugin backed by OpenStreetMap Nominatim.
 
-# Import Featured Collections list for prioritization
-try:
-    from hybrid_rendering_system import FEATURED_COLLECTIONS
-    logger.info("[OK] Featured Collections loaded - prioritization enabled")
-except ImportError:
-    FEATURED_COLLECTIONS = []
-    logger.warning("[WARN] Featured Collections not available - no prioritization")
+        This provides an AI-callable tool that can:
+        1. Verify that a location exists
+        2. Return a bounding box for the location
+        3. Reverse geocode coordinates to a human-readable place
 
-# Import PC metadata loader (SINGLE SOURCE OF TRUTH from PC repository)
-try:
-    from pc_tasks_config_loader import (
-        load_pc_metadata,
-        get_collection_metadata,
-        get_pc_rendering_config as get_rendering_config,
-        is_static_collection,
-        supports_temporal_filtering,
-        supports_cloud_filtering,
-        get_collection_description,
-        get_collection_keywords,
-        build_gpt_collection_catalog,
-        get_all_collection_ids,
-        get_query_rules,
-        get_cloud_cover_property
-    )
-    PC_METADATA_AVAILABLE = True
-    logger.info("[OK] PC metadata loaded from planetary-computer-tasks repository - single source of truth active")
-except ImportError as e:
-    PC_METADATA_AVAILABLE = False
-    logger.warning(f"[WARN] PC metadata loader not available: {e}")
-    
-    # Fallback stubs
-    def load_pc_metadata(): return {'categories': []}
-    def get_collection_metadata(cid): return None
-    def is_static_collection(cid): return False
-    def supports_temporal_filtering(cid): return True
-    def supports_cloud_filtering(cid): return False
-    def build_gpt_collection_catalog(): return "No collections available"
-    def get_all_collection_ids(): return []
-    def get_query_rules(cid): return {}
-    def get_cloud_cover_property(cid): return 'eo:cloud_cover'
-    
-    # Fallback functions
-    def generate_collection_knowledge_for_agent() -> str:
-        return ""
-    def is_static_collection(collection_id: str) -> bool:
-        return collection_id in ["cop-dem-glo-30", "cop-dem-glo-90", "nasadem", "alos-dem"]
-    def is_composite_collection(collection_id: str) -> bool:
-        return "modis" in collection_id.lower()
-    def supports_temporal_filtering(collection_id: str) -> bool:
-        return not is_static_collection(collection_id)
-    def supports_cloud_filtering(collection_id: str) -> bool:
-        return not (is_static_collection(collection_id) or is_composite_collection(collection_id))
-    def uses_sortby_instead_of_datetime(collection_id: str) -> bool:
-        return is_composite_collection(collection_id)
-    def get_ignored_parameters(collection_id: str) -> list:
-        return []
-    def validate_multi_collection_query(stac_query: dict) -> tuple:
-        return True, {}
-    def log_query_construction_strategy(collections: list, stac_query: dict, logger_instance=None):
-        pass
-
-# Import VEDA collection profiles for dual-source routing
-try:
-    from veda_collection_profiles import is_veda_query, get_veda_collections_for_query
-    VEDA_PROFILES_AVAILABLE = True
-    logger.info("[OK] VEDA collection profiles loaded - dual-source routing enabled")
-except ImportError:
-    VEDA_PROFILES_AVAILABLE = False
-    logger.warning("[WARN] VEDA collection profiles not available - using Planetary Computer only")
-    
-    # Fallback functions
-    def is_veda_query(query: str) -> bool:
-        return False
-    
-    def get_veda_collections_for_query(query: str) -> List[str]:
-        return []
-
-# Configure logging — INFO level for production, suppress noisy HTTP libraries
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-    ]
-)
-# Suppress verbose HTTP/SDK debug traffic that floods container logs
-for _noisy in ["httpcore", "httpx", "openai", "azure.core", "azure.identity",
-               "urllib3", "aiohttp", "semantic_kernel.connectors"]:
-    logging.getLogger(_noisy).setLevel(logging.WARNING)
-
-# Semantic Kernel 1.37.0+ compatible imports for GPT-5 support
-try:
-    import semantic_kernel as sk
-    from semantic_kernel import Kernel
-    from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
-    from semantic_kernel.connectors.ai.function_choice_behavior import FunctionChoiceBehavior
-    from semantic_kernel.connectors.ai.chat_completion_client_base import ChatCompletionClientBase
-    from semantic_kernel.contents.chat_history import ChatHistory
-    from semantic_kernel.functions.kernel_arguments import KernelArguments
-    from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (
-        AzureChatPromptExecutionSettings,
-    )
-    # Template classes for SK 1.37.0+
-    from semantic_kernel.prompt_template.prompt_template_config import PromptTemplateConfig
-    from semantic_kernel.prompt_template.input_variable import InputVariable
-    from semantic_kernel.functions.kernel_function import KernelFunction
-    SK_AVAILABLE = True
-    logging.info(f"[OK] Semantic Kernel {sk.__version__} successfully imported with GPT-5 support")
-except ImportError as e:
-    SK_AVAILABLE = False
-    logging.error(f"[ERROR] Semantic Kernel import failed: {e}")
-    logging.error("This will prevent AI functionality - Earth Copilot requires Semantic Kernel")
-    raise ImportError(f"Semantic Kernel is required for Earth Copilot functionality: {e}")
-except Exception as e:
-    SK_AVAILABLE = False
-    logging.error(f"[FAIL] Unexpected error loading Semantic Kernel: {e}")
-    raise Exception(f"Critical error initializing Semantic Kernel: {e}")
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-class LocationCache:
-    """In-memory location cache with TTL for performance optimization"""
-    
-    def __init__(self, ttl_hours: int = 24, max_entries: int = 500):
-        self.cache = {}
-        self.ttl_seconds = ttl_hours * 3600
-        self.max_entries = max_entries
-    
-    def _generate_key(self, location_name: str, location_type: str) -> str:
-        """Generate cache key for location"""
-        key_string = f"{location_name.lower().strip()}:{location_type.lower()}"
-        return hashlib.md5(key_string.encode()).hexdigest()
-    
-    def get(self, location_name: str, location_type: str) -> Optional[List[float]]:
-        """Get cached location bbox"""
-        key = self._generate_key(location_name, location_type)
-        
-        if key in self.cache:
-            entry = self.cache[key]
-            if time.time() - entry["timestamp"] < self.ttl_seconds:
-                logger.info(f"Cache hit for location: {location_name}")
-                return entry["bbox"]
-            else:
-                del self.cache[key]
-        
-        return None
-    
-    def set(self, location_name: str, location_type: str, bbox: List[float]):
-        """Cache location bbox"""
-        key = self._generate_key(location_name, location_type)
-        
-        if len(self.cache) >= self.max_entries:
-            self._evict_oldest()
-        
-        self.cache[key] = {
-            "bbox": bbox,
-            "timestamp": time.time(),
-            "location_name": location_name
-        }
-        logger.info(f"Cached location: {location_name}")
-    
-    def _evict_oldest(self):
-        """Remove oldest cache entry"""
-        if self.cache:
-            oldest_key = min(self.cache.keys(), key=lambda k: self.cache[k]["timestamp"])
-            del self.cache[oldest_key]
-
-
-# ============================================================================
-# [MAP] GEOCODING PLUGIN - Azure Maps Tool for AI Agent Function Calling
-# ============================================================================
-# This plugin provides the Azure Maps geocoding capability as a tool that
-# GPT-5 can call during location extraction. When the fast keyword match
-# fails, the agent can use this tool to verify/resolve unknown locations.
-# ============================================================================
-
-class GeocodingPlugin:
-    """
-    Semantic Kernel plugin providing Azure Maps geocoding as an AI-callable tool.
-    
-    This enables "True Agent with Tools" architecture where GPT-5 can:
-    1. Identify that a location needs verification
-    2. Call azure_maps_geocode tool with the location name
-    3. Receive structured bbox coordinates
-    4. Return verified location data
-    
-    Benefits over pure LLM extraction:
-    - Validates locations actually exist
-    - Gets accurate bounding box from authoritative source
-    - Handles typos via Azure Maps fuzzy matching
-    - Disambiguates locations (Portland OR vs ME)
-    """
-    
-    def __init__(self):
-        """Initialize with Azure Maps API key from environment"""
-        self.azure_maps_key = os.getenv("AZURE_MAPS_SUBSCRIPTION_KEY")
-        if not self.azure_maps_key:
-            logger.warning("[WARN] AZURE_MAPS_SUBSCRIPTION_KEY not set - geocoding tool will be unavailable")
-    
-    async def azure_maps_geocode(self, location_name: str) -> str:
+        Implementation notes:
+        - Uses public Nominatim endpoints (no Azure Maps dependency)
+        - Respects Nominatim usage policy with a custom User-Agent
+        - Mirrors the previous Azure Maps tool interfaces so existing
+          call sites can keep using azure_maps_geocode/azure_maps_reverse_geocode
+          names without pulling in Azure-specific SDKs or configuration.
         """
-        Geocode a location name using Azure Maps API.
-        
-        This tool resolves location names to bounding box coordinates.
-        Call this when you need to verify a location exists and get its coordinates.
-        
-        Args:
-            location_name: The name of the location to geocode (e.g., "Moscow", "Grand Canyon", "Tokyo")
-        
-        Returns:
-            JSON string with location data including name, type, country, and bbox coordinates.
+
+        def __init__(self):
+            # No Azure Maps configuration; purely Nominatim-based
+            self.user_agent = "EarthCopilot/2.1 (geocoding-plugin)"
+
+        async def azure_maps_geocode(self, location_name: str) -> str:
+            """Geocode a location name using OpenStreetMap Nominatim.
+
+            The method name is kept for backward compatibility with existing
+            tools wiring, but the implementation no longer uses Azure Maps.
+            """
+            url = "https://nominatim.openstreetmap.org/search"
+            params = {
+                "q": location_name,
+                "format": "json",
+                "limit": 1,
+                "addressdetails": 1,
+                "dedupe": 1,
+            }
+            headers = {"User-Agent": self.user_agent}
+
+            try:
+                import aiohttp
+
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                        if response.status != 200:
+                            text = await response.text()
+                            logger.error(f"[MAP] Nominatim geocode error {response.status}: {text}")
+                            return json.dumps({
+                                "error": f"Geocoding service error: {response.status}",
+                                "location_name": location_name,
+                            })
+
+                        data = await response.json()
+                        if not data:
+                            logger.warning(f"[MAP] Nominatim: No results for '{location_name}'")
+                            return json.dumps({
+                                "error": "Location not found",
+                                "location_name": location_name,
+                                "suggestion": "Try a more specific location name or check spelling",
+                            })
+
+                        result = data[0]
+                        bbox_raw = result.get("boundingbox")
+                        if bbox_raw and len(bbox_raw) == 4:
+                            # Nominatim: [min_lat, max_lat, min_lon, max_lon]
+                            bbox = [
+                                float(bbox_raw[2]),
+                                float(bbox_raw[0]),
+                                float(bbox_raw[3]),
+                                float(bbox_raw[1]),
+                            ]
+                        else:
+                            # Fallback around the point
+                            lat = float(result.get("lat"))
+                            lon = float(result.get("lon"))
+                            buffer = 0.1
+                            bbox = [lon - buffer, lat - buffer, lon + buffer, lat + buffer]
+
+                        address = result.get("display_name", location_name)
+                        country = (result.get("address") or {}).get("country", "Unknown")
+                        location_type = result.get("type", "region")
+
+                        logger.info(f"[MAP] Nominatim geocode: '{location_name}' -> {address}, bbox={bbox}")
+                        return json.dumps(
+                            {
+                                "name": address,
+                                "type": location_type,
+                                "country": country,
+                                "bbox": bbox,
+                                "confidence": 0.9,
+                                "original_query": location_name,
+                            }
+                        )
+            except asyncio.TimeoutError:
+                logger.error(f"[MAP] Nominatim timeout for '{location_name}'")
+                return json.dumps({"error": "Geocoding request timed out", "location_name": location_name})
+            except Exception as e:
+                logger.error(f"[MAP] Nominatim exception for '{location_name}': {e}")
+                return json.dumps({"error": str(e), "location_name": location_name})
+
+        async def azure_maps_reverse_geocode(self, latitude: float, longitude: float) -> str:
+            """Reverse geocode coordinates via OpenStreetMap Nominatim.
+
+            The method name is preserved for compatibility but no Azure
+            services are used.
+            """
+            url = "https://nominatim.openstreetmap.org/reverse"
+            params = {
+                "lat": latitude,
+                "lon": longitude,
+                "format": "json",
+                "addressdetails": 1,
+            }
+            headers = {"User-Agent": self.user_agent}
+
+            try:
+                import aiohttp
+
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                        if response.status != 200:
+                            text = await response.text()
+                            logger.error(f"[MAP] Nominatim reverse error {response.status}: {text}")
+                            return json.dumps({
+                                "error": f"Reverse geocoding service error: {response.status}",
+                                "coordinates": [latitude, longitude],
+                            })
+
+                        data = await response.json()
+                        address = data.get("display_name", "Unknown location")
+                        addr_details = data.get("address", {})
+
+                        country = addr_details.get("country", "")
+                        region = addr_details.get("state", "") or addr_details.get("region", "")
+
+                        logger.info(f"[MAP] Nominatim reverse geocode: ({latitude}, {longitude}) -> {address}")
+                        return json.dumps(
+                            {
+                                "name": address,
+                                "region": region,
+                                "country": country,
+                                "freeform": address,
+                                "coordinates": [latitude, longitude],
+                            }
+                        )
+            except asyncio.TimeoutError:
+                logger.error(f"[MAP] Nominatim reverse timeout for ({latitude}, {longitude})")
+                return json.dumps({"error": "Reverse geocoding request timed out", "coordinates": [latitude, longitude]})
+            except Exception as e:
+                logger.error(f"[MAP] Nominatim reverse exception for ({latitude}, {longitude}): {e}")
+                return json.dumps({"error": str(e), "coordinates": [latitude, longitude]})
             Returns error message if location cannot be found.
         
         Examples:
