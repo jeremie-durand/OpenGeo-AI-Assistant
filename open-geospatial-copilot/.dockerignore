@@ -1,6 +1,3 @@
-# Docker ignore file for Earth Copilot (build context: earth-copilot/)
-# Applied when ACR builds with --file container-app/Dockerfile.complete ../
-
 # Python
 **/__pycache__/
 **/*.pyc
