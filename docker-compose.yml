@@ -3,7 +3,7 @@ version: "3.9"
 services:
   backend:
     build:
-      context: ./earth-copilot/
+      context: ./open-geospatial-copilot/
       dockerfile: Dockerfile
     container_name: earth-copilot-backend
     ports:
