@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./earth-copilot/container-app
+      dockerfile: Dockerfile
+    container_name: earth-copilot-backend
+    ports:
+      - "8000:8080"
+    env_file:
+      - .env
+    environment:
+      # CORS for local dev (adjust as needed)
+      - CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+    restart: unless-stopped
