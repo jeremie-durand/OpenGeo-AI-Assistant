@@ -319,12 +319,16 @@ app.add_middleware(
 # Add Entra ID JWT auth middleware (validates Bearer tokens on protected routes)
 # Registered AFTER CORSMiddleware so CORS headers are always added, even on 401.
 # Open paths (/api/health, /docs, etc.) are excluded from auth.
-try:
-    from auth_middleware import EntraAuthMiddleware
-    app.add_middleware(EntraAuthMiddleware)
-    logger.info("[AUTH] Entra ID auth middleware registered")
-except ImportError as e:
-    logger.warning(f"[AUTH] Auth middleware not available — all routes are open: {e}")
+ENABLE_AUTH = os.environ.get("ENABLE_AUTH", "true").lower() == "true"
+if ENABLE_AUTH:
+    try:
+        from auth_middleware import EntraAuthMiddleware
+        app.add_middleware(EntraAuthMiddleware)
+        logger.info("[AUTH] Entra ID auth middleware registered")
+    except ImportError as e:
+        logger.warning(f"[AUTH] Auth middleware not available — all routes are open: {e}")
+else:
+    logger.warning("[AUTH] ENABLE_AUTH is false — all routes are open (no authentication checks)")
 
 # Mount static files for React frontend (if static directory exists)
 static_dir = os.path.join(os.path.dirname(__file__), "static")
