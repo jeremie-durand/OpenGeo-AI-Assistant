@@ -1,8 +1,33 @@
-# Use Python 3.11 base image (required for semantic-kernel>=1.0.0)
-FROM python:3.11-slim
+# Multi-stage Dockerfile for Complete Earth Copilot Application
+# Stage 1: Build React Frontend
+# Stage 2: Python Backend with Static Files
 
-# Set working directory
-WORKDIR /app
+# =============================================================================
+# STAGE 1: Build React Frontend
+# =============================================================================
+FROM node:20-alpine AS frontend-build
+
+WORKDIR /frontend
+
+# Copy package files for dependency installation
+COPY web-ui/package*.json ./
+
+# Install Node.js dependencies
+RUN npm ci
+
+# Copy frontend source code
+COPY web-ui/ ./
+
+# Fix permissions and build the React application for production
+RUN chmod +x node_modules/.bin/* && npm run build
+
+# List contents of dist directory for debugging
+RUN ls -la dist/
+
+# =============================================================================
+# STAGE 2: Python Backend with Static Files
+# =============================================================================
+FROM python:3.12-slim
 
 # Install system dependencies for geospatial processing
 # GDAL is required for rasterio to read COG files (terrain analysis)
@@ -18,28 +43,51 @@ RUN apt-get update && apt-get install -y \
     libgdal-dev \
     libproj-dev \
     proj-bin \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set GDAL environment variables for rasterio
 ENV GDAL_CONFIG=/usr/bin/gdal-config
 ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
 ENV C_INCLUDE_PATH=/usr/include/gdal
-# Skip netCDF driver — it requires userfaultfd (blocked by Docker seccomp).
-# HDF5 driver reads the same NetCDF4 files without this restriction.
-ENV GDAL_SKIP=netCDF
 
-# Copy requirements file
-COPY requirements.txt .
+# Set working directory
+WORKDIR /app
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy Python requirements and install dependencies
+COPY container-app/requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy all Python modules
+COPY container-app/*.py ./
+
+# Copy JSON config files (pc_rendering_config.json, etc.)
+COPY container-app/*.json ./
+
+# Copy agents folder (Vision Agent and other AI agents)
+COPY container-app/agents/ ./agents/
+
+# Copy geoint folder (GEOINT agents and modules) from container-app
+COPY container-app/geoint/ ./geoint/
+
+# Create static directory and copy built React app
+RUN mkdir -p /app/static
+COPY --from=frontend-build /frontend/dist/ /app/static/
+
+# Create uploads directory (if needed)
+RUN mkdir -p /app/uploads
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
 # Expose port 8080 (must match Azure Container App targetPort configuration)
 EXPOSE 8080
 
-# Run the FastAPI application with uvicorn on port 8080
-# Using 4 workers to handle concurrent requests (especially important for AI/LLM calls)
-CMD ["uvicorn", "fastapi_app:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "4"]
+# Health check (updated to use port 8080)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8080/api/health || exit 1
+
+# Start the FastAPI application on port 8080
+CMD ["uvicorn", "fastapi_app:app", "--host", "0.0.0.0", "--port", "8080"]
