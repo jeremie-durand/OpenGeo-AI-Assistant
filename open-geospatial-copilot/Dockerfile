@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for Complete Earth Copilot Application
+# Multi-stage Dockerfile for Complete Open Geospatial Copilot Application
 # Stage 1: Build React Frontend
 # Stage 2: Python Backend with Static Files
 
