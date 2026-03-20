@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 import logging
 
 from openai import AsyncOpenAI
-from .anthropic_client import AnthropicClient
+from anthropic_client import AnthropicClient
 
 logger = logging.getLogger(__name__)
 

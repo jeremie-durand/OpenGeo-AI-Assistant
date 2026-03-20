@@ -917,38 +917,25 @@ class EnhancedLocationResolver:
         
         # Try resolution with preprocessed queries (most specific first)
         all_queries = processed_queries + [location_name]  # Try processed queries first, then original
-        
+
         for query in all_queries:
-            # Strategy 1: (removed) Azure Maps
-            # Strategy 2: (removed) Azure OpenAI
-
-            # Strategy 3: Try Mapbox (excellent for geographic regions) - ONLY if we really need it
-        # Disabled to focus on Azure ecosystem
-        # if self.mapbox_token:
-        #     bbox = await self._strategy_mapbox(location_name)
-        #     if bbox:
-        #         self.logger.info(f"[OK] Resolved via Mapbox: {location_name}")
-        #         self.cache.set(location_name, location_type, bbox)
-        #         return bbox
-        
-
-        # Strategy 5: International-focused Nominatim with smart queries
-        bbox = await self._strategy_international_nominatim(location_name, location_type)
-        if bbox:
-            # Expand bbox for large geographic features
-            bbox = self._expand_bbox_for_large_features(bbox, location_name)
-            self.logger.info(f"[GLOBE] Resolved via International Nominatim: {location_name}")
-            self.cache.set(location_name, location_type, bbox)
-            return bbox
-            
-        # Strategy 6: Multi-language Wikipedia/GeoNames approach
-        bbox = await self._strategy_geonames_alternative(location_name, location_type)
-        if bbox:
-            # Expand bbox for large geographic features
-            bbox = self._expand_bbox_for_large_features(bbox, location_name)
-            self.logger.info(f"[DOCS] Resolved via GeoNames alternative: {location_name}")
-            self.cache.set(location_name, location_type, bbox)
-            return bbox
+            # Strategy: International-focused Nominatim with smart queries
+            bbox = await self._strategy_international_nominatim(location_name, location_type)
+            if bbox:
+                # Expand bbox for large geographic features
+                bbox = self._expand_bbox_for_large_features(bbox, location_name)
+                self.logger.info(f"[GLOBE] Resolved via International Nominatim: {location_name}")
+                self.cache.set(location_name, location_type, bbox)
+                return bbox
+                
+            # Strategy: Multi-language Wikipedia/GeoNames approach
+            bbox = await self._strategy_geonames_alternative(location_name, location_type)
+            if bbox:
+                # Expand bbox for large geographic features
+                bbox = self._expand_bbox_for_large_features(bbox, location_name)
+                self.logger.info(f"[DOCS] Resolved via GeoNames alternative: {location_name}")
+                self.cache.set(location_name, location_type, bbox)
+                return bbox
         
         self.logger.error(f"[FAIL] Could not resolve location: {location_name}")
         return None
@@ -978,39 +965,7 @@ class EnhancedLocationResolver:
         return await self._azure_maps_address_search(location_name)
     
     async def _azure_maps_with_population_priority(self, location_name: str) -> Optional[List[float]]:
-        """Try Azure Maps search prioritizing populated places over administrative regions"""
-        
-        if not self._is_azure_maps_configured():
-            return None
-        
-        # Get authentication headers and base params
-        headers, params = self._get_azure_maps_auth()
-        
-        # Use a more specific query that prioritizes major populated places
-        url = f"{cloud_cfg.azure_maps_base_url}/search/fuzzy/json"
-        params.update({
-            "query": f"{location_name} city United States",  # Add "city" to prioritize urban areas
-            "limit": 5,
-            "entityType": "Municipality,PopulatedPlace",
-            "countrySet": "US"
-        })
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, headers=headers) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        results = data.get("results", [])
-                        
-                        if results:
-                            # Use our ranking system to find the best match
-                            ranked_results = self._rank_results_by_relevance(results, location_name)
-                            if ranked_results:
-                                return self._extract_azure_bounds(ranked_results[0])
-                                
-        except Exception as e:
-            self.logger.error(f"Azure Maps population priority search error: {e}")
-        
+        """Stub: Azure Maps population-priority search removed. Always returns None."""
         return None
     
     def _looks_like_admin_division(self, location_name: str) -> bool:
@@ -1122,118 +1077,15 @@ class EnhancedLocationResolver:
         return bbox
     
     async def _azure_maps_structured_search(self, location_name: str) -> Optional[List[float]]:
-        """Use Azure Maps Structured Search for administrative divisions"""
-        
-        if not self._is_azure_maps_configured():
-            return None
-        
-        # Get authentication headers and base params
-        headers, params = self._get_azure_maps_auth()
-        
-        url = f"{cloud_cfg.azure_maps_base_url}/search/address/structured/json"
-        params.update({
-            "countryCode": "US",
-            "countrySubdivision": location_name,  # This targets state-level
-            "limit": 3
-        })
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, headers=headers) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        results = data.get("results", [])
-                        
-                        # Look for the best administrative match
-                        for result in results:
-                            address = result.get("address", {})
-                            # Check if this is actually the state we're looking for
-                            if address.get("countrySubdivision", "").lower() == location_name.lower():
-                                bbox = self._extract_azure_bounds(result)
-                                if bbox:
-                                    return bbox
-        except Exception as e:
-            self.logger.error(f"Azure Maps structured search error: {e}")
-        
+        """Stub: Azure Maps structured search removed. Always returns None."""
         return None
     
     async def _azure_maps_fuzzy_search(self, location_name: str) -> Optional[List[float]]:
-        """Use Azure Maps Fuzzy Search with improved accuracy"""
-        
-        if not self._is_azure_maps_configured():
-            return None
-        
-        # Get authentication headers and base params
-        headers, params = self._get_azure_maps_auth()
-        
-        url = f"{cloud_cfg.azure_maps_base_url}/search/fuzzy/json"
-        
-        # For cities, prioritize population/importance over administrative divisions
-        if self._looks_like_city(location_name):
-            params.update({
-                "query": location_name,  # Don't force ", United States" - let ranking find the most important match
-                "limit": 10,  # Get more results to find the best match
-                "entityType": "Municipality,PopulatedPlace",  # Focus on populated places for cities
-                "countrySet": "US"
-            })
-        else:
-            # For regions/states, use administrative division search
-            params.update({
-                "query": f"{location_name}, United States",
-                "limit": 5,
-                "entityType": "CountrySubdivision,CountrySecondarySubdivision",
-                "countrySet": "US"
-            })
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, headers=headers) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        results = data.get("results", [])
-                        
-                        if results:
-                            # Use intelligent ranking to find the best result
-                            ranked_results = self._rank_results_by_relevance(results, location_name)
-                            
-                            # Try the top-ranked results in order
-                            for result in ranked_results:
-                                bbox = self._extract_azure_bounds(result)
-                                if bbox:
-                                    self.logger.info(f"Using result: {result.get('address', {}).get('freeformAddress', 'N/A')} "
-                                                   f"(type: {result.get('entityType', 'N/A')})")
-                                    return bbox
-        except Exception as e:
-            self.logger.error(f"Azure Maps fuzzy search error: {e}")
-        
+        """Stub: Azure Maps fuzzy search removed. Always returns None."""
         return None
     
     async def _azure_maps_address_search(self, location_name: str) -> Optional[List[float]]:
-        """Fallback to regular address search"""
-        
-        if not self._is_azure_maps_configured():
-            return None
-        
-        # Get authentication headers and base params
-        headers, params = self._get_azure_maps_auth()
-        
-        url = f"{cloud_cfg.azure_maps_base_url}/search/address/json"
-        params.update({
-            "query": location_name,
-            "limit": 1
-        })
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, headers=headers) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        results = data.get("results", [])
-                        if results:
-                            return self._extract_azure_bounds(results[0])
-        except Exception as e:
-            self.logger.error(f"Azure Maps address search error: {e}")
-        
+        """Stub: Azure Maps address search removed. Always returns None."""
         return None
     
     def _is_reasonable_admin_bbox(self, bbox: List[float]) -> bool:
