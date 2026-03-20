@@ -57,82 +57,88 @@ Built with Azure AI Foundry, Semantic Kernel agents, Azure AI Agent Service, and
 | Show me burned area mapping for Montana wildfire regions 2023 |
 | Show me NDVI vegetation health for Iowa cropland summer 2024 |
 | Show me sea surface temperature anomalies in the Gulf of Mexico |
+# Earth Copilot
 
-</details>
+Earth Copilot is a geospatial AI platform for natural language search, data access, and visualization. The project is now fully Azure-free and supports local-first development using Docker and environment variables.
 
-<details>
-<summary><b>Contextual Earth Science Questions</b></summary>
+## Project Structure
 
-| Query |
-|-------|
-| How was NYC impacted by Hurricane Sandy |
-| What was the impact of Hurricane Florence 2018 in North Carolina |
-| How did vegetation recover after flooding in Missouri River valley 2023 |
-| What are the long-term climate trends affecting Pacific Northwest forests |
-| Explain the correlation between El Niño events and wildfire patterns |
+```
+earth-copilot/           # Backend (FastAPI, LLM, geospatial logic)
+web-ui/                  # Frontend (Vite, React)
+documentation/           # Architecture, data collections, etc.
+infra/                   # Infrastructure as code (Bicep, scripts)
+requirements.txt         # Top-level requirements (if any)
+docker-compose.yml       # Orchestration for backend/frontend
+.env.example             # Example environment config
+```
 
-</details>
+## Quick Start (Local, Azure-Free)
 
-<details>
-<summary><b>Geointelligence & Raster Analysis</b></summary>
+### 1. Prerequisites
+- Docker
+- OpenAI-compatible API key (for LLM)
 
-| Module | Query |
-|--------|-------|
-| **Vision** | Analyze this satellite image — what land cover types are visible and what is the surface reflectance? |
-| **Terrain** | Analyze terrain elevation, slope, and line-of-sight at 38.9N, 77.0W |
-| **Comparison** | Show wildfire activity in Southern California in January 2025 and analyze how it evolved over 48 hours |
-| **Mobility** | Classify terrain traversability at these coordinates across 5 elevation layers |
-| **Building Damage** | Assess building damage using before/after satellite imagery at these coordinates |
-| **Extreme Weather** | What are the projected temperature and precipitation trends for Miami through 2050? |
+### 2. Environment Setup
+Copy `.env.example` to `.env` in the repo root and fill in your values:
+```sh
+cp .env.example .env
+# Edit .env with your LLM key and model
+```
 
-</details>
+### 3. Start the Backend
+```sh
+docker compose up --build
+```
 
-<details>
-<summary><b>Private Data Search with RAG</b></summary>
+- The backend will be available at [http://localhost:8000](http://localhost:8000)
 
-| Query |
-|-------|
-| Analyze our proprietary STAC collection for mineral exploration sites |
-| Compare our private agricultural data with public MODIS vegetation indices |
-| Search our internal disaster response catalog for similar flood patterns |
-| Query our custom satellite constellation for urban heat island analysis |
+### 4. Health Check
+```sh
+curl http://localhost:8000/api/health
+```
 
-</details>
+### 5. Test a Prompt (Smoke Test)
+```sh
+curl -X POST http://localhost:8000/api/query \
+	-H 'Content-Type: application/json' \
+	-d '{"query": "Show me satellite imagery of Paris"}'
+```
 
-### Examples
+### 6. Web UI (Optional)
+- See `web-ui/README.md` for instructions to run the frontend and point it to the backend at `http://localhost:8000`.
 
-![GEOINT Modules](./documentation/images/modules.png)
+## Configuration
 
-<table>
-<tr>
-<td align="center" width="25%"><b>ALOS World (Berlanga)</b><br/><img src="./documentation/images/maps/alos_world_berlanga.png" width="220"/></td>
-<td align="center" width="25%"><b>Burn Severity (California)</b><br/><img src="./documentation/images/maps/burn_severity_california.png" width="220"/></td>
-<td align="center" width="25%"><b>Cropland (Florida)</b><br/><img src="./documentation/images/maps/cropland_florida.png" width="220"/></td>
-<td align="center" width="25%"><b>Elevation (Grand Canyon)</b><br/><img src="./documentation/images/maps/elevation_grand_canyon.png" width="220"/></td>
-</tr>
-<tr>
-<td align="center"><b>HLS Greece Elevation</b><br/><img src="./documentation/images/maps/hls_greece_elevation.png" width="220"/></td>
-<td align="center"><b>LIDAR Height (New Orleans)</b><br/><img src="./documentation/images/maps/lidar_height_new_orleans.png" width="220"/></td>
-<td align="center"><b>MODIS Snow Cover (Quebec)</b><br/><img src="./documentation/images/maps/modis_snow_cover_quebec.png" width="220"/></td>
-<td align="center"><b>Nadir BDRF (Mexico)</b><br/><img src="./documentation/images/maps/nadir_bdrf_mexico.png" width="220"/></td>
-</tr>
-<tr>
-<td align="center"><b>Net Production (San Jose)</b><br/><img src="./documentation/images/maps/net_production_san_jose.png" width="220"/></td>
-<td align="center"><b>Sea Surface Temp (Madagascar)</b><br/><img src="./documentation/images/maps/sea_surface_temp_madagascar.png" width="220"/></td>
-<td align="center"><b>Sentinel (NYC)</b><br/><img src="./documentation/images/maps/sentinel_nyc.png" width="220"/></td>
-<td align="center"><b>Sentinel RTC (Philippines)</b><br/><img src="./documentation/images/maps/sentinel_rtc_philipines.png" width="220"/></td>
-</tr>
-<tr>
-<td align="center"><b>Surface Water (Bangladesh)</b><br/><img src="./documentation/images/maps/surface_water_bangladesh.png" width="220"/></td>
-<td align="center"><b>Vegetation Indices (Ukraine)</b><br/><img src="./documentation/images/maps/vegetation_indices_ukraine.png" width="220"/></td>
-<td align="center"><b>Vision Agent</b><br/><img src="./documentation/images/maps/agent_vision.png" width="220"/></td>
-<td align="center"><b>Vision Agent</b><br/><img src="./documentation/images/maps/agent_vision_fire.png" width="220"/></td>
-</tr>
-<tr>
-<td align="center"><b>Terrain Agent</b><br/><img src="./documentation/images/maps/agent_terrain_galapagos.png" width="220"/></td>
-<td align="center"><b>Terrain Agent</b><br/><img src="./documentation/images/maps/agent_terrain_florida.png" width="220"/></td>
-<td align="center"><b>Terrain Agent</b><br/><img src="./documentation/images/maps/agent_terrain_huston.png" width="220"/></td>
-<td align="center"><b>Mobility Agent</b><br/><img src="./documentation/images/maps/agent_mobility.png" width="220"/></td>
+Environment variables are loaded from `.env` in the repo root. See `.env.example` for required values:
+
+```
+LLM_API_KEY=sk-...
+LLM_API_BASE=https://api.openai.com/v1
+LLM_MODEL=gpt-3.5-turbo
+```
+
+## Advanced
+
+- To use a different LLM provider, update `LLM_API_BASE` and `LLM_MODEL` in your `.env` file.
+- For geocoding, the backend uses OpenStreetMap Nominatim (no API key required).
+
+## Development
+
+- Backend: `earth-copilot/container-app/`
+- Frontend: `web-ui/`
+- LLM client abstraction: `earth-copilot/container-app/llm_client.py`
+- Geocoding: `earth-copilot/container-app/semantic_translator.py` (Nominatim)
+
+## License
+
+See [LICENSE.txt](LICENSE.txt)
+
+## Crédit du projet original
+
+Ce projet est basé sur le travail original de Microsoft et de ses partenaires, présenté lors de Microsoft Ignite 2024. Pour plus d'informations, consultez la présentation officielle : [Satya Nadella présente NASA Earth Copilot 1.0 à Microsoft Ignite 2024](https://www.linkedin.com/posts/microsoft_msignite-activity-7265061510635241472-CAYx/?utm_source=share&utm_medium=member_desktop).
+
+Le code, l'architecture et la documentation s'inspirent du dépôt open source initial publié par Microsoft. Merci à tous les contributeurs du projet d'origine.
 </tr>
 <tr>
 <td align="center"><b>Mobility Agent</b><br/><img src="./documentation/images/maps/agent_mobility_alos_palsar_equador.png" width="220"/></td>

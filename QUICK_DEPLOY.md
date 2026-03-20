@@ -1,48 +1,48 @@
 # Quick Deploy - Earth Copilot (GitHub Actions)
+# Quick Deploy: Earth Copilot (Azure-Free)
 
-**Full automated deployment to Azure via GitHub Actions**
+This guide describes how to quickly deploy the entire Earth Copilot system (backend and frontend) locally, with no Azure dependencies.
 
-Deploy Earth Copilot to your Azure subscription with full automation. This workflow deploys all infrastructure, backend, and frontend in < 1 hour.
+## Prerequisites
+- Docker
+- OpenAI-compatible API key (for LLM)
 
-### What Gets Deployed
+## 1. Environment Setup
+Copy `.env.example` to `.env` in the repo root and fill in your values:
+```sh
+cp .env.example .env
+# Edit .env with your LLM key and model
+```
 
-Earth Copilot is a multi-agent geospatial AI system powered by **Azure AI Agent Service** and **Semantic Kernel**.
+## 2. Start the Backend
+```sh
+docker compose up --build
+```
 
-The infrastructure includes Azure AI Foundry (with GPT model deployment of your choice + Agent Service Hub/Project), Container Apps, Azure Maps, Container Registry (with VNet-integrated build agent pool), Key Vault, and Storage.
+- The backend will be available at [http://localhost:8000](http://localhost:8000)
 
+## 3. Health Check
+```sh
+curl http://localhost:8000/api/health
+```
 
-## Deployment Overview
+## 4. Test a Prompt (Smoke Test)
+```sh
+curl -X POST http://localhost:8000/api/query \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "Show me satellite imagery of Paris"}'
+```
 
-These instructions work for any Azure subscription:
+## 5. Web UI (Optional)
+- See `web-ui/README.md` for instructions to run the frontend and point it to the backend at `http://localhost:8000`.
 
-| Aspect | Value | Who Provides It |
-|--------|-------|-----------------|
-| Source repo to fork | `microsoft/Earth-Copilot` | OSS |
-| Azure subscription | User's own | User |
-| Service principal | Created by user | User |
-| GitHub secret | `AZURE_CREDENTIALS` | User |
-| Resource group | `rg-earthcopilot` (default) | Workflow (`vars.RESOURCE_GROUP`) |
-| Location | `eastus2` (default) | Workflow (`vars.LOCATION`) |
-| Project name prefix | `earthcopilot` (default) | Workflow (`vars.PROJECT_NAME`) |
-| Resource names | Auto-generated unique | Workflow (dynamic) |
-| Private endpoints | **ON** by default | Workflow (opt-out: `disable_private_endpoints`) |
-| Authentication | **ON** if `AUTH_CLIENT_ID` secret is set | User creates app registration + sets secret |
+## Advanced
+- To use a different LLM provider, update `LLM_API_BASE` and `LLM_MODEL` in your `.env` file.
+- For geocoding, the backend uses OpenStreetMap Nominatim (no API key required).
 
----
+## License
 
-## What You'll Need
-
-- **Azure Account**: Active Azure subscription
-- **GitHub Account**: To fork this repository
-- **Azure CLI**: Required for Azure authentication and resource provider registration ([Install in Step 3](#step-3-install-required-cli-tools))
-- **GitHub CLI**: Optional but recommended for easier secret configuration ([Install in Step 3](#step-3-install-required-cli-tools))
-
-### Required Azure Permissions
-
-You need these permissions (all configured manually before deploying):
-
-| Permission Type | Required Role | Purpose | Required? |
-|-----------------|---------------|---------|-----------|
+See [LICENSE.txt](LICENSE.txt)
 | **Azure AD** | "Users can register applications" = Yes (default) OR **Application Developer** role | Create service principal (Step 7) | **Yes** |
 | **Azure Subscription** | **Contributor** + **User Access Administrator** | Deploy resources + assign roles | **Yes** |
 
