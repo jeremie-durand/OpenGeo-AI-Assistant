@@ -6,45 +6,21 @@
 
 </div>
 
-# 🌍 Welcome to Earth Copilot!
-**An AI-powered geospatial application that allows you to explore and visualize vast Earth science data using natural language queries.**
 
-## Overview
+# 🌍 Open Geospatial Copilot
 
-Built with Azure AI Foundry, Semantic Kernel agents, Azure AI Agent Service, and containerized microservices, Earth Copilot automatically finds the right planetary data collection, renders it on a map, and analyzes it for you. Whether you're a scientist, analyst, or decision-maker, Earth Copilot helps you spend less time finding data and more time unlocking insights.
+An open-source, AI-powered geospatial assistant for exploring, analyzing, and visualizing Earth data using natural language queries. This project is based on the original Earth Copilot by Microsoft, but is Azure-free.
 
-**Watch Satya Nadella introduce NASA Earth Copilot 1.0 at Microsoft Ignite 2024**: [View Here](https://www.linkedin.com/posts/microsoft_msignite-activity-7265061510635241472-CAYx/?utm_source=share&utm_medium=member_desktop)
+## Project Description
 
-**Auto-Deploy Ready:** This repository includes fully automated deployment via **Bicep** and **GitHub Actions**. Follow the [Quick Start Guide](QUICK_DEPLOY.md) to deploy the complete architecture: infrastructure, backend, and frontend within one hour. Its modular architecture is designed for extensibility to any use case.
+Open Geospatial Copilot enables users to:
+- Search and visualize satellite and geospatial data collections with natural language
+- Run locally via Docker, without any Azure dependencies
+- Extend and customize backend and frontend modules for new data sources or workflows
 
-> **This is a proof-of-concept, not a production-ready product.**
-> 
-> Earth Copilot demonstrates a reusable geospatial AI pattern that can be adapted across different use cases. This open source repository is not supported by Microsoft Copilot and will continue to evolve.
+The project is inspired by and reuses open source patterns from [Earth Copilot](https://github.com/microsoft/Earth-Copilot), but is not affiliated with or endorsed by Microsoft. See the credit section below for attribution.
 
-##  Features
-
-- **AI Agent Architecture** — Semantic Kernel + Azure AI Agent Service with extendable modules for vision, terrain, mobility, comparison, building damage, and extreme weather analysis
-- **130+ Satellite Collections** — Microsoft Planetary Computer & NASA VEDA data catalog integration
-- **Bring Your Own Data** — Connect your own private STAC catalogs via Planetary Computer Pro or extend with custom MCP tools
-- **MCP Server Integration** — Model Context Protocol server for integration with VS Code GitHub Copilot and other AI assistants
-- **Copilot Studio & M365** — Integrate with Microsoft Copilot Studio for Teams and M365 deployment via custom connectors
-- **ArcGIS Integration** — Connect with Esri ArcGIS for advanced geospatial workflows, map services, and enterprise GIS capabilities
-- **Fully Private Deployment** — Automated VNet integration with private endpoints, private DNS zones, and Entra ID authentication for an enterprise-ready deployment out of the box
-
-
-## Use Cases
-
-| | | | | |
-|:---:|:---:|:---:|:---:|:---:|
-| **Science & Environment** | **Agriculture & Natural Resources** | **Energy & Infrastructure** | **Public Safety & Emergency Management** | **Defense / National Security** |
-| Accelerates climate, air quality, land-surface, extreme weather scenarios, and environmental research | Assess drought conditions, soil moisture, and water quality for agriculture planning | Monitor energy grids, transmission corridors, and dam infrastructure, supporting site selection and permitting | Supports response to wildfires, floods, hurricanes, and other natural disasters | Monitor geospatial intelligence and support situational awareness for national security operations |
-
-
-##  What Earth Copilot Does
-
-![Earth Copilot Interface](documentation/images/EC.png)
-
-### Query Examples
+## Query Examples
 
 <details>
 <summary><b>Satellite Imagery & Visualization</b></summary>
@@ -57,33 +33,18 @@ Built with Azure AI Foundry, Semantic Kernel agents, Azure AI Agent Service, and
 | Show me burned area mapping for Montana wildfire regions 2023 |
 | Show me NDVI vegetation health for Iowa cropland summer 2024 |
 | Show me sea surface temperature anomalies in the Gulf of Mexico |
-# Earth Copilot
 
-Earth Copilot is a geospatial AI platform for natural language search, data access, and visualization. The project is now fully Azure-free and supports local-first development using Docker and environment variables.
-
-## Project Structure
-
-```
-earth-copilot/           # Backend (FastAPI, LLM, geospatial logic)
-web-ui/                  # Frontend (Vite, React)
-documentation/           # Architecture, data collections, etc.
-infra/                   # Infrastructure as code (Bicep, scripts)
-requirements.txt         # Top-level requirements (if any)
-docker-compose.yml       # Orchestration for backend/frontend
-.env.example             # Example environment config
-```
-
-## Quick Start (Local, Azure-Free)
+## Quick Start
 
 ### 1. Prerequisites
 - Docker
-- OpenAI-compatible API key (for LLM)
+- API key for your LLM provider (OpenAI or Anthropic/Claude supported)
 
 ### 2. Environment Setup
 Copy `.env.example` to `.env` in the repo root and fill in your values:
 ```sh
 cp .env.example .env
-# Edit .env with your LLM key and model
+# Edit .env with your LLM provider, key, and model
 ```
 
 ### 3. Start the Backend
@@ -110,12 +71,22 @@ curl -X POST http://localhost:8000/api/query \
 
 ## Configuration
 
-Environment variables are loaded from `.env` in the repo root. See `.env.example` for required values:
 
+Environment variables are loaded from `.env` in the repo root. See `.env.example` for required values and provider-specific examples.
+
+#### Example for OpenAI:
 ```
-LLM_API_KEY=sk-...
-LLM_API_BASE=https://api.openai.com/v1
-LLM_MODEL=gpt-3.5-turbo
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-...your-openai-key...
+LLM_MODEL=gpt-4-1106-preview
+```
+
+#### Example for Anthropic (Claude):
+```
+LLM_PROVIDER=anthropic
+LLM_API_KEY=...your-anthropic-key...
+LLM_MODEL=claude-3-opus-20240229
+LLM_BASE_URL=https://api.anthropic.com/v1
 ```
 
 ## Advanced
