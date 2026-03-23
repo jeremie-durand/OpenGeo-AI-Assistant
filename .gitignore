@@ -35,10 +35,6 @@ dist-check/
 !.env.example
 !.env.template
 
-# Azure specific environment files
-local.settings.json
-.azure/
-
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
@@ -225,16 +221,10 @@ publish/
 
 # Publish Web Output
 *.[Pp]ublish.xml
-*.azurePubxml
 # Note: Comment the next line if you want to checkin your web deploy settings,
 # but database connection strings (with potential passwords) will be unencrypted
 *.pubxml
 *.publishproj
-
-# Microsoft Azure Web App publish settings. Comment the next line if you want to
-# checkin your Azure Web App publish settings, but sensitive information contained
-# in these scripts will be unencrypted
-PublishScripts/
 
 # NuGet Packages
 *.nupkg
@@ -249,14 +239,6 @@ PublishScripts/
 # NuGet v3's project.json files produces more ignorable files
 *.nuget.props
 *.nuget.targets
-
-# Microsoft Azure Build Output
-csx/
-*.build.csdef
-
-# Microsoft Azure Emulator
-ecf/
-rcf/
 
 # Windows Store app package directories and files
 AppPackages/
@@ -383,21 +365,10 @@ env/
 *.pyo
 *.pyd
 
-# Azure Functions specific
-local.settings.json
-!local.settings.json.example
-!local.settings.json.template
-
 # Function logs
 *.log
 function_debug.log
 semantic_translator_debug.log
-
-# Azure deployment artifacts
-*.zip
-function-app*.zip
-react-ui*.zip
-webapp-logs/
 
 # Temporary deployment files
 deploy.zip
@@ -421,9 +392,6 @@ deploy.zip
 
 # OpenCover UI analysis results
 OpenCover/
-
-# Azure Stream Analytics local run output
-ASALocalRun/
 
 # MSBuild Binary and Structured Log
 *.binlog

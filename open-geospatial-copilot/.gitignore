@@ -43,13 +43,6 @@ Thumbs.db
 *.log
 logs/
 
-# Azure & Deployment
-.azure/
-*.publish
-.azurewebsites/
-azds.yaml
-charts/
-
 # Data & Artifacts
 data/
 models/
