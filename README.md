@@ -11,16 +11,12 @@ Open Geospatial Copilot enables users to:
 
 The project is inspired by and reuses open source patterns from [Earth Copilot](https://github.com/microsoft/Earth-Copilot), but is not affiliated with or endorsed by Microsoft. See the credit section below for attribution.
 
-## Query Examples
+## Differences from the Original Project
 
-| Query |
-|-------|
-| Show me high resolution satellite imagery of Dubai urban expansion in 2020 |
-| Show me radar imagery of Houston Texas during Hurricane Harvey August 2017 |
-| Show me HLS Landsat imagery for Ukraine farmland from 2024 |
-| Show me burned area mapping for Montana wildfire regions 2023 |
-| Show me NDVI vegetation health for Iowa cropland summer 2024 |
-| Show me sea surface temperature anomalies in the Gulf of Mexico |
+This project extends and adapts the original Earth Copilot codebase with the following changes:
+
+- Removed all dependencies on Microsoft Azure tools  
+- Implemented custom large language model (LLM) options instead of relying solely on OpenAI
 
 ## Quick Deploy
 
