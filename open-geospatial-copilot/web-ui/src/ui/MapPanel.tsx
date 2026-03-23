@@ -1,66 +1,66 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
+declare const atlas: any;
 import React, { useEffect, useRef } from 'react';
-import axios from 'axios';
 import type { CollectionInfo } from './App';
 
-declare const atlas: any;
-
 export default function MapPanel({ geojson, selected }: { geojson: any | null; selected: CollectionInfo | null }) {
-  const mapRef = useRef<any>(null);
-  const dsRef = useRef<any>(null);
+  const mapDivRef = useRef<any>(null);
+  const leafletMapRef = useRef<any>(null);
+  const geoJsonLayerRef = useRef<any>(null);
 
+  // Initialize Leaflet map
   useEffect(() => {
-    async function init() {
-      const cfg = await axios.get('/maps-config').then(r => r.data);
-      const map = new atlas.Map('map', {
-        center: [-95.7129, 37.0902],
+    if (!mapDivRef.current || leafletMapRef.current) return;
+    if (typeof window !== 'undefined' && window.L) {
+      const map = window.L.map(mapDivRef.current, {
+        center: [37.0902, -95.7129],
         zoom: 3,
-        style: 'satellite',
-        authOptions: { authType: 'subscriptionKey', subscriptionKey: cfg.subscriptionKey },
+        zoomControl: true
       });
-      map.events.add('ready', () => {
-        const ds = new atlas.source.DataSource();
-        map.sources.add(ds);
-        map.layers.add(new atlas.layer.PolygonLayer(ds, null, { fillColor: 'rgba(255,165,0,0.2)', fillOpacity: 0.7 }));
-        map.layers.add(new atlas.layer.LineLayer(ds, null, { strokeColor: 'orange', strokeWidth: 2 }));
-        dsRef.current = ds;
-      });
-      mapRef.current = map;
+      window.L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '© Esri World Imagery',
+        maxZoom: 22
+      }).addTo(map);
+      leafletMapRef.current = map;
     }
-    init();
   }, []);
 
+  // Update GeoJSON overlay
   useEffect(() => {
-    if (!geojson || !dsRef.current) return;
-    dsRef.current.clear();
-    for (const f of geojson.features || []) {
-      dsRef.current.add(f);
+    if (!leafletMapRef.current) return;
+    const map = leafletMapRef.current;
+    // Remove previous GeoJSON layer
+    if (geoJsonLayerRef.current) {
+      map.removeLayer(geoJsonLayerRef.current);
+      geoJsonLayerRef.current = null;
     }
-    // Compute union bbox of ALL features, not just the first one
-    if (geojson.features?.length > 0 && mapRef.current) {
-      let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
-      for (const f of geojson.features) {
-        if (f.bbox && f.bbox.length >= 4) {
-          minLon = Math.min(minLon, f.bbox[0]);
-          minLat = Math.min(minLat, f.bbox[1]);
-          maxLon = Math.max(maxLon, f.bbox[2]);
-          maxLat = Math.max(maxLat, f.bbox[3]);
+    if (geojson && geojson.features && geojson.features.length > 0) {
+      const geoLayer = window.L.geoJSON(geojson, {
+        style: {
+          color: 'orange',
+          weight: 2,
+          fillColor: 'rgba(255,165,0,0.2)',
+          fillOpacity: 0.7
         }
-      }
-      if (minLon !== Infinity) {
-        mapRef.current.setCamera({ bounds: [minLon, minLat, maxLon, maxLat], padding: 50 });
+      }).addTo(map);
+      geoJsonLayerRef.current = geoLayer;
+      // Fit map to features
+      const bounds = geoLayer.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50] });
       }
     }
   }, [geojson]);
 
+  // Fit map to selected collection extent
   useEffect(() => {
-    if (selected?.extent_bbox && mapRef.current) {
+    if (selected?.extent_bbox && leafletMapRef.current) {
       const b = selected.extent_bbox;
-      mapRef.current.setCamera({ bounds: [b[0], b[1], b[2], b[3]], padding: 50 });
+      leafletMapRef.current.fitBounds([[b[1], b[0]], [b[3], b[2]]], { padding: [50, 50] });
     }
   }, [selected]);
 
-  return <div id="map"></div>;
+  return <div ref={mapDivRef} style={{ width: '100%', height: '100%' }} />;
 }

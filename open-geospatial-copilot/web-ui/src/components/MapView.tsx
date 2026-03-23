@@ -131,7 +131,6 @@ const MapView: React.FC<MapViewProps> = ({
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapProvider, setMapProvider] = useState<'azure' | 'leaflet' | null>(null);
   const [mapsConfig, setMapsConfig] = useState<any>(null);
   const [satelliteData, setSatelliteData] = useState<SatelliteData | null>(null);
   const [currentLayer, setCurrentLayer] = useState<any>(null);
@@ -226,76 +225,38 @@ const MapView: React.FC<MapViewProps> = ({
   // Zoom level tracking state
   const [currentZoomLevel, setCurrentZoomLevel] = useState<number>(4);
 
-  // Initialize fallback map using OpenStreetMap when Azure Maps fails
-  const initializeFallbackMap = () => {
-    if (!mapRef.current || mapProvider === 'leaflet') return;
-
-    console.log('??? MapView: Initializing fallback Leaflet map');
-
-    // Check if Leaflet is available
+  // Initialize Leaflet map
+  useEffect(() => {
+    if (!mapRef.current || map) return;
     if (typeof window !== 'undefined' && window.L) {
       try {
-        // Create Leaflet map
         const leafletMap = window.L.map(mapRef.current, {
-          center: [39.8282, -98.5795], // Center of United States
+          center: [39.8282, -98.5795],
           zoom: 4,
           zoomControl: true
         });
-
-        // Add satellite tile layer using Esri World Imagery
         window.L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-          attribution: '� Esri World Imagery',
-          maxZoom: 22 // Maximum useful zoom level for satellite imagery
+          attribution: '© Esri World Imagery',
+          maxZoom: 22
         }).addTo(leafletMap);
-
         setMap(leafletMap);
-        setMapProvider('leaflet');
         setMapLoaded(true);
         setMapError(null);
-
-        console.log('??? MapView: Fallback Leaflet map initialized successfully');
+        console.log('MapView: Leaflet map initialized successfully');
       } catch (error) {
-        console.error('??? MapView: Failed to initialize fallback map:', error);
-        setMapError('Failed to initialize any map system');
-      }
-    } else {
-      // Create basic HTML/CSS map as last resort
-      console.log('??? MapView: Creating basic HTML map as last resort');
-      if (mapRef.current) {
-        mapRef.current.innerHTML = `
-          <div style="
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(45deg, #4a90e2, #7fb3d3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-family: Arial, sans-serif;
-            text-align: center;
-            flex-direction: column;
-          ">
-            <h3>?? Map View</h3>
-            <p>Map services temporarily unavailable</p>
-            <p>Satellite data will be displayed here when map loads</p>
-          </div>
-        `;
-        setMapProvider('leaflet'); // Set to indicate fallback is active
-        setMapLoaded(true);
-        setMapError(null);
+        console.error('MapView: Failed to initialize Leaflet map:', error);
+        setMapError('Failed to initialize map');
       }
     }
-  };
+  }, [mapRef, map]);
 
-  // Helper function to test tile URL at specific coordinates
+  // Helper function to test tile URL at specific coordinates (Leaflet only)
   const testTileUrl = async (tileTemplate: string, z: number, x: number, y: number): Promise<void> => {
     const testUrl = tileTemplate.replace('{z}', z.toString()).replace('{x}', x.toString()).replace('{y}', y.toString());
-    console.log(`??? MapView: [TILE-TEST] Testing tile at ${z}/${x}/${y}: ${testUrl}`);
-
+    console.log(`MapView: [TILE-TEST] Testing tile at ${z}/${x}/${y}: ${testUrl}`);
     try {
       const response = await fetch(testUrl);
-      console.log(`??? MapView: [TILE-TEST] Response status: ${response.status}`);
-      
+      console.log(`MapView: [TILE-TEST] Response status: ${response.status}`);
       if (response.ok) {
         const blob = await response.blob();
         console.log(`MapView: [TILE-TEST] Success! Blob size: ${blob.size} bytes, type: ${blob.type}`);
@@ -358,15 +319,7 @@ const MapView: React.FC<MapViewProps> = ({
         console.log(`[SNAP] MapView: Using canvas: ${canvas.width}x${canvas.height}`);
         
         // FIX: Force Azure Maps to render if it's the active map
-        if (map && mapProvider === 'azure') {
-          console.log('[SNAP] Forcing Azure Maps render before capture...');
-          try {
-            // Trigger a repaint/render cycle
-            (map as any).triggerRepaint?.();
-          } catch (e) {
-            console.log('[SNAP] triggerRepaint not available, continuing...');
-          }
-        }
+        // No Azure Maps logic needed for Leaflet
         
         // CRITICAL: For WebGL, we MUST capture during the next animation frame
         // This is the only reliable way to get the rendered content
@@ -510,15 +463,11 @@ const MapView: React.FC<MapViewProps> = ({
         if (navigateToData.bbox && Array.isArray(navigateToData.bbox) && navigateToData.bbox.length === 4) {
           console.log('MapView: Using bbox for navigation:', navigateToData.bbox);
           
-          // Use Azure Maps instance (from state) to fly to the bbox
-          if (map && typeof map.setCamera === 'function') {
+          // Use Leaflet to fit bounds
+          if (map && typeof map.fitBounds === 'function') {
             const [minLon, minLat, maxLon, maxLat] = navigateToData.bbox;
-            map.setCamera({
-              bounds: [minLon, minLat, maxLon, maxLat],
-              padding: { top: 50, bottom: 50, left: 50, right: 50 },
-              type: 'jump'
-            });
-            console.log('MapView: Azure Maps camera set to bbox:', navigateToData.bbox);
+            map.fitBounds([[minLat, minLon], [maxLat, maxLon]], { padding: [50, 50] });
+            console.log('MapView: Leaflet fitBounds to bbox:', navigateToData.bbox);
           } else {
             console.warn('MapView: Map not ready for camera update');
           }
@@ -526,13 +475,9 @@ const MapView: React.FC<MapViewProps> = ({
           console.log('MapView: Using lat/lon for navigation:', navigateToData.latitude, navigateToData.longitude);
           
           // Fallback to center + zoom if no bbox
-          if (map && typeof map.setCamera === 'function') {
-            map.setCamera({
-              center: [navigateToData.longitude, navigateToData.latitude],
-              zoom: navigateToData.zoom || 10,
-              type: 'jump'
-            });
-            console.log('MapView: Azure Maps camera set to center:', [navigateToData.longitude, navigateToData.latitude]);
+          if (map && typeof map.setView === 'function') {
+            map.setView([navigateToData.latitude, navigateToData.longitude], navigateToData.zoom || 10);
+            console.log('MapView: Leaflet setView to center:', [navigateToData.latitude, navigateToData.longitude]);
           } else {
             console.warn('MapView: Map not ready for camera update');
           }
@@ -665,8 +610,9 @@ const MapView: React.FC<MapViewProps> = ({
                 console.log('MapView: Set mosaic satellite data - single seamless tile layer');
                 
                 // Update map view to show entire coverage area
-                if (map && bbox) {
-                  updateMapView(bbox);
+                if (map && bbox && typeof map.fitBounds === 'function') {
+                  const [minLon, minLat, maxLon, maxLat] = bbox;
+                  map.fitBounds([[minLat, minLon], [maxLat, maxLon]], { padding: [50, 50] });
                 }
                 
                 return; // Exit early - mosaic rendering will use single tilejson URL
@@ -734,8 +680,9 @@ const MapView: React.FC<MapViewProps> = ({
                 console.log('? MapView: Set multi-tile satellite data');
                 
                 // Update map view to show entire coverage area
-                if (map && bbox) {
-                  updateMapView(bbox);
+                if (map && bbox && typeof map.fitBounds === 'function') {
+                  const [minLon, minLat, maxLon, maxLat] = bbox;
+                  map.fitBounds([[minLat, minLon], [maxLat, maxLon]], { padding: [50, 50] });
                 }
                 
                 return; // Exit early - multi-tile rendering will be handled in the rendering effect
@@ -894,8 +841,9 @@ const MapView: React.FC<MapViewProps> = ({
                     console.log('? MapView: Set elevation data with TileJSON tiles');
                     console.log('?? MapView: Tiles will now render from authenticated TileJSON endpoint');
                     
-                    if (map && overallBbox) {
-                      updateMapView(overallBbox);
+                    if (map && overallBbox && typeof map.fitBounds === 'function') {
+                      const [minLon, minLat, maxLon, maxLat] = overallBbox;
+                      map.fitBounds([[minLat, minLon], [maxLat, maxLon]], { padding: [50, 50] });
                     }
                   } catch (error) {
                     console.error('? MapView: Error fetching TileJSON:', error);

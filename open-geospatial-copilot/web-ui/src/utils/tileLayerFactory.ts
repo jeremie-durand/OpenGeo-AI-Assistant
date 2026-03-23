@@ -13,346 +13,126 @@
       console.log(`[TileLayerFactory] High-res optical (no TileJSON): zoom range ${minZoom}-${maxZoom}`);
     }
     // MODIS: enforce minimum zoom to avoid 404 errors with large footprints
-    else if (collectionLower.includes('modis')) {
-      minZoom = 8; // CRITICAL: MODIS ~1200km footprints need zoom 8+
-      maxZoom = 18;
-      console.log(`[TileLayerFactory] MODIS (no TileJSON): zoom range ${minZoom}-${maxZoom}`);
-    }ype, data characteristics, and rendering requirements.
- * Consolidates tile layer creation logic from MapView.tsx.
- * 
- * @module tileLayerFactory
- */
 
-import { getCollectionConfig, DataType } from './renderingConfig';
-import type { TileJsonResponse } from './tileJsonFetcher';
+    import { getCollectionConfig } from './renderingConfig';
+    import type { TileJsonResponse } from './tileJsonFetcher';
 
-export interface TileLayerOptions {
-  tileUrl: string;
-  collection: string;
-  bounds?: number[];
-  tilejson?: TileJsonResponse;
-  isElevation?: boolean;
-  isThermal?: boolean;
-  isFire?: boolean;
-  customOpacity?: number;
-}
+    export interface TileLayerOptions {
+      tileUrl: string;
+      collection: string;
+      bounds?: number[];
+      tilejson?: TileJsonResponse;
+      isElevation?: boolean;
+      isThermal?: boolean;
+      isFire?: boolean;
+      customOpacity?: number;
+    }
 
-export interface TileLayerConfig {
-  tileUrl: string;
-  opacity: number;
-  tileSize: number;
-  bounds?: number[];
-  minSourceZoom: number;
-  maxSourceZoom: number;
-  tileLoadRadius: number;
-  blend: string;
-  fadeDuration: number;
-  rasterOpacity: number;
-  buffer: number;
-  tolerance: number;
-  interpolate: boolean;
-  // Thermal-specific
-  noDataValue?: number;
-  resample?: string;
-  // Quality enhancements
-  errorTolerance?: number;
-  ignoreInvalidTiles?: boolean;
-  maxRetries?: number;
-  antialiasing?: boolean;
-  smoothTransitions?: boolean;
-}
+    /**
+     * Creates a Leaflet TileLayer with optimized configuration
+     * @param options - Configuration options for tile layer
+     * @param leaflet - Leaflet library (window.L)
+     * @returns Configured Leaflet TileLayer instance
+     */
+    export function createTileLayer(
+      options: TileLayerOptions,
+      leaflet: any
+    ): any {
+      const {
+        tileUrl,
+        collection,
+        bounds,
+        tilejson,
+        isElevation = false,
+        isThermal = false,
+        isFire = false,
+        customOpacity
+      } = options;
 
-/**
- * Creates an Azure Maps TileLayer with optimized configuration
- * 
- * @param options - Configuration options for tile layer
- * @param atlasLibrary - Azure Maps atlas library (window.atlas)
- * @returns Configured TileLayer instance
- */
-export function createTileLayer(
-  options: TileLayerOptions,
-  atlasLibrary: any
-): any {
-  const {
-    tileUrl,
-    collection,
-    bounds,
-    tilejson,
-    isElevation = false,
-    isThermal = false,
-    isFire = false,
-    customOpacity
-  } = options;
+      console.log(`[TileLayerFactory] Creating Leaflet tile layer for collection: ${collection}`);
 
-  console.log(`[TileLayerFactory] Creating tile layer for collection: ${collection}`);
+      // Get centralized rendering configuration
+      const renderingConfig = getCollectionConfig(collection);
+      const collectionLower = collection.toLowerCase();
 
-  // Get centralized rendering configuration
-  const renderingConfig = getCollectionConfig(collection);
-  
-  // Normalize collection name for pattern matching (used throughout)
-  const collectionLower = collection.toLowerCase();
-  
-  // COLLECTION-SPECIFIC ZOOM LEVEL CONFIGURATION
-  // Determine zoom levels based on collection characteristics and data resolution
-  let minZoom = renderingConfig.minZoom;
-  let maxZoom = renderingConfig.maxZoom;
-
-  // Override with TileJSON if available (authoritative source from data provider)
-  if (tilejson) {
-    if (tilejson.minzoom !== undefined || tilejson.maxzoom !== undefined) {
-      // Special handling for MODIS collections
-      if (collectionLower.includes('modis')) {
-        // MODIS individual-item tiles reliably exist only at zoom 8+
-        // Each MODIS granule is a sinusoidal grid tile (~1200km). Below zoom 8,
-        // WebMercatorQuad tiles don't align with reprojected granule footprints → 404
-        // Backend hybrid_rendering_system.py confirms: min_zoom=8
-        minZoom = Math.max(8, tilejson.minzoom || 8);
-        maxZoom = tilejson.maxzoom !== undefined ? Math.min(tilejson.maxzoom, 12) : 12; // Cap at 12 (data pixelates beyond)
-        console.log(`[TileLayerFactory] MODIS collection: zoom range ${minZoom}-${maxZoom} (item tiles available at zoom 8+)`);
-      } 
-      // High-resolution optical collections can zoom very deep
-      // Covers: sentinel-2-l2a, landsat-c2-l2, landsat-8-c2-l2, landsat-9-c2-l2, naip, hls (all variants)
-      // NOTE: HLS mosaic tiles only exist at zoom 8+ from PC API (HTTP 204 at lower zooms)
-      // However, we allow minZoom=0 so Azure Maps can OVERZOOM the tiles at lower zoom levels
-      // This prevents tiles from disappearing when zooming out - instead they'll just be upscaled
-      else if (collectionLower.includes('sentinel-2') || 
-               collectionLower.includes('landsat') ||
-               collectionLower.includes('hls') ||
-               collectionLower.includes('naip')) {
-        // FIX: Set minZoom=0 to allow tile display at all zoom levels via overzooming
-        // The tiles may look pixelated at low zoom, but they won't disappear
-        // Azure Maps will request zoom 8+ tiles and scale them down for display at lower zooms
-        minZoom = 0; // Allow display at any zoom level
-        maxZoom = tilejson.maxzoom !== undefined ? Math.max(tilejson.maxzoom, 22) : 22; // Allow deep zoom for clarity
-        console.log(`[TileLayerFactory] High-res optical: zoom range ${minZoom}-${maxZoom} (allowing overzoom at low zoom levels)`);
+      // Determine zoom levels
+      let minZoom = renderingConfig.minZoom;
+      let maxZoom = renderingConfig.maxZoom;
+      if (tilejson) {
+        if (tilejson.minzoom !== undefined) minZoom = tilejson.minzoom;
+        if (tilejson.maxzoom !== undefined) maxZoom = tilejson.maxzoom;
       }
-      // SAR collections (Sentinel-1 GRD/RTC)
-      else if (collectionLower.includes('sentinel-1')) {
-        minZoom = Math.max(6, tilejson.minzoom || 6); // Enforce min zoom 6 for SAR too
-        maxZoom = tilejson.maxzoom !== undefined ? Math.max(tilejson.maxzoom, 20) : 20;
-        console.log(`[TileLayerFactory] SAR collection: zoom range ${minZoom}-${maxZoom}`);
+
+      // Opacity
+      let opacity = customOpacity !== undefined ? customOpacity : renderingConfig.opacity;
+      if (collectionLower.includes('sentinel-2') || collectionLower.includes('landsat') || collectionLower.includes('hls') || collectionLower.includes('naip')) {
+        opacity = Math.max(opacity, 0.98);
+      } else if (collectionLower.includes('sentinel-1')) {
+        opacity = Math.max(opacity, 0.95);
+      } else if (isElevation || collectionLower.includes('dem') || collectionLower.includes('elevation')) {
+        opacity = 0.65;
+      } else if (isFire || collectionLower.includes('fire') || collectionLower.includes('14a')) {
+        opacity = 0.7;
+      } else if (isThermal || collectionLower.includes('thermal')) {
+        opacity = 1.0;
+      } else {
+        opacity = Math.max(opacity, 0.85);
       }
-      // Elevation models
-      else if (isElevation || collectionLower.includes('dem') || collectionLower.includes('elevation')) {
-        minZoom = Math.max(5, tilejson.minzoom || 5); // DEM can work at slightly lower zoom
-        maxZoom = tilejson.maxzoom !== undefined ? Math.max(tilejson.maxzoom, 20) : 20;
-        console.log(`[TileLayerFactory] Elevation model: zoom range ${minZoom}-${maxZoom}`);
+
+      // Leaflet TileLayer options
+      const leafletOptions: any = {
+        opacity,
+        minZoom,
+        maxZoom,
+        tileSize: renderingConfig.tileSize || 256,
+        bounds: bounds && bounds.length === 4 ? [[bounds[1], bounds[0]], [bounds[3], bounds[2]]] : undefined,
+        // Add more options as needed
+      };
+
+      // Create and return the Leaflet tile layer
+      return leaflet.tileLayer(tileUrl, leafletOptions);
+    }
+
+    /**
+     * Creates multiple Leaflet tile layers for seamless multi-tile rendering
+     * @param tiles - Array of tile information with URLs and bounds
+     * @param collection - Collection identifier
+     * @param leaflet - Leaflet library (window.L)
+     * @returns Array of configured Leaflet TileLayer instances
+     */
+    export async function createMultipleTileLayers(
+      tiles: Array<{ tileUrl: string; bounds: number[]; itemId: string; tilejson?: TileJsonResponse }>,
+      collection: string,
+      leaflet: any
+    ): Promise<{ layers: any[]; successCount: number; errorCount: number }> {
+      console.log(`[TileLayerFactory] Creating ${tiles.length} Leaflet tile layers for seamless coverage`);
+      const layers: any[] = [];
+      let successCount = 0;
+      let errorCount = 0;
+      const isElevation = collection.toLowerCase().includes('dem') || collection.toLowerCase().includes('elevation');
+      for (const tile of tiles) {
+        try {
+          const layer = createTileLayer(
+            {
+              tileUrl: tile.tileUrl,
+              collection,
+              bounds: tile.bounds,
+              tilejson: tile.tilejson,
+              isElevation
+            },
+            leaflet
+          );
+          layers.push(layer);
+          successCount++;
+          console.log(`[TileLayerFactory] Created Leaflet layer ${successCount}/${tiles.length}: ${tile.itemId}`);
+        } catch (error) {
+          console.error(`[TileLayerFactory] Error creating Leaflet layer for ${tile.itemId}:`, error);
+          errorCount++;
+        }
       }
-      // Default: use TileJSON values
-      else {
-        minZoom = tilejson.minzoom !== undefined ? tilejson.minzoom : minZoom;
-        maxZoom = tilejson.maxzoom !== undefined ? tilejson.maxzoom : maxZoom;
-        console.log(`�️ [TileLayerFactory] Using TileJSON zoom range: ${minZoom}-${maxZoom}`);
-      }
+      console.log(`[TileLayerFactory] Multi-tile Leaflet layer creation complete. Success: ${successCount}, Errors: ${errorCount}`);
+      return { layers, successCount, errorCount };
     }
-  }
-  // No TileJSON: use collection-specific defaults
-  else {
-    // HLS collections: allow display at all zoom levels via overzooming
-    // Mosaic tiles only exist at zoom 8+, but we set minZoom=0 to overzoom at lower levels
-    if (collectionLower.includes('hls')) {
-      minZoom = 0; // Allow overzoom at lower levels (tiles will be upscaled from zoom 8)
-      maxZoom = 22;
-      console.log(`[TileLayerFactory] HLS (no TileJSON): zoom range ${minZoom}-${maxZoom} (allowing overzoom at low zoom levels)`);
-    }
-    // High-resolution optical: enable deep zoom and allow overzoom
-    else if (collectionLower.includes('sentinel-2') || 
-        collectionLower.includes('landsat') ||
-        collectionLower.includes('naip')) {
-      minZoom = 0; // Allow overzoom at lower levels
-      maxZoom = 22; // Maximum zoom for crisp detail
-      console.log(`[TileLayerFactory] High-res optical (no TileJSON): zoom range ${minZoom}-${maxZoom}`);
-    }
-    // MODIS: item-level tiles only exist at zoom 8+ (sinusoidal granules → WebMercator 404 below zoom 8)
-    else if (collectionLower.includes('modis')) {
-      minZoom = 8; // Matches backend hybrid_rendering_system.py min_zoom=8
-      maxZoom = 18;
-      console.log(`[TileLayerFactory] MODIS (no TileJSON): zoom range ${minZoom}-${maxZoom} (item tiles at zoom 8+)`);
-    }
-    // SAR, Elevation, other collections: use config defaults with reasonable max zoom
-    else {
-      minZoom = renderingConfig.minZoom;
-      maxZoom = Math.max(renderingConfig.maxZoom, 20); // Ensure at least zoom 20 for satellite data
-      console.log(`[TileLayerFactory] Using config zoom range: ${minZoom}-${maxZoom}`);
-    }
-  }
-
-  console.log(`[TileLayerFactory] Final zoom configuration: ${minZoom}-${maxZoom} for ${collection}`);
-
-  // Validate and clamp bounds if provided
-  let validatedBounds = undefined;
-  if (bounds && Array.isArray(bounds) && bounds.length === 4) {
-    validatedBounds = validateAndClampBounds(bounds);
-    if (validatedBounds) {
-      console.log('[TileLayerFactory] Using clamped bounds:', validatedBounds);
-    }
-  }
-
-  // Ensure high-resolution tile URLs
-  const highResUrl = ensureHighResolution(tileUrl);
-
-  // COLLECTION-SPECIFIC OPACITY CONFIGURATION
-  // Opacity is dynamically determined based on:
-  // 1. Collection-specific requirements (high-res optical needs max clarity)
-  // 2. Data type characteristics (elevation overlays, fire detection, thermal)
-  // 3. Custom overrides from rendering system
-  let opacity = customOpacity !== undefined ? customOpacity : renderingConfig.opacity;
-  
-  // HIGH-RESOLUTION OPTICAL IMAGERY (Sentinel-2, Landsat, NAIP, HLS)
-  // These need MAXIMUM opacity for crisp, vivid satellite imagery
-  // Covers: sentinel-2-l2a, landsat-c2-l2, landsat-8-c2-l2, landsat-9-c2-l2, 
-  //         hls2-l30, hls2-s30, hls-l30, hls-s30, hls, naip
-  if (collectionLower.includes('sentinel-2') || 
-      collectionLower.includes('landsat') ||
-      collectionLower.includes('hls') ||
-      collectionLower.includes('naip')) {
-    opacity = Math.max(opacity, 0.98); // Ensure at least 98% opacity for vivid RGB colors
-    console.log(`[TileLayerFactory] High-res optical imagery: using opacity ${opacity}`);
-  }
-  
-  // SAR IMAGERY (Sentinel-1 RTC/GRD)
-  // SAR needs high opacity for clear radar returns
-  // Covers: sentinel-1-grd, sentinel-1-rtc
-  else if (collectionLower.includes('sentinel-1')) {
-    opacity = Math.max(opacity, 0.95); // High opacity for SAR clarity
-    console.log(`[TileLayerFactory] SAR imagery: using opacity ${opacity}`);
-  }
-  
-  // ELEVATION MODELS (DEM, Copernicus, NASADEM)
-  // Lower opacity to see terrain overlay on basemap
-  else if (isElevation || collectionLower.includes('dem') || collectionLower.includes('elevation')) {
-    opacity = 0.65; // Moderate opacity for elevation overlays
-    console.log(`[TileLayerFactory] Elevation data: using opacity ${opacity}`);
-  }
-  
-  // FIRE DETECTION (MODIS 14A1/14A2, VIIRS)
-  // High opacity to see fire hotspots clearly while keeping nodata transparent
-  else if (isFire || collectionLower.includes('fire') || collectionLower.includes('14a')) {
-    opacity = 0.7; // High opacity but allows base map to show through nodata areas
-    console.log(`[TileLayerFactory] Fire detection: using opacity ${opacity}`);
-  }
-  
-  // THERMAL IMAGERY (Landsat thermal bands)
-  // Full opacity for thermal analysis
-  else if (isThermal || collectionLower.includes('thermal')) {
-    opacity = 1.0; // FULL opacity for thermal data
-    console.log(`[TileLayerFactory] Thermal imagery: using opacity ${opacity}`);
-  }
-  
-  // MODIS VEGETATION INDICES (NDVI, EVI, LAI, NPP, GPP)
-  // High opacity for vegetation analysis
-  else if (collectionLower.includes('modis') && 
-          (collectionLower.includes('13') || collectionLower.includes('15') || collectionLower.includes('17'))) {
-    opacity = Math.max(opacity, 0.90); // High opacity for vegetation indices
-    console.log(`[TileLayerFactory] MODIS vegetation: using opacity ${opacity}`);
-  }
-  
-  // SNOW/ICE (MODIS Snow Cover, Sentinel-2 Snow)
-  // High opacity for clear snow detection
-  else if (collectionLower.includes('snow') || collectionLower.includes('ice')) {
-    opacity = Math.max(opacity, 0.92);
-    console.log(`[TileLayerFactory] Snow/ice data: using opacity ${opacity}`);
-  }
-  
-  // DEFAULT: Use collection config or ensure minimum 85%
-  else {
-    opacity = Math.max(opacity, 0.85); // Minimum 85% for any satellite data
-    console.log(`[TileLayerFactory] Default opacity: ${opacity} for ${collection}`);
-  }
-
-  // Build layer configuration
-  const layerConfig: TileLayerConfig = {
-    tileUrl: highResUrl,
-    opacity,
-    tileSize: renderingConfig.tileSize,
-    bounds: validatedBounds,
-    minSourceZoom: minZoom,
-    maxSourceZoom: maxZoom,
-    tileLoadRadius: renderingConfig.renderingHints?.tileLoadRadius ?? 2,
-    blend: 'normal',
-    fadeDuration: renderingConfig.renderingHints?.fadeEnabled ? 500 : 0,
-    rasterOpacity: opacity,
-    buffer: renderingConfig.renderingHints?.buffer ?? 64,
-    tolerance: 0.05,
-    interpolate: renderingConfig.renderingHints?.interpolate ?? true,
-    // Quality enhancements
-    errorTolerance: 0.1,
-    ignoreInvalidTiles: true,
-    maxRetries: 3,
-    antialiasing: true,
-    smoothTransitions: true
-  };
-
-  // Apply thermal-specific configuration
-  if (isThermal) {
-    console.log('[TileLayerFactory] Applying thermal-specific configuration');
-    layerConfig.noDataValue = -9999;
-    layerConfig.interpolate = false;
-    layerConfig.resample = 'bilinear';
-  }
-
-  console.log('[TileLayerFactory] Creating tile layer with config:', {
-    collection,
-    minZoom,
-    maxZoom,
-    opacity,
-    tileSize: layerConfig.tileSize,
-    bounds: validatedBounds ? 'set' : 'none',
-    fadeEnabled: layerConfig.fadeDuration > 0
-  });
-
-  // Create and return the tile layer
-  return new atlasLibrary.layer.TileLayer(layerConfig);
-}
-
-/**
- * Creates multiple tile layers for seamless multi-tile rendering
- * 
- * @param tiles - Array of tile information with URLs and bounds
- * @param collection - Collection identifier
- * @param atlasLibrary - Azure Maps atlas library
- * @returns Array of configured TileLayer instances
- */
-export async function createMultipleTileLayers(
-  tiles: Array<{ tileUrl: string; bounds: number[]; itemId: string; tilejson?: TileJsonResponse }>,
-  collection: string,
-  atlasLibrary: any
-): Promise<{ layers: any[]; successCount: number; errorCount: number }> {
-  console.log(`[TileLayerFactory] Creating ${tiles.length} tile layers for seamless coverage`);
-
-  const layers: any[] = [];
-  let successCount = 0;
-  let errorCount = 0;
-
-  const isElevation = collection.toLowerCase().includes('dem') || 
-                     collection.toLowerCase().includes('elevation');
-
-  for (const tile of tiles) {
-    try {
-      const layer = createTileLayer(
-        {
-          tileUrl: tile.tileUrl,
-          collection,
-          bounds: tile.bounds,
-          tilejson: tile.tilejson,
-          isElevation
-        },
-        atlasLibrary
-      );
-
-      layers.push(layer);
-      successCount++;
-      console.log(`[TileLayerFactory] Created layer ${successCount}/${tiles.length}: ${tile.itemId}`);
-    } catch (error) {
-      console.error(`[TileLayerFactory] Error creating layer for ${tile.itemId}:`, error);
-      errorCount++;
-    }
-  }
-
-  console.log(`[TileLayerFactory] Multi-tile layer creation complete. Success: ${successCount}, Errors: ${errorCount}`);
-
-  return { layers, successCount, errorCount };
-}
 
 /**
  * Validates and clamps bounds to prevent geometry extent errors
