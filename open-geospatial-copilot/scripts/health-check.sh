@@ -1,5 +1,5 @@
 #!/bin/bash
-# Health check script for Earth Copilot services
+# Health check script
 
 SERVICE_PORT=${PORT:-8080}
 HEALTH_ENDPOINT=${HEALTH_ENDPOINT:-/health}
