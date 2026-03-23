@@ -37,6 +37,9 @@ import {
 } from '../utils/renderingLogger';
 import DataLegend from './DataLegend';
 
+// Centralized map provider configuration - set to 'leaflet' for open-source, no-auth setup
+const mapProvider = 'leaflet';
+
 /**
  * Extract geographic region from query text and return appropriate bounds
  * NOTE: This function now relies on backend location resolution instead of hardcoded coordinates
