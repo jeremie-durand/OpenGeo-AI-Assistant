@@ -94,14 +94,9 @@ class ApiService {
         },
       });
 
-      // Add request interceptor for auth token + debugging
+      // Add request/response interceptors for debugging only (no auth)
       this.api.interceptors.request.use(
-        async (config) => {
-          // Attach EasyAuth token for backend Container App auth
-          const token = await getAuthToken();
-          if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-          }
+        (config) => {
           debugLog(`Making ${config.method?.toUpperCase()} request to ${config.url}`, {
             baseURL: config.baseURL,
             fullURL: `${config.baseURL}${config.url}`,
@@ -116,7 +111,6 @@ class ApiService {
         }
       );
 
-      // Add response interceptor for debugging + automatic token refresh on 401
       this.api.interceptors.response.use(
         (response: AxiosResponse) => {
           debugLog(`Received ${response.status} response from ${response.config.url}`, {
@@ -127,31 +121,7 @@ class ApiService {
           });
           return response;
         },
-        async (error: AxiosError) => {
-          const originalRequest = error.config as any;
-
-          // Auto-refresh token and retry on 401 "Token has expired"
-          if (
-            error.response?.status === 401 &&
-            !originalRequest._authRetried
-          ) {
-            originalRequest._authRetried = true;
-            console.warn('[Auth] 401 received — attempting token refresh...');
-
-            const newToken = await refreshAuthToken();
-            if (newToken) {
-              console.log('[Auth] Token refreshed — retrying request');
-              originalRequest.headers.Authorization = `Bearer ${newToken}`;
-              return this.api!.request(originalRequest);
-            }
-
-            // Refresh failed — redirect to login
-            console.warn('[Auth] Token refresh failed — redirecting to login');
-            window.location.href = '/.auth/login/aad?post_login_redirect_uri=' +
-              encodeURIComponent(window.location.pathname + window.location.search);
-            return Promise.reject(error);
-          }
-
+        (error: AxiosError) => {
           errorLog(`Response error from ${error.config?.url}`, {
             status: error.response?.status,
             statusText: error.response?.statusText,
