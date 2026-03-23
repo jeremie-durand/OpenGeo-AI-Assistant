@@ -33,17 +33,11 @@ echo " Installing dependencies..."
 cd veda_search_poc
 pip install -r requirements.txt
 
-# Install PromptFlow CLI
-echo " Installing PromptFlow CLI..."
-pip install promptflow[azure]
-
 echo ""
 echo " Setup complete!"
 echo ""
 echo "Next steps:"
-echo "1. Copy .env_template to .env and fill in your Azure service configurations"
+echo "1. Copy .env_template to .env and fill in the required values"
 echo "2. Run the indexing script: python ../scripts/create_search_index_with_vectors.py"
-echo "3. Create PromptFlow connection: pf connection create --file azure_openai.yaml --name azure_open_ai_connection"
-echo "4. Test locally: pf flow test --flow . --interactive"
 echo ""
 echo " Ready to explore VEDA data!"
