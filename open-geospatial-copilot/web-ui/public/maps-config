@@ -1,9 +1,9 @@
 {
-  "subscriptionKey": "demo-key",
-  "region": "atlas",
-  "apiVersion": "2.0",
-  "enableDebug": true,
-  "style": "road",
-  "zoom": 10,
-  "center": [-122.4194, 47.6062]
+  "provider": "leaflet",
+  "tileProvider": "esri-world-imagery",
+  "tileUrl": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  "attribution": "© Esri World Imagery",
+  "zoom": 4,
+  "center": [-98.5795, 39.8282],
+  "style": "satellite"
 }
