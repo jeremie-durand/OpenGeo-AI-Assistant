@@ -84,7 +84,7 @@ RUN mkdir -p /app/uploads
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# Expose port 8080 (must match Azure Container App targetPort configuration)
+# Expose port 8080
 EXPOSE 8080
 
 # Health check (updated to use port 8080)
