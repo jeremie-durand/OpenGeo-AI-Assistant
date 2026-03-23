@@ -38,7 +38,7 @@ export interface CollectionConfig {
 
 /**
  * Featured Collections Configuration
- * These 23 collections represent ~80% of Earth Copilot queries
+ * These 23 collections represent ~80% of queries
  */
 const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
   // ============================================================================

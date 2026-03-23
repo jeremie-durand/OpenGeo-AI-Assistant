@@ -102,7 +102,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
               <rect x="0" y="12" width="10" height="10" fill="#00A4EF" />
               <rect x="12" y="12" width="10" height="10" fill="#FFB900" />
             </svg>
-            <span>Microsoft | Earth Copilot</span>
+            <span>Open Geospatial Copilot</span>
           </div>
         </div>
         <div className="landing-top-right">
@@ -225,7 +225,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
               ×
             </button>
             <div style={{ marginBottom: '10px', fontSize: '14px', fontWeight: 600, color: '#1e3a5f' }}>
-              Welcome to Earth Copilot!
+              Welcome to Open Geospatial Copilot!
             </div>
             <div style={{ fontSize: '12px', lineHeight: 1.5, color: 'rgba(30, 58, 95, 0.8)' }}>
               To get started, try the example queries in the{' '}
@@ -293,7 +293,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           e.currentTarget.style.transform = 'scale(1)';
           e.currentTarget.style.boxShadow = '0 4px 20px rgba(59, 130, 246, 0.5)';
         }}
-        title="Open Earth Copilot Map"
+        title="Open Map"
       >
         <svg 
           width="28" 

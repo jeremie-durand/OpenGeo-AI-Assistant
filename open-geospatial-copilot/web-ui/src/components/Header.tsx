@@ -34,7 +34,7 @@ const Header: React.FC<HeaderProps> = ({ onReturnToLanding, onRestartSession, on
              onMouseEnter={(e) => (e.target as HTMLElement).style.opacity = '0.8'}
              onMouseLeave={(e) => (e.target as HTMLElement).style.opacity = '1'}>
           <MicrosoftLogo />
-          <div className="brand-name">Microsoft | Earth Copilot</div>
+          <div className="brand-name">Open Geospatial Copilot</div>
         </div>
       </div>
       <div style={{ 

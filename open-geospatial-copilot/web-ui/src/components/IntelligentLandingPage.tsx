@@ -119,7 +119,7 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
             WebkitTextFillColor: 'transparent',
             fontWeight: 'bold'
           }}>
-            Earth Copilot
+            Open Geospatial Copilot
           </h1>
           <p style={{ 
             fontSize: '1.2rem', 

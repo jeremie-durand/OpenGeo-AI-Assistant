@@ -523,7 +523,7 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
         <div className="get-started-modal-overlay" onClick={() => setShowModal(false)}>
           <div className="get-started-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="get-started-modal-header">
-              <h2>Get Started with Earth Copilot</h2>
+              <h2>Get Started with Open Geospatial Copilot</h2>
               <button 
                 onClick={() => setShowModal(false)} 
                 className="get-started-modal-close"
@@ -659,7 +659,7 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                                     <button
                                       className="copy-query-btn"
                                       onClick={() => handleStacQueryClick(example.query)}
-                                      title="Run this query in Earth Copilot"
+                                      title="Run this query in Open Geospatial Copilot"
                                     >
                                       Go
                                     </button>
