@@ -38,15 +38,19 @@ See [LICENSE.txt](LICENSE.txt)
 
 ## Credits & Acknowledgments
 
-This project is based on the original work by Microsoft and its partners, presented at Microsoft Ignite 2024. For more information, see the official presentation: [Satya Nadella introduces NASA Earth Copilot 1.0 at Microsoft Ignite 2024](https://www.linkedin.com/posts/microsoft_msignite-activity-7265061510635241472-CAYx/?utm_source=share&utm_medium=member_desktop).
+This project is based on the open-source Earth Copilot project originally published by Microsoft.
 
-The code, architecture, and documentation are inspired by the initial open source repository published by Microsoft. Thanks to all contributors of the original project.
+For more information, see the official presentation:
+[Satya Nadella introduces NASA Earth Copilot 1.0 at Microsoft Ignite 2024](https://www.linkedin.com/posts/microsoft_msignite-activity-7265061510635241472-CAYx/?utm_source=share&utm_medium=member_desktop)
+
+The code, architecture, and documentation are inspired by the initial open-source repository. Thanks to all contributors of the original project. [See original repository](https://github.com/microsoft/Earth-Copilot/tree/main)
 
 Earth Copilot was developed by Melisa Bardhi and advised by Juan Carlos Lopez.
 
-Collaborators:
-- **Microsoft Planetary Computer** 
-- **NASA**
-- **Microsoft Team**: Juan Carlos Lopez, Jocelynn Hartwig, Minh Nguyen & Matt Morrell.
+The original Earth Copilot project involved contributions and collaboration from:
 
-*Built for the Earth science community with ❤️ and AI*
+- Microsoft Planetary Computer  
+- NASA  
+- Microsoft team members including Juan Carlos Lopez, Jocelynn Hartwig, Minh Nguyen, and Matt Morrell.
+
+This project is an independent work and is not affiliated with, endorsed by, or sponsored by Microsoft or NASA.
