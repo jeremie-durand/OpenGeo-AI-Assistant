@@ -526,34 +526,22 @@ class RouterAgent:
         self.sessions: Dict[str, RouterAgentSession] = {}
         self._agent: Optional[ChatCompletionAgent] = None
         self._initialized = False
-        
+        self._llm_client = None  # provider-agnostic client for direct LLM calls
+
         logger.info(" RouterAgent created (will initialize on first use)")
-    
+
     async def _ensure_initialized(self):
-        """Lazy initialization of the agent."""
+        """Lazy initialization — uses a provider-agnostic LLM client."""
         if self._initialized:
             return
-            
-        logger.info(" Initializing RouterAgent with Semantic Kernel...")
-        
-        from semantic_translator import get_llm_client
-        chat_service = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-4o-mini"), vision=False)
-        
-        self.kernel.add_service(chat_service)
-        
-        # Add router tools as a plugin
-        self.kernel.add_plugin(self.tools, plugin_name="router")
-        
-        # Create the agent with function calling enabled
-        self._agent = ChatCompletionAgent(
-            kernel=self.kernel,
-            name="RouterAgent",
-            instructions=ROUTER_AGENT_INSTRUCTIONS,
-            function_choice_behavior=FunctionChoiceBehavior.Auto()
-        )
-        
+
+        logger.info(" Initializing RouterAgent (direct LLM mode, no Azure SK required)...")
+
+        from llm_client import get_llm_client
+        self._llm_client = get_llm_client()
+
         self._initialized = True
-        logger.info(f" RouterAgent initialized with {len(self.kernel.plugins)} plugins")
+        logger.info(" RouterAgent initialized (using provider-agnostic LLM client)")
     
     def set_semantic_translator(self, translator):
         """Set the semantic translator for STAC operations."""
@@ -1033,31 +1021,32 @@ Respond with ONLY valid JSON (no markdown):
 {{"has_collection": true/false, "collection": "matched concept or null", "has_location": true/false, "location": "place name or null"}}"""
 
         try:
-            from semantic_kernel.contents.chat_history import ChatHistory
-            
-            classification_history = ChatHistory()
-            classification_history.add_user_message(classification_prompt)
-            
-            # Get chat service and call without tools (pure classification)
-            chat_service = self.kernel.get_service("router_chat")
-            
-            result = await chat_service.get_chat_message_content(
-                chat_history=classification_history,
-                settings=None
+            response = await self._llm_client._llm.chat(
+                messages=[{"role": "user", "content": classification_prompt}],
+                max_tokens=256,
+                temperature=0.0,
             )
-            
-            response_text = str(result).strip()
+            # Normalise response across providers
+            if isinstance(response, dict):
+                content_blocks = response.get("content", [])
+                if content_blocks and isinstance(content_blocks, list):
+                    response_text = content_blocks[0].get("text", "") if isinstance(content_blocks[0], dict) else str(content_blocks[0])
+                else:
+                    choices = response.get("choices", [])
+                    response_text = choices[0]["message"]["content"] if choices else str(response)
+            else:
+                response_text = str(response)
+
+            response_text = response_text.strip()
             logger.info(f" LLM classification response: {response_text}")
-            
-            # Parse JSON response - handle markdown code blocks if present
+
             if "```json" in response_text:
                 response_text = response_text.split("```json")[1].split("```")[0].strip()
             elif "```" in response_text:
                 response_text = response_text.split("```")[1].split("```")[0].strip()
-            
-            classification = json.loads(response_text)
-            return classification
-            
+
+            return json.loads(response_text)
+
         except Exception as e:
             logger.error(f" LLM classification failed: {e}")
             raise
@@ -1077,22 +1066,27 @@ Respond with ONLY valid JSON:
 {{"has_location": true/false, "location": "place name" or null}}"""
 
         try:
-            from semantic_kernel.contents.chat_history import ChatHistory
-            extraction_history = ChatHistory()
-            extraction_history.add_user_message(prompt)
-            
-            chat_service = self.kernel.get_service("router_chat")
-            result = await chat_service.get_chat_message_content(
-                chat_history=extraction_history,
-                settings=None
+            response = await self._llm_client._llm.chat(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=128,
+                temperature=0.0,
             )
-            
-            response_text = str(result).strip()
+            if isinstance(response, dict):
+                content_blocks = response.get("content", [])
+                if content_blocks and isinstance(content_blocks, list):
+                    response_text = content_blocks[0].get("text", "") if isinstance(content_blocks[0], dict) else str(content_blocks[0])
+                else:
+                    choices = response.get("choices", [])
+                    response_text = choices[0]["message"]["content"] if choices else str(response)
+            else:
+                response_text = str(response)
+
+            response_text = response_text.strip()
             if "```json" in response_text:
                 response_text = response_text.split("```json")[1].split("```")[0].strip()
             elif "```" in response_text:
                 response_text = response_text.split("```")[1].split("```")[0].strip()
-            
+
             return json.loads(response_text)
         except Exception as e:
             logger.error(f" Location extraction failed: {e}")

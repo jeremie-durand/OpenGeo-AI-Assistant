@@ -8518,5 +8518,19 @@ async def create_semantic_translator() -> SemanticQueryTranslator:
     
     if not endpoint or not api_key:
         raise ValueError("Missing required Azure OpenAI configuration")
-    
+
     return SemanticQueryTranslator(endpoint, api_key, model)
+
+
+# ---------------------------------------------------------------------------
+# Provider-agnostic helpers (re-exported so other modules can import from here)
+# ---------------------------------------------------------------------------
+
+def get_llm_client(model: str = None, vision: bool = False):
+    """Return an OpenAI-compatible client for the configured LLM provider.
+
+    Re-exports llm_client.get_llm_client so that all existing imports of
+    ``from semantic_translator import get_llm_client`` continue to work.
+    """
+    from llm_client import get_llm_client as _get
+    return _get(model=model, vision=vision)

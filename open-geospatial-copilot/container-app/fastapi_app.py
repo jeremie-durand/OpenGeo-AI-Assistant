@@ -610,52 +610,55 @@ async def execute_direct_stac_search(stac_query: Dict[str, Any], stac_endpoint: 
 async def startup_event():
     """Initialize the application components.
 
-    For local, non-Azure runs this should succeed without any Azure-specific
-    environment variables or SDKs. Azure-backed SemanticQueryTranslator and
-    Agent Service flows are not initialized here.
+    Attempts to initialise the GenericQueryTranslator backed by whatever LLM
+    provider is configured via LLM_PROVIDER / LLM_API_KEY / LLM_MODEL.
+    Falls back to keyword-only mode when no valid LLM config is present.
     """
     global semantic_translator, global_translator, SEMANTIC_KERNEL_AVAILABLE, router_agent
     global terrain_analyzer, mobility_classifier, los_calculator, geoint_utils, GEOINT_AVAILABLE
 
-    logger.info("[LAUNCH] OPEN GEOSPATIAL COPILOT CONTAINER STARTING UP (local mode, no Azure LLM/Agent dependencies)")
+    logger.info("[LAUNCH] OPEN GEOSPATIAL COPILOT CONTAINER STARTING UP")
 
-    # Do not initialize Azure OpenAI / SemanticQueryTranslator here. For the
-    # local, provider-agnostic path semantic_translator remains None and
-    # endpoints that rely on it should either be updated to use the generic
-    # LLM client or return a clear error if invoked.
+    # ----------------------------------------------------------------
+    # Initialise provider-agnostic GenericQueryTranslator
+    # ----------------------------------------------------------------
     semantic_translator = None
     global_translator = None
     SEMANTIC_KERNEL_AVAILABLE = False
 
-    # GEOINT endpoints use lazy imports - no initialization needed here
-    logger.info("[OK] GEOINT endpoints ready (lazy import mode)")
-
-    # Validate LLM configuration (non-fatal in local mode)
     try:
         from llm_client import LLMConfigurationError, get_llm_client
-
         client = get_llm_client()
-        logger.info(f"[OK] LLM client initialized (provider={client.provider}, model={client.model})")
-    except ImportError:
-        logger.warning("[WARN] llm_client module not available; LLM-backed endpoints may be disabled")
+        logger.info(f"[OK] LLM client configured (provider={client.provider}, model={client.model})")
+
+        from generic_query_translator import GenericQueryTranslator
+        _translator = GenericQueryTranslator()
+        semantic_translator = _translator
+        global_translator = _translator
+        SEMANTIC_KERNEL_AVAILABLE = True
+        logger.info("[OK] GenericQueryTranslator initialised — AI query translation ENABLED")
+    except ImportError as e:
+        logger.warning(f"[WARN] llm_client / GenericQueryTranslator not available: {e}")
     except Exception as e:
-        # Do not block startup if LLM configuration is missing or invalid
-        logger.warning(f"[WARN] LLM client not fully configured: {e}")
+        logger.warning(f"[WARN] LLM client not fully configured — falling back to keyword mode: {e}")
+
+    # GEOINT endpoints use lazy imports - no initialization needed here
+    logger.info("[OK] GEOINT endpoints ready (lazy import mode)")
 
     # Initialize RouterAgent for intelligent query classification, if available.
     try:
         from geoint.router_agent import get_router_agent
         router_agent = get_router_agent()
-        logger.info("[OK] RouterAgent initialized for intelligent query routing")
+        logger.info("[OK] RouterAgent initialised for intelligent query routing")
     except Exception as e:
-        logger.warning(f"[WARN] RouterAgent initialization failed: {e} - will use fallback classification")
+        logger.warning(f"[WARN] RouterAgent initialisation failed: {e} - will use fallback classification")
         router_agent = None
 
     # Log quick start cache status
     qs_stats = get_quickstart_stats()
     logger.info(f"[LAUNCH] Quick Start Cache: {qs_stats['total_queries']} queries, {len(qs_stats['collections_covered'])} collections")
 
-    logger.info("[OK] OPEN GEOSPATIAL COPILOT CONTAINER READY (local mode)")
+    logger.info(f"[OK] OPEN GEOSPATIAL COPILOT CONTAINER READY (AI={'ENABLED' if SEMANTIC_KERNEL_AVAILABLE else 'DISABLED — keyword fallback'})")
 
 # Helper functions ported from Router Function App
 def detect_collections(query: str) -> List[str]:
@@ -1566,8 +1569,7 @@ async def unified_query_processor(request: Request):
         if semantic_translator:
             semantic_translator.set_model(selected_model)
         else:
-            logger.critical("[CRITICAL] semantic_translator is None - AI functionality DISABLED. Check LLM API keys and configuration.")
-            raise HTTPException(status_code=500, detail="AI functionality is disabled: LLM API keys/configuration missing or invalid.")
+            logger.warning("[WARN] semantic_translator is None - using keyword-based fallback for collection detection.")
         
         # [MICRO] Generate unique pipeline session ID for tracing
         import uuid
