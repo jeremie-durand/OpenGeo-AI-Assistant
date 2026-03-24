@@ -96,12 +96,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                onClick={handleLogoClick}
                onMouseEnter={(e) => (e.target as HTMLElement).style.opacity = '0.8'}
                onMouseLeave={(e) => (e.target as HTMLElement).style.opacity = '1'}>
-            <svg width="28" height="28" viewBox="0 0 22 22" aria-label="Microsoft logo" role="img">
-              <rect x="0" y="0" width="10" height="10" fill="#F25022" />
-              <rect x="12" y="0" width="10" height="10" fill="#7FBA00" />
-              <rect x="0" y="12" width="10" height="10" fill="#00A4EF" />
-              <rect x="12" y="12" width="10" height="10" fill="#FFB900" />
-            </svg>
             <span>Open Geospatial Copilot</span>
           </div>
         </div>

@@ -17,15 +17,6 @@ interface HeaderProps {
   selectedModel?: string;
 }
 
-const MicrosoftLogo: React.FC = () => (
-  <svg width="32" height="32" viewBox="0 0 22 22" aria-label="Microsoft logo" role="img">
-    <rect x="0" y="0" width="10" height="10" fill="#F35325" />
-    <rect x="12" y="0" width="10" height="10" fill="#81BC06" />
-    <rect x="0" y="12" width="10" height="10" fill="#05A6F0" />
-    <rect x="12" y="12" width="10" height="10" fill="#FFBA08" />
-  </svg>
-);
-
 const Header: React.FC<HeaderProps> = ({ onReturnToLanding, onRestartSession, onModelChange, selectedModel }) => {
   return (
     <div className="top-header">
@@ -33,7 +24,6 @@ const Header: React.FC<HeaderProps> = ({ onReturnToLanding, onRestartSession, on
         <div className="brand" onClick={onReturnToLanding} style={{cursor:'pointer', transition:'opacity 0.2s ease'}}
              onMouseEnter={(e) => (e.target as HTMLElement).style.opacity = '0.8'}
              onMouseLeave={(e) => (e.target as HTMLElement).style.opacity = '1'}>
-          <MicrosoftLogo />
           <div className="brand-name">Open Geospatial Copilot</div>
         </div>
       </div>
