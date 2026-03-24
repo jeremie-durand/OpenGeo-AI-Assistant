@@ -418,6 +418,67 @@ Provide a 2-3 sentence helpful response. Be specific about what might have gone 
             logger.error(f"[GQT] generate_empty_result_response failed: {exc}")
             return f"No results found for '{natural_query}'. Try adjusting the location name, time range, or collection type."
 
+    def determine_stac_source(self, query: str, entities: Dict[str, Any]) -> str:
+        """Route to the appropriate STAC endpoint. Always Planetary Computer for now."""
+        return "planetary_computer"
+
+    # ------------------------------------------------------------------
+    # Spatial / cloud-cover filtering (mirrors SemanticQueryTranslator)
+    # ------------------------------------------------------------------
+
+    def _calculate_spatial_overlap(
+        self, bbox1: List[float], bbox2: List[float]
+    ) -> float:
+        """Return the fractional overlap of bbox2 within bbox1 (0-1)."""
+        try:
+            x_overlap = max(0, min(bbox1[2], bbox2[2]) - max(bbox1[0], bbox2[0]))
+            y_overlap = max(0, min(bbox1[3], bbox2[3]) - max(bbox1[1], bbox2[1]))
+            intersection = x_overlap * y_overlap
+            area1 = (bbox1[2] - bbox1[0]) * (bbox1[3] - bbox1[1])
+            if area1 <= 0:
+                return 0.0
+            return intersection / area1
+        except Exception:
+            return 0.0
+
+    def _filter_stac_results_by_spatial_overlap(
+        self,
+        stac_results: Dict[str, Any],
+        requested_bbox: Optional[List[float]],
+        min_overlap: float = 0.1,
+    ) -> Dict[str, Any]:
+        """Keep only features with meaningful overlap with *requested_bbox*."""
+        if not requested_bbox or not stac_results.get("features"):
+            return stac_results
+
+        kept = [
+            f for f in stac_results["features"]
+            if f.get("bbox") and self._calculate_spatial_overlap(requested_bbox, f["bbox"]) >= min_overlap
+        ]
+        logger.info(f"[TARGET] Spatial filter: {len(kept)}/{len(stac_results['features'])} features kept")
+        return {**stac_results, "features": kept}
+
+    def _filter_stac_results_by_cloud_cover(
+        self,
+        stac_results: Dict[str, Any],
+        max_cloud_cover: Optional[int] = None,
+        collection_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Keep only features whose cloud cover is ≤ *max_cloud_cover*."""
+        if max_cloud_cover is None or not stac_results.get("features"):
+            return stac_results
+
+        cloud_props = ["eo:cloud_cover", "cloud_cover", "cloudCover", "CLOUD_COVER"]
+        kept = []
+        for feature in stac_results["features"]:
+            props = feature.get("properties", {})
+            cloud = next((props[p] for p in cloud_props if p in props), None)
+            if cloud is None or cloud <= max_cloud_cover:
+                kept.append(feature)
+
+        logger.info(f"[CLOUD] Cloud filter ≤{max_cloud_cover}%: {len(kept)}/{len(stac_results['features'])} features kept")
+        return {**stac_results, "features": kept}
+
     async def generate_alternative_result_response(
         self,
         natural_query: str,
