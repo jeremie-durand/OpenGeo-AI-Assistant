@@ -1,25 +1,24 @@
 """
-Terrain Agent - Azure AI Agent Service with Function Tools
+GEOINT Terrain Agent — Provider-agnostic rewrite
 
-Refactored from Semantic Kernel ChatCompletionAgent to Azure AI Agent Service.
-Uses AgentsClient with FunctionTool/ToolSet for automatic function calling.
+Uses LLM_PROVIDER / LLM_API_KEY / LLM_MODEL (same as the rest of the app).
+No Azure AI Agent Service dependency.
 
-This agent:
-1. Maintains conversation memory via AgentThread (persistent threads)
-2. Has access to terrain analysis tools (FunctionTool)
-3. Plans and reasons about which tools to use (LLM-driven)
-4. Synthesizes results into coherent answers
+Flow per query:
+  1. LLM selects which terrain tools to call
+  2. Tools are called directly (sync, in executor)
+  3. Optional screenshot vision analysis
+  4. LLM synthesises a natural-language response from all tool results
+  5. Conversation history is kept in-process per session
 """
 
 import logging
-import os
 import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Agent system prompt (unchanged - well-crafted for terrain analysis)
 TERRAIN_AGENT_INSTRUCTIONS = """You are a Geospatial Intelligence (GEOINT) Terrain Analysis Agent specializing in site permitting and environmental suitability analysis.
 
 Your role is to analyze terrain and answer questions about geographic locations using DEM (Digital Elevation Model) data, water occurrence data, land cover data, and visual analysis from the user's current map view.
@@ -70,219 +69,334 @@ Each message includes [Location Context] with:
    - Slope & Traversability: Steepness data, percentage flat/steep, traversability
    - Aspect & Sun Exposure: Direction distribution, sun exposure rating WITH note
    - Environmental Assessment (for permitting): Flood risk, water proximity, wetlands/forests
-3. **Summary**: ALWAYS conclude with a **Summary** section that gives a clear, direct answer to the user's specific question, grounded in the data returned by tools. For example:
-   - If asked about solar suitability, end with an explicit recommendation (good/moderate/limited) citing the flat terrain percentage and aspect data
-   - If asked about slope direction, state the dominant direction and distribution clearly
-   - If asked about permitting, end with SUITABLE / CONDITIONAL / NOT SUITABLE with reasons
+3. **Summary**: ALWAYS conclude with a **Summary** section that gives a clear, direct answer to the user's specific question, grounded in the data returned by tools.
 
 ## CRITICAL RULES:
 - **Always use the Location name from [Location Context].** Never respond with just coordinates.
-- **Answer the question asked.** Do not provide unrelated sections. If the user asks about sun exposure, focus on aspect and sun exposure — do not add environmental permitting sections unless asked.
+- **Answer the question asked.** Do not provide unrelated sections.
 - **Use the sun_exposure_note** from get_aspect_analysis results — it accounts for flat terrain correctly.
 - **Never contradict tool data.** If the tool says sun exposure is "good" due to flat terrain, do NOT downgrade it.
 
-**Keep responses factual and concise. Do NOT include:**
-- "Actionable Insights" or recommendation sections beyond permitting status
-- Summary paragraphs at the end restating what was said
-- Generic suggestions unrelated to the user's question
-- Caveats or notes that contradict the data-grounded conclusion
+**Keep responses factual and concise.**
 """
 
+# ---------------------------------------------------------------------------
+# Tool catalogue (name → callable)
+# ---------------------------------------------------------------------------
+
+_TOOL_REGISTRY: Dict[str, Any] = {}
+
+
+def _get_tool_registry() -> Dict[str, Any]:
+    global _TOOL_REGISTRY
+    if not _TOOL_REGISTRY:
+        from geoint.terrain_tools import (
+            get_elevation_analysis,
+            get_slope_analysis,
+            get_aspect_analysis,
+            find_flat_areas,
+            analyze_flood_risk,
+            analyze_water_proximity,
+            analyze_environmental_sensitivity,
+        )
+        _TOOL_REGISTRY = {
+            "get_elevation_analysis": get_elevation_analysis,
+            "get_slope_analysis": get_slope_analysis,
+            "get_aspect_analysis": get_aspect_analysis,
+            "find_flat_areas": find_flat_areas,
+            "analyze_flood_risk": analyze_flood_risk,
+            "analyze_water_proximity": analyze_water_proximity,
+            "analyze_environmental_sensitivity": analyze_environmental_sensitivity,
+        }
+    return _TOOL_REGISTRY
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _parse_json_safe(text: str) -> Any:
+    text = text.strip()
+    for marker in ("```json", "```"):
+        if marker in text:
+            text = text.split(marker, 1)[1].split("```")[0].strip()
+            break
+    try:
+        return json.loads(text)
+    except Exception:
+        import re
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group())
+            except Exception:
+                pass
+        m2 = re.search(r"\[.*\]", text, re.DOTALL)
+        if m2:
+            try:
+                return json.loads(m2.group())
+            except Exception:
+                pass
+    return None
+
+
+async def _llm_text(llm, messages, max_tokens=512, temperature=0.2):
+    response = await llm.chat(messages, max_tokens=max_tokens, temperature=temperature)
+    if isinstance(response, dict):
+        blocks = response.get("content", [])
+        if blocks and isinstance(blocks, list):
+            item = blocks[0]
+            return item.get("text", "") if isinstance(item, dict) else str(item)
+        choices = response.get("choices", [])
+        if choices:
+            return choices[0].get("message", {}).get("content", "")
+    return str(response)
+
+
+# ---------------------------------------------------------------------------
+# Session
+# ---------------------------------------------------------------------------
 
 class TerrainAgentSession:
-    """Represents a conversation session with the terrain agent.
-    
-    Maps a session_id to an Agent Service thread_id for persistent conversation.
-    """
-    
-    def __init__(self, session_id: str, latitude: float, longitude: float, thread_id: str):
+    def __init__(self, session_id: str, latitude: float, longitude: float):
         self.session_id = session_id
         self.latitude = latitude
         self.longitude = longitude
-        self.thread_id = thread_id  # Agent Service thread ID
         self.created_at = datetime.utcnow()
         self.last_activity = datetime.utcnow()
-        self.analysis_cache: Dict[str, Any] = {}
         self.message_count = 0
-        
+        # Conversation history as OpenAI-style messages
+        self.history: List[Dict[str, Any]] = []
+
     def update_location(self, latitude: float, longitude: float):
-        """Update the session's focus location."""
         self.latitude = latitude
         self.longitude = longitude
         self.last_activity = datetime.utcnow()
 
 
+# ---------------------------------------------------------------------------
+# TerrainAgent
+# ---------------------------------------------------------------------------
+
 class TerrainAgent:
-    """
-    Azure AI Agent Service-based terrain analysis agent with:
-    - Persistent threads for multi-turn conversation
-    - FunctionTool calling for raster analysis
-    - Automatic function execution via ToolSet
-    """
-    
+    """Provider-agnostic terrain analysis agent with persistent conversation."""
+
     def __init__(self):
-        """Initialize the terrain agent."""
-        self.sessions: Dict[str, TerrainAgentSession] = {}
-        self._agents_client = None
-        self._agent_id: Optional[str] = None
+        self._llm = None
         self._initialized = False
-        
-        logger.info("TerrainAgent created (will initialize on first use)")
-    
+        self.sessions: Dict[str, TerrainAgentSession] = {}
+        logger.info("TerrainAgent created (provider-agnostic, lazy init)")
+
+    # ------------------------------------------------------------------
+    # Initialisation
+    # ------------------------------------------------------------------
+
     async def _ensure_initialized(self):
-        """Initialize with retry logic for transient Agent Service failures."""
         if self._initialized:
             return
-
-        import asyncio as _aio
-        max_attempts = 3
-        for attempt in range(max_attempts):
+        import asyncio
+        for attempt in range(3):
             try:
                 await self._do_initialize()
                 return
             except Exception as e:
-                if attempt < max_attempts - 1:
+                if attempt < 2:
                     wait = 2 ** attempt
                     logger.warning(f"TerrainAgent init attempt {attempt + 1} failed: {e} — retrying in {wait}s")
-                    await _aio.sleep(wait)
+                    await asyncio.sleep(wait)
                 else:
-                    logger.error(f"TerrainAgent init failed after {max_attempts} attempts: {e}")
+                    logger.error(f"TerrainAgent init failed after 3 attempts: {e}")
                     raise
 
     async def _do_initialize(self):
-        """Actual initialization logic (called by _ensure_initialized with retries)."""
-            
-        logger.info("Initializing TerrainAgent with Azure AI Agent Service...")
-        
-        # Prefer AI Foundry project endpoint (services.ai.azure.com) for Agent Service API
-        # Falls back to AZURE_OPENAI_ENDPOINT (cognitiveservices.azure.com) if not set
-        endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
-        
-        if not endpoint:
-            raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
-        
-        logger.info(f"TerrainAgent using endpoint: {endpoint}")
-        
-        from semantic_translator import get_llm_client
-        self._agents_client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
-        
-        # Build terrain tools as standalone functions for FunctionTool
-        from geoint.terrain_tools import create_terrain_functions
-        terrain_functions = create_terrain_functions()
-        
-        self._agents_client.register_tools(terrain_functions)
-        
-        # Create the agent
-        agent = await self._agents_client.create_agent(
-            model=deployment,
-            name="TerrainAnalyst",
-            instructions=TERRAIN_AGENT_INSTRUCTIONS,
-            toolset=terrain_functions,
-        )
-        self._agent_id = agent.id
-        
+        from llm_client import get_llm_client
+        compat = get_llm_client()
+        self._llm = compat._llm
         self._initialized = True
-        logger.info(f"TerrainAgent initialized: agent_id={agent.id}, model={deployment}")
-    
-    async def _get_or_create_session(
-        self, 
+        logger.info(f"TerrainAgent initialised (provider={self._llm.provider}, model={self._llm.model})")
+
+    # ------------------------------------------------------------------
+    # Step 1 — select which tools to call
+    # ------------------------------------------------------------------
+
+    async def _select_tools(self, user_query: str) -> List[str]:
+        all_tools = list(_get_tool_registry().keys())
+
+        prompt = f"""Given this terrain analysis question, select the relevant tools to call.
+
+USER QUESTION: "{user_query}"
+
+Available tools:
+- get_elevation_analysis: elevation, altitude, height, topography
+- get_slope_analysis: slope, steepness, gradient, traversability
+- get_aspect_analysis: aspect, direction, sun exposure, solar, orientation
+- find_flat_areas: flat land, landing zones, construction, buildable
+- analyze_flood_risk: flood risk, water occurrence, flooding history
+- analyze_water_proximity: water setback, distance to water, wetland buffer
+- analyze_environmental_sensitivity: environmental, wetlands, forest, habitat, permitting
+
+Rules:
+- For permitting questions: include flood, water proximity, and environmental sensitivity
+- For solar/wind farm: include aspect and slope
+- For general terrain overview: include elevation and slope
+- Return ONLY a JSON array of tool names from the list above
+
+Return ONLY valid JSON array, e.g.: ["get_elevation_analysis", "get_slope_analysis"]"""
+
+        try:
+            raw = await _llm_text(
+                self._llm,
+                [{"role": "user", "content": prompt}],
+                max_tokens=128,
+                temperature=0.0,
+            )
+            parsed = _parse_json_safe(raw)
+            if isinstance(parsed, list):
+                valid = [t for t in parsed if t in all_tools]
+                if valid:
+                    return valid
+        except Exception as e:
+            logger.error(f"[TerrainAgent] Tool selection failed: {e}")
+
+        # Fallback: elevation + slope
+        return ["get_elevation_analysis", "get_slope_analysis"]
+
+    # ------------------------------------------------------------------
+    # Step 2 — call tools directly (sync in executor)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _call_tool(tool_name: str, latitude: float, longitude: float, radius_km: float) -> Dict[str, Any]:
+        registry = _get_tool_registry()
+        fn = registry.get(tool_name)
+        if not fn:
+            return {"error": f"Unknown tool: {tool_name}"}
+        try:
+            raw = fn(latitude=latitude, longitude=longitude, radius_km=radius_km)
+            parsed = json.loads(raw) if isinstance(raw, str) else raw
+            return parsed if isinstance(parsed, dict) else {"result": raw}
+        except Exception as e:
+            logger.error(f"[TerrainAgent] Tool {tool_name} failed: {e}")
+            return {"error": str(e)}
+
+    # ------------------------------------------------------------------
+    # Step 3 — screenshot vision analysis (optional)
+    # ------------------------------------------------------------------
+
+    async def _analyze_screenshot(
+        self,
+        screenshot_base64: str,
+        latitude: float,
+        longitude: float,
+    ) -> Optional[str]:
+        try:
+            clean = screenshot_base64
+            if screenshot_base64.startswith("data:image"):
+                clean = screenshot_base64.split(",", 1)[1]
+
+            vision_prompt = (
+                f"Analyze this satellite/map image for terrain and geospatial intelligence.\n"
+                f"Location: approximately ({latitude:.4f}, {longitude:.4f})\n\n"
+                "Provide a brief analysis covering:\n"
+                "1. Land use & urban development\n"
+                "2. Vegetation & land cover\n"
+                "3. Water features\n"
+                "4. Terrain features (hills, valleys, flat areas)\n"
+                "Be specific and concise."
+            )
+
+            if self._llm.provider == "anthropic":
+                messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": vision_prompt},
+                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": clean}},
+                    ],
+                }]
+            else:
+                messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": vision_prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{clean}", "detail": "high"}},
+                    ],
+                }]
+
+            result = await _llm_text(self._llm, messages, max_tokens=600, temperature=0.3)
+            logger.info(f"Terrain vision analysis: {len(result)} chars")
+            return result
+        except Exception as e:
+            logger.warning(f"Terrain vision analysis failed: {e}")
+            return None
+
+    # ------------------------------------------------------------------
+    # Step 4 — synthesise the final response
+    # ------------------------------------------------------------------
+
+    async def _synthesise_response(
+        self,
+        session: TerrainAgentSession,
+        context_message: str,
+        tool_results: Dict[str, Any],
+    ) -> str:
+        tool_summary = json.dumps(tool_results, indent=2)[:3000]
+
+        system_prompt = TERRAIN_AGENT_INSTRUCTIONS
+
+        # Build message list: system + history + current context+tools
+        messages = []
+        if self._llm.provider != "anthropic":
+            messages.append({"role": "system", "content": system_prompt})
+
+        # Include recent conversation history (last 10 turns)
+        messages.extend(session.history[-10:])
+
+        # Current turn: context + tool results
+        user_content = f"{context_message}\n\n[Tool Results]\n{tool_summary}"
+        messages.append({"role": "user", "content": user_content})
+
+        try:
+            kwargs: Dict[str, Any] = {"max_tokens": 1200, "temperature": 0.4}
+            if self._llm.provider == "anthropic":
+                kwargs["system"] = system_prompt
+            return await _llm_text(self._llm, messages, **kwargs)
+        except Exception as e:
+            logger.error(f"[TerrainAgent] Response synthesis failed: {e}")
+            return f"Terrain analysis could not be completed: {str(e)}"
+
+    # ------------------------------------------------------------------
+    # Session management
+    # ------------------------------------------------------------------
+
+    def _get_or_create_session(
+        self,
         session_id: str,
         latitude: float,
-        longitude: float
+        longitude: float,
     ) -> TerrainAgentSession:
-        """Get existing session or create a new one with a new thread."""
         if session_id in self.sessions:
             session = self.sessions[session_id]
             session.update_location(latitude, longitude)
             return session
-        
-        # Create a new Agent Service thread
-        thread = await self._agents_client.threads.create()
-        
-        session = TerrainAgentSession(session_id, latitude, longitude, thread.id)
+        session = TerrainAgentSession(session_id, latitude, longitude)
         self.sessions[session_id] = session
-        logger.info(f"Created new session: {session_id} -> thread: {thread.id}")
+        logger.info(f"TerrainAgent: created session {session_id}")
         return session
-    
+
     def cleanup_old_sessions(self, max_age_minutes: int = 60):
-        """Remove sessions older than max_age_minutes."""
         now = datetime.utcnow()
         expired = [
-            sid for sid, session in self.sessions.items()
-            if (now - session.last_activity).total_seconds() > max_age_minutes * 60
+            sid for sid, s in self.sessions.items()
+            if (now - s.last_activity).total_seconds() > max_age_minutes * 60
         ]
         for sid in expired:
             del self.sessions[sid]
-            logger.info(f"Cleaned up expired session: {sid}")
-    
-    async def _analyze_screenshot_direct(
-        self,
-        screenshot_base64: str,
-        latitude: float,
-        longitude: float
-    ) -> Optional[str]:
-        """
-        Directly analyze a screenshot using GPT-5 Vision.
-        
-        This runs BEFORE the agent invoke to ensure visual analysis
-        is always available in the agent's context.
-        Uses the standard OpenAI client (not Agent Service) for vision.
-        """
-        try:
-            from semantic_translator import get_llm_client
-            logger.info(f"Running direct vision analysis at ({latitude:.4f}, {longitude:.4f})")
-            client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
-            
-            # Clean base64 if needed
-            clean_base64 = screenshot_base64
-            if screenshot_base64.startswith('data:image'):
-                clean_base64 = screenshot_base64.split(',', 1)[1]
-            
-            vision_prompt = f"""Analyze this satellite/map image for terrain and geospatial intelligence.
+            logger.info(f"TerrainAgent: expired session {sid}")
 
-Location: Approximately ({latitude:.4f}, {longitude:.4f})
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
 
-Provide a comprehensive analysis covering:
-1. **Land Use & Urban Development**: Urban vs rural, settlements, roads
-2. **Vegetation & Land Cover**: Forest, grassland, agricultural areas
-3. **Water Features**: Rivers, lakes, wetlands, flood-prone areas
-4. **Terrain Features**: Hills, valleys, flat areas
-5. **Notable Observations**: Distinctive landmarks or features
-
-Be specific and quantitative where possible."""
-            
-            response = await client.chat.completions.create(
-                model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert geospatial analyst specializing in terrain analysis and satellite imagery interpretation."
-                    },
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": vision_prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/jpeg;base64,{clean_base64}", "detail": "high"}
-                            }
-                        ]
-                    }
-                ],
-                max_completion_tokens=1500
-            )
-            
-            analysis = response.choices[0].message.content
-            logger.info(f"Vision analysis complete: {len(analysis)} chars")
-            return analysis
-            
-        except Exception as e:
-            logger.error(f"Direct vision analysis failed: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return f"Visual analysis unavailable: {str(e)}"
-    
     async def chat(
         self,
         session_id: str,
@@ -290,268 +404,122 @@ Be specific and quantitative where possible."""
         latitude: float,
         longitude: float,
         screenshot_base64: Optional[str] = None,
-        radius_km: float = 5.0
+        radius_km: float = 5.0,
     ) -> Dict[str, Any]:
-        """
-        Process a user message and return agent response.
-        
-        Same interface as the previous SK-based agent for drop-in compatibility.
-        """
         await self._ensure_initialized()
-        
-        # Get or create session (creates Agent Service thread)
-        session = await self._get_or_create_session(session_id, latitude, longitude)
-        
-        # ====================================================================
-        # REVERSE GEOCODE + VISION IN PARALLEL (15s timeout gate)
-        # ====================================================================
+
+        session = self._get_or_create_session(session_id, latitude, longitude)
+
+        # ---- Reverse geocode + vision in parallel ----
         import asyncio
-        from semantic_translator import geocoding_plugin
 
         async def _reverse_geocode() -> str:
             fallback = f"Location ({latitude:.4f}, {longitude:.4f})"
             try:
+                from semantic_translator import geocoding_plugin
                 rg = await geocoding_plugin.azure_maps_reverse_geocode(latitude, longitude)
                 data = json.loads(rg)
                 if not data.get("error"):
                     n = data.get("name", "")
                     r = data.get("region", "")
                     c = data.get("country", "")
-                    parts = [p for p in [n, r, c] if p and p != n]
+                    parts = [p for p in [r, c] if p and p != n]
                     return f"{n}, {', '.join(parts)}" if n and parts else n or fallback
             except Exception as e:
                 logger.warning(f"Reverse geocode exception: {e}")
             return fallback
 
-        async def _vision_analysis() -> Optional[str]:
+        async def _vision() -> Optional[str]:
             if not screenshot_base64 or len(screenshot_base64) < 5000:
                 return None
             try:
-                result = await asyncio.wait_for(
-                    self._analyze_screenshot_direct(screenshot_base64, latitude, longitude),
-                    timeout=15.0
+                return await asyncio.wait_for(
+                    self._analyze_screenshot(screenshot_base64, latitude, longitude),
+                    timeout=15.0,
                 )
-                if result and len(result.strip()) > 0:
-                    return result
-                logger.info("Vision analysis returned empty — skipping")
             except asyncio.TimeoutError:
-                logger.warning("Vision analysis timed out (15s cap) — skipping")
+                logger.warning("Terrain vision analysis timed out — skipping")
             except Exception as e:
-                logger.warning(f"Vision analysis failed: {e} — skipping")
+                logger.warning(f"Terrain vision error: {e}")
             return None
 
-        location_name, visual_analysis = await asyncio.gather(
-            _reverse_geocode(), _vision_analysis()
+        location_name, visual_analysis = await asyncio.gather(_reverse_geocode(), _vision())
+        logger.info(f"TerrainAgent: location={location_name}, vision={len(visual_analysis) if visual_analysis else 0} chars")
+
+        # ---- Build context message ----
+        context_message = (
+            f"[Location Context]\n"
+            f"- Location: {location_name}\n"
+            f"- Coordinates: ({latitude:.6f}, {longitude:.6f})\n"
+            f"- Analysis radius: {radius_km} km\n"
         )
-        logger.info(f"Resolved location: ({latitude}, {longitude}) -> {location_name}, vision: {len(visual_analysis) if visual_analysis else 0} chars")
-        
-        # Build context-enriched message
-        context_message = f"""[Location Context]
-- Location: {location_name}
-- Coordinates: ({latitude:.6f}, {longitude:.6f})
-- Analysis radius: {radius_km} km
-- Session messages: {session.message_count}"""
-        
         if visual_analysis:
-            context_message += f"""
+            context_message += f"\n[Visual Analysis of Current Map View]\n{visual_analysis}\n"
+        context_message += f"\n[User Question]\n{user_message}"
 
-[Visual Analysis of Current Map View]
-{visual_analysis}"""
-        
-        context_message += f"""
+        # ---- Select and run tools ----
+        tool_names = await self._select_tools(user_message)
+        logger.info(f"TerrainAgent: selected tools {tool_names}")
 
-[User Question]
-{user_message}"""
-        
-        logger.info(f"Session {session_id}: Processing '{user_message[:50]}...'")
-        
-        _retryable_patterns = ["404", "Resource not found", "invalid_engine_error",
-                               "Failed to resolve model", "InternalServerError",
-                               "Unable to get resource", "DeploymentNotFound",
-                               "server_error", "something went wrong"]
+        loop = asyncio.get_event_loop()
+        tool_results: Dict[str, Any] = {}
+        tool_calls_meta: List[Dict[str, Any]] = []
 
-        max_retries = 3
-        for attempt in range(max_retries):
+        for tool_name in tool_names:
             try:
-                # Re-create thread if we had to re-initialize (stale session)
-                if attempt > 0:
-                    session = await self._get_or_create_session(f"{session_id}_retry{attempt}", latitude, longitude)
-
-                # Add message to the Agent Service thread
-                await self._agents_client.messages.create(
-                    thread_id=session.thread_id,
-                    role="user",
-                    content=context_message,
+                result = await loop.run_in_executor(
+                    None,
+                    self._call_tool,
+                    tool_name,
+                    latitude,
+                    longitude,
+                    radius_km,
                 )
-                
-                # Create and process the run (auto-executes function tools via ToolSet)
-                run = await self._agents_client.runs.create_and_process(
-                    thread_id=session.thread_id,
-                    agent_id=self._agent_id,
-                )
-                
-                if run.status == "failed":
-                    err_str = str(run.last_error)
-                    is_retryable = any(p in err_str for p in _retryable_patterns)
-                    if is_retryable and attempt < max_retries - 1:
-                        logger.warning(f"Terrain run failed (retryable), attempt {attempt + 1}: {run.last_error}")
-                        self._initialized = False
-                        self._agent_id = None
-                        self._agents_client = None
-                        self.sessions.clear()
-                        await self._ensure_initialized()
-                        continue
-                    logger.error(f"Agent run failed: {run.last_error}")
-                    return {
-                        "response": f"I encountered an error analyzing this location: {run.last_error}",
-                        "error": str(run.last_error),
-                        "session_id": session_id
-                    }
-                
-                # Get messages from the thread (newest first)
-                messages_iterable = self._agents_client.messages.list(
-                    thread_id=session.thread_id,
-                    order="desc",
-                )
-                
-                # Extract the assistant's latest response
-                response_content = ""
-                tool_calls = []
-                
-                async for msg in messages_iterable:
-                    if msg.run_id == run.id and msg.role == "assistant":
-                        if msg.text_messages:
-                            response_content = msg.text_messages[-1].text.value
-                        break
-                
-                # Extract tool call info from run steps
-                try:
-                    run_steps_iterable = self._agents_client.run_steps.list(
-                        thread_id=session.thread_id,
-                        run_id=run.id,
-                    )
-                    async for step in run_steps_iterable:
-                        if hasattr(step, 'step_details') and hasattr(step.step_details, 'tool_calls'):
-                            for tc in step.step_details.tool_calls:
-                                if hasattr(tc, 'function'):
-                                    tool_name = tc.function.name
-                                    tool_output = getattr(tc.function, 'output', None)
-                                    result_parsed = tool_output
-                                    if isinstance(tool_output, str) and tool_output.startswith('{'):
-                                        try:
-                                            result_parsed = json.loads(tool_output)
-                                        except Exception:
-                                            pass
-                                    tool_calls.append({
-                                        "tool": tool_name,
-                                        "result": result_parsed if isinstance(result_parsed, dict) else str(tool_output)[:500] if tool_output else None
-                                    })
-                                    logger.info(f"Tool called: {tool_name}")
-                except Exception as e:
-                    logger.debug(f"Could not extract run steps: {e}")
-                
-                session.message_count += 2  # user + assistant
-                session.last_activity = datetime.utcnow()
-                
-                logger.info(f"Agent response ({len(response_content)} chars, {len(tool_calls)} tool calls)")
-                
-                return {
-                    "response": response_content,
-                    "tool_calls": tool_calls,
-                    "session_id": session_id,
-                    "message_count": session.message_count,
-                    "location": {"latitude": latitude, "longitude": longitude}
-                }
-                
+                tool_results[tool_name] = result
+                tool_calls_meta.append({"tool": tool_name, "result": result})
+                logger.info(f"TerrainAgent: {tool_name} → {str(result)[:120]}")
             except Exception as e:
-                error_str = str(e)
-                is_retryable = any(p in error_str for p in _retryable_patterns)
-                if is_retryable and attempt < max_retries - 1:
-                    logger.warning(f"Terrain agent error (retryable), re-initializing... (attempt {attempt + 1}): {e}")
-                    self._initialized = False
-                    self._agent_id = None
-                    self._agents_client = None
-                    self.sessions.clear()
-                    try:
-                        await self._ensure_initialized()
-                        continue  # Retry with fresh agent
-                    except Exception as reinit_err:
-                        logger.error(f"Terrain agent re-initialization failed: {reinit_err}")
-                        return {
-                            "response": f"Error: Agent service unavailable - {str(reinit_err)}",
-                            "error": str(reinit_err),
-                            "session_id": session_id
-                        }
+                logger.error(f"TerrainAgent: {tool_name} executor failed: {e}")
+                tool_results[tool_name] = {"error": str(e)}
 
-                logger.error(f"Agent error: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
-                
-                return {
-                    "response": f"I encountered an error analyzing this location: {str(e)}",
-                    "error": str(e),
-                    "session_id": session_id
-                }
-    
+        # ---- Synthesise response ----
+        response_text = await self._synthesise_response(session, context_message, tool_results)
+
+        # Update conversation history
+        session.history.append({"role": "user", "content": context_message})
+        session.history.append({"role": "assistant", "content": response_text})
+        session.message_count += 2
+        session.last_activity = datetime.utcnow()
+
+        return {
+            "response": response_text,
+            "tool_calls": tool_calls_meta,
+            "session_id": session_id,
+            "message_count": session.message_count,
+            "location": {"latitude": latitude, "longitude": longitude},
+        }
+
     async def get_session_history(self, session_id: str) -> List[Dict[str, str]]:
-        """Get conversation history for a session from the Agent Service thread."""
         if session_id not in self.sessions:
             return []
-        
-        session = self.sessions[session_id]
-        
-        try:
-            await self._ensure_initialized()
-            messages_iterable = self._agents_client.messages.list(
-                thread_id=session.thread_id,
-                order="asc",
-            )
-            
-            history = []
-            async for msg in messages_iterable:
-                content = ""
-                if msg.text_messages:
-                    content = msg.text_messages[-1].text.value
-                history.append({
-                    "role": msg.role,
-                    "content": content
-                })
-            return history
-            
-        except Exception as e:
-            logger.error(f"Failed to get session history: {e}")
-            return []
-    
+        return list(self.sessions[session_id].history)
+
     async def clear_session(self, session_id: str) -> bool:
-        """Clear a session's memory by deleting the thread."""
         if session_id in self.sessions:
-            session = self.sessions[session_id]
-            try:
-                await self._ensure_initialized()
-                await self._agents_client.threads.delete(session.thread_id)
-            except Exception as e:
-                logger.debug(f"Thread cleanup: {e}")
             del self.sessions[session_id]
-            logger.info(f"Cleared session: {session_id}")
+            logger.info(f"TerrainAgent: cleared session {session_id}")
             return True
         return False
-    
+
     async def cleanup(self):
-        """Cleanup agent resources on shutdown."""
-        if self._agents_client and self._agent_id:
-            try:
-                await self._agents_client.delete_agent(self._agent_id)
-                logger.info(f"Deleted agent: {self._agent_id}")
-            except Exception as e:
-                logger.debug(f"Agent cleanup: {e}")
+        pass  # Nothing to clean up
 
 
-# Singleton instance
+# Singleton
 _terrain_agent: Optional[TerrainAgent] = None
 
 
 def get_terrain_agent() -> TerrainAgent:
-    """Get the singleton TerrainAgent instance."""
     global _terrain_agent
     if _terrain_agent is None:
         _terrain_agent = TerrainAgent()

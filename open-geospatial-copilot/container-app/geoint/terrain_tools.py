@@ -21,9 +21,10 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Module-level STAC catalog (lazy-loaded)
+# Terrain tools always query Planetary Computer directly.
+# STAC_API_URL is for user satellite imagery — not for DEM/JRC/WorldCover data.
 _catalog = None
-_stac_endpoint = cloud_cfg.stac_catalog_url
+_stac_endpoint = "https://planetarycomputer.microsoft.com/api/stac/v1"
 
 
 def _get_catalog():
