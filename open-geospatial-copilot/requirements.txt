@@ -5,6 +5,8 @@ pydantic==2.11.9  # CRITICAL: Compatible version for semantic-kernel 1.36.2
 aiohttp>=3.9.0
 httpx>=0.27.0
 requests>=2.31.0
+urllib3>=1.21.1,<3          # Pin to range requests supports (avoids RequestsDependencyWarning)
+charset-normalizer>=2,<4    # Pin to range requests supports
 
 # --- Core Python libs ---
 python-dotenv>=1.0.0
