@@ -1506,19 +1506,24 @@ async def health_check():
             checks["llm_client"] = {"status": "error", "error": str(e)}
             all_healthy = False
 
-        # 2. STAC API — quick GET, no search
-        try:
-            stac_url = STAC_ENDPOINTS["local_stac"]
-            # Remove trailing /search if present, get catalog root
-            catalog_url = stac_url.rsplit("/search", 1)[0]
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
-                async with session.get(catalog_url + "/") as resp:
-                    checks["stac_api"] = {"status": "connected" if resp.status == 200 else "degraded"}
-        except Exception:
-            checks["stac_api"] = {"status": "degraded"}
+        # 2. Private STAC API — quick GET, no search (only if STAC_API_URL is configured)
+        stac_api_url = os.getenv("STAC_API_URL", "").strip()
+        if stac_api_url:
+            try:
+                catalog_url = stac_api_url.rsplit("/search", 1)[0]
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+                    async with session.get(catalog_url) as resp:
+                        checks["private_stac_api"] = {
+                            "status": "connected" if resp.status == 200 else "degraded",
+                            "api_url": stac_api_url,
+                        }
+            except Exception:
+                checks["private_stac_api"] = {"status": "disconnected", "api_url": stac_api_url}
+        else:
+            checks["private_stac_api"] = {"status": "not_configured"}
 
         overall = "healthy" if all_healthy else "degraded"
-        logger.info(f"[BLDG] Health: {overall} | llm_client={checks['llm_client']['status']} stac={checks['stac_api']['status']}")
+        logger.info(f"[BLDG] Health: {overall} | llm_client={checks['llm_client']['status']} private_stac={checks['private_stac_api']['status']}")
 
         return JSONResponse(
             content={
@@ -1540,6 +1545,30 @@ async def get_config():
             "baseUrl": "/api"
         }
     }
+
+@app.get("/api/stac/collections")
+async def get_stac_collections():
+    """Return the list of collections available in the configured private STAC API."""
+    stac_api_url = os.getenv("STAC_API_URL", "").strip()
+    if not stac_api_url:
+        return JSONResponse(content={"configured": False, "collections": []})
+    catalog_url = stac_api_url.rsplit("/search", 1)[0].rstrip("/")
+    collections_url = f"{catalog_url}/collections"
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+            async with session.get(collections_url) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    cols = [
+                        {"id": c["id"], "title": c.get("title", c["id"]), "description": c.get("description", "")}
+                        for c in data.get("collections", [])
+                        if "id" in c
+                    ]
+                    return JSONResponse(content={"configured": True, "collections": cols})
+                return JSONResponse(content={"configured": True, "collections": [], "error": f"HTTP {resp.status}"})
+    except Exception as e:
+        logger.error(f"[FAIL] /api/stac/collections error: {e}")
+        return JSONResponse(content={"configured": True, "collections": [], "error": str(e)})
 
 # ============================================================================
 # COLORMAP ENDPOINTS REMOVED

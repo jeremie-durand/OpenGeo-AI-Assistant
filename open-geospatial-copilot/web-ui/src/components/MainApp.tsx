@@ -288,11 +288,18 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
     queryKey: ['planetaryComputerDatasets'],
     queryFn: () => apiService.getPlanetaryComputerDatasets(),
     initialData: [],
-    enabled: true, // Always load planetary computer datasets
+    enabled: true,
     staleTime: 60000,
   });
 
-  const isLoading = loadingMyData || loadingVeda || loadingPublic || loadingPC;
+  const { data: stacApiCollections = [], isLoading: loadingStacApi } = useQuery({
+    queryKey: ['stacApiCollections'],
+    queryFn: () => apiService.getStacApiCollections(),
+    initialData: [],
+    staleTime: 60000,
+  });
+
+  const isLoading = loadingMyData || loadingVeda || loadingPublic || loadingPC || loadingStacApi;
 
   // Update CSS variable for sidebar and chat panel
   useEffect(() => {
@@ -357,6 +364,7 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
         vedaDatasets={vedaDatasets}
         publicDatasets={publicDatasets}
         planetaryComputerDatasets={planetaryComputerDatasets}
+        stacApiCollections={stacApiCollections}
         isLoading={isLoading}
         onDatasetSelect={handleDatasetClick}
         selectedDataset={appState.selectedDataset}

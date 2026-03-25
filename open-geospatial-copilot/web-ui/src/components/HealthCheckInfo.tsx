@@ -22,12 +22,16 @@ interface HealthCheckData {
   // Backend may return either 'checks' or 'connectivity_tests'
   checks?: {
     azure_openai?: { status: string; endpoint?: string; model?: string; available_models?: string[] };
+    llm_client?: { status: string; provider?: string; model?: string };
     stac_api?: { status: string; api_url?: string };
+    private_stac_api?: { status: string; api_url?: string };
     azure_maps?: { status: string };
   };
   connectivity_tests?: {
     azure_openai?: { status: string; endpoint?: string; model?: string; available_models?: string[] };
+    llm_client?: { status: string; provider?: string; model?: string };
     stac_api?: { status: string; api_url?: string };
+    private_stac_api?: { status: string; api_url?: string };
     azure_maps?: { status: string };
   };
 }
@@ -147,14 +151,26 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
             {(() => {
               // Backend may return 'checks' or 'connectivity_tests'
               const svc = healthData.checks || healthData.connectivity_tests || {};
+              const aiStatus = svc.llm_client?.status || svc.azure_openai?.status;
+              const privateStac = svc.private_stac_api;
               return (
                 <>
                   <div className="health-status-item">
                     <span className="health-label">AI Model:</span>
-                    <span className={`health-value ${isServiceOk(svc.azure_openai?.status) ? 'success' : 'error'}`}>
-                      {isServiceOk(svc.azure_openai?.status) ? 'Connected' : 'Disconnected'}
+                    <span className={`health-value ${isServiceOk(aiStatus) ? 'success' : 'error'}`}>
+                      {isServiceOk(aiStatus) ? 'Connected' : 'Disconnected'}
                     </span>
                   </div>
+
+                  {/* Private STAC API — only show when configured */}
+                  {privateStac && privateStac.status !== 'not_configured' && (
+                    <div className="health-status-item">
+                      <span className="health-label">Private STAC API:</span>
+                      <span className={`health-value ${isServiceOk(privateStac.status) ? 'success' : 'error'}`}>
+                        {isServiceOk(privateStac.status) ? 'Connected' : 'Disconnected'}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="health-status-item">
                     <span className="health-label">Planetary Computer:</span>
@@ -163,12 +179,14 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
                     </span>
                   </div>
 
-                  <div className="health-status-item">
-                    <span className="health-label">Azure Maps:</span>
-                    <span className={`health-value ${isServiceOk(svc.azure_maps?.status) ? 'success' : 'error'}`}>
-                      {isServiceOk(svc.azure_maps?.status) ? 'Connected' : 'Disconnected'}
-                    </span>
-                  </div>
+                  {svc.azure_maps && (
+                    <div className="health-status-item">
+                      <span className="health-label">Azure Maps:</span>
+                      <span className={`health-value ${isServiceOk(svc.azure_maps?.status) ? 'success' : 'error'}`}>
+                        {isServiceOk(svc.azure_maps?.status) ? 'Connected' : 'Disconnected'}
+                      </span>
+                    </div>
+                  )}
                 </>
               );
             })()}

@@ -13,6 +13,7 @@ interface SidebarProps {
   vedaDatasets: Dataset[];
   publicDatasets: Dataset[];
   planetaryComputerDatasets: Dataset[];
+  stacApiCollections?: Dataset[];
   isLoading: boolean;
   onDatasetSelect: (dataset: Dataset) => void;
   selectedDataset: Dataset | null;
@@ -28,6 +29,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   vedaDatasets,
   publicDatasets,
   planetaryComputerDatasets,
+  stacApiCollections = [],
   isLoading,
   onDatasetSelect,
   selectedDataset,
@@ -37,6 +39,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [dropdownSelectedDataset, setDropdownSelectedDataset] = useState<Dataset | null>(null);
   const [vedaSelectedDataset, setVedaSelectedDataset] = useState<Dataset | null>(null);
+  const [stacSelectedCollection, setStacSelectedCollection] = useState<Dataset | null>(null);
 
   // Always show 3 data sources (removed APIs section)
   const shouldShowMyData = true;
@@ -299,6 +302,56 @@ const Sidebar: React.FC<SidebarProps> = ({
                     ) : (
                       <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic' }}>
                         No datasets available
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Private STAC API collections */}
+                {stacApiCollections.length > 0 && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <div
+                      className="title"
+                      style={{
+                        fontSize: 14,
+                        marginBottom: 8,
+                        fontWeight: 'normal',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      STAC API
+                      <span style={{ fontSize: '11px', opacity: 0.6, fontStyle: 'italic' }}>Private</span>
+                    </div>
+                    <DatasetDropdown
+                      datasets={stacApiCollections}
+                      selectedDataset={stacSelectedCollection}
+                      onDatasetSelect={(dataset) => {
+                        setStacSelectedCollection(dataset);
+                        onDatasetSelect(dataset);
+                      }}
+                      placeholder="Select a collection..."
+                    />
+                    {stacSelectedCollection && onPrivateSearch && (
+                      <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'center' }}>
+                        <button
+                          onClick={() => onPrivateSearch(`Search ${stacSelectedCollection.title}`, stacSelectedCollection)}
+                          style={{
+                            padding: '8px 16px',
+                            backgroundColor: '#3b82f6',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            fontWeight: '500',
+                          }}
+                          onMouseEnter={(e) => { (e.target as HTMLElement).style.backgroundColor = '#2563eb'; }}
+                          onMouseLeave={(e) => { (e.target as HTMLElement).style.backgroundColor = '#3b82f6'; }}
+                        >
+                          Search
+                        </button>
                       </div>
                     )}
                   </div>

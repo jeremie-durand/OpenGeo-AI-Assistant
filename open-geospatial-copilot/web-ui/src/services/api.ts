@@ -282,6 +282,24 @@ class ApiService {
     }
   }
 
+  async getStacApiCollections(): Promise<Dataset[]> {
+    try {
+      const response = await fetch(`${API_BASE}/api/stac/collections`);
+      if (!response.ok) return [];
+      const data = await response.json();
+      if (!data.configured) return [];
+      return (data.collections || []).map((c: { id: string; title: string; description: string }) => ({
+        id: c.id,
+        title: c.title || c.id,
+        description: c.description || '',
+        type: 'private_stac',
+      }));
+    } catch (error) {
+      console.error('Failed to fetch private STAC collections:', error);
+      return [];
+    }
+  }
+
   async sendChatMessage(
     message: string, 
     datasetId?: string, 
