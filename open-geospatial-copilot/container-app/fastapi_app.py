@@ -476,13 +476,13 @@ async def execute_direct_stac_search(stac_query: Dict[str, Any], stac_endpoint: 
     try:
         stac_url = STAC_ENDPOINTS.get(stac_endpoint, STAC_ENDPOINTS["local_stac"])
         logger.info(f"[SEARCH] STAC SEARCH: {stac_endpoint} | collections={stac_query.get('collections', [])} | bbox={stac_query.get('bbox', 'NONE')} | datetime={stac_query.get('datetime', 'NONE')} | limit={stac_query.get('limit', 'default')}")
-        
+
         # NOTE: We do NOT validate coverage proactively because STAC collection extents
         # represent "data exists somewhere in this region" not "complete coverage".
         # Instead, we let the search run and handle empty results with helpful messages.
-        
+
         timeout = aiohttp.ClientTimeout(total=60)
-        
+
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(stac_url, json=stac_query) as response:
                 logger.info(f"[SEARCH] STAC SEARCH: HTTP {response.status}")
@@ -1244,10 +1244,19 @@ def build_stac_query(stac_params: Dict[str, Any]) -> Dict[str, Any]:
         query['sortby'] = [{"field": "datetime", "direction": "desc"}]
         logger.info(f"[CHART] Adding default sortby (datetime desc) to get most recent imagery")
     
-    # Add query parameters
+    # Add query parameters (CQL2 extension)
     if stac_params.get('query'):
         query['query'] = stac_params['query']
-    
+
+    # Add cloud cover filter — server-side for APIs that support it (PC, stac-fastapi)
+    # Client-side filtering in execute_direct_stac_search also uses this value as a safety net
+    if stac_params.get('cloud_cover') is not None:
+        cloud_val = int(stac_params['cloud_cover'])
+        q = query.setdefault('query', {})
+        q['eo:cloud_cover'] = {'lte': cloud_val}   # Sentinel-2, Landsat
+        q['cloud_cover'] = {'lte': cloud_val}       # HLS / other providers
+        logger.info(f"[CLOUD] Adding cloud cover filter to STAC query: ≤{cloud_val}%")
+
     return query
 
 def calculate_center_from_bbox(bbox: List[float]) -> List[float]:
@@ -1643,8 +1652,8 @@ async def unified_query_processor(request: Request):
             }
             qs_stac_query = build_stac_query(qs_stac_params)
             
-            # Execute STAC search (the only step that MUST hit the network)
-            qs_stac_endpoint = "planetary_computer"
+            # Execute STAC search — route to local STAC if configured, else Planetary Computer
+            qs_stac_endpoint = translator.determine_stac_source(natural_query, qs_stac_params)
             qs_stac_response = await execute_direct_stac_search(qs_stac_query, qs_stac_endpoint, original_query=natural_query)
             
             qs_features = []
@@ -2960,23 +2969,28 @@ async def unified_query_processor(request: Request):
                         logger.info(f"[SKIP] Skipping spatial pre-filter: Agent 3 will ensure coverage from {len(raw_features)} tiles")
                         
                         # [CLOUD] CLIENT-SIDE CLOUD COVER FILTERING: Safety net in case STAC API ignored the filter
-                        # Extract cloud cover limit from query parameters OR detect from original query keywords
+                        # Extract cloud cover limit from stac_params (LLM-extracted), then query filter, then keywords
                         cloud_cover_limit = None
-                        query_filter = stac_query.get("query", {})
-                        logger.info(f"[SEARCH] DEBUG: Client-side check - stac_query.get('query') = {query_filter}")
-                        
-                        # Check both eo:cloud_cover (Sentinel-2, Landsat) and cloud_cover (HLS)
-                        for prop_name in ["eo:cloud_cover", "cloud_cover"]:
-                            if prop_name in query_filter:
-                                cloud_cover_filter = query_filter[prop_name]
-                                logger.info(f"[SEARCH] DEBUG: Found {prop_name} in query_filter: {cloud_cover_filter}")
-                                if "lte" in cloud_cover_filter:
-                                    cloud_cover_limit = cloud_cover_filter["lte"]
-                                elif "lt" in cloud_cover_filter:
-                                    cloud_cover_limit = cloud_cover_filter["lt"]
-                                break
-                            else:
-                                logger.info(f"[SEARCH] DEBUG: {prop_name} NOT in query_filter")
+
+                        # Primary source: LLM-extracted cloud_cover from translate_query
+                        if stac_params and stac_params.get('cloud_cover') is not None:
+                            cloud_cover_limit = int(stac_params['cloud_cover'])
+                            logger.info(f"[CLOUD] Cloud cover limit from stac_params: {cloud_cover_limit}%")
+                        else:
+                            # Secondary: check STAC query filter (eo:cloud_cover / cloud_cover CQL2 extension)
+                            query_filter = stac_query.get("query", {})
+                            logger.info(f"[SEARCH] DEBUG: Client-side check - stac_query.get('query') = {query_filter}")
+                            for prop_name in ["eo:cloud_cover", "cloud_cover"]:
+                                if prop_name in query_filter:
+                                    cloud_cover_filter = query_filter[prop_name]
+                                    logger.info(f"[SEARCH] DEBUG: Found {prop_name} in query_filter: {cloud_cover_filter}")
+                                    if "lte" in cloud_cover_filter:
+                                        cloud_cover_limit = cloud_cover_filter["lte"]
+                                    elif "lt" in cloud_cover_filter:
+                                        cloud_cover_limit = cloud_cover_filter["lt"]
+                                    break
+                                else:
+                                    logger.info(f"[SEARCH] DEBUG: {prop_name} NOT in query_filter")
                         
                         # [TOOL] FALLBACK: Keyword detection if no cloud filter in query parameters
                         # This catches cases where the cloud filter wasn't propagated through the pipeline

@@ -120,41 +120,79 @@ class GenericQueryTranslator:
     # Agent 1 — collection mapping
     # ------------------------------------------------------------------
 
+    async def _discover_stac_collections(self) -> Optional[List[Dict[str, str]]]:
+        """Fetch available collections from the configured local STAC API.
+
+        Returns a list of {"id": ..., "title": ...} dicts, or None if not configured.
+        """
+        import os
+        stac_url = os.getenv("STAC_API_URL", "").strip()
+        if not stac_url:
+            return None
+        # Derive the /collections endpoint from the search URL
+        base = stac_url.rsplit("/search", 1)[0].rstrip("/")
+        collections_url = f"{base}/collections"
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as session:
+                async with session.get(collections_url) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        cols = data.get("collections", [])
+                        return [{"id": c["id"], "title": c.get("title", c["id"])} for c in cols if "id" in c]
+        except Exception as exc:
+            logger.warning(f"[GQT] Could not discover STAC collections from {collections_url}: {exc}")
+        return None
+
     async def collection_mapping_agent(self, query: str) -> List[str]:
         """Return a list of STAC collection IDs relevant to *query*."""
+        # Try to discover collections from the configured local STAC API first
+        discovered = await self._discover_stac_collections()
+        if discovered:
+            collection_list = "\n".join(f"{c['id']} : {c['title']}" for c in discovered)
+            source_note = "These are the collections available in the configured local STAC API."
+        else:
+            # Fall back to the well-known Planetary Computer collection list
+            collection_list = (
+                "sentinel-2-l2a : Sentinel-2 optical imagery (10 m)\n"
+                "landsat-c2-l2 : Landsat Collection 2 Level-2 (30 m)\n"
+                "hls2-s30 : Harmonized Landsat-Sentinel (Sentinel) 30 m\n"
+                "hls2-l30 : Harmonized Landsat-Sentinel (Landsat) 30 m\n"
+                "naip : NAIP aerial imagery (US, <1 m)\n"
+                "modis-09A1-061 : MODIS surface reflectance 8-day 500 m\n"
+                "modis-09Q1-061 : MODIS surface reflectance 8-day 250 m\n"
+                "cop-dem-glo-30 : Copernicus DEM 30 m\n"
+                "cop-dem-glo-90 : Copernicus DEM 90 m\n"
+                "alos-dem : ALOS DEM 30 m\n"
+                "3dep-lidar-hag : USGS 3DEP LiDAR height above ground\n"
+                "sentinel-1-rtc : Sentinel-1 SAR RTC\n"
+                "sentinel-1-grd : Sentinel-1 SAR GRD\n"
+                "modis-14A1-061 : MODIS thermal anomalies / fire daily\n"
+                "modis-14A2-061 : MODIS fire 8-day\n"
+                "modis-64A1-061 : MODIS burned area monthly\n"
+                "modis-10A1-061 : MODIS snow cover daily\n"
+                "modis-10A2-061 : MODIS snow cover 8-day\n"
+                "modis-13Q1-061 : MODIS NDVI/EVI 250 m 16-day\n"
+                "modis-13A1-061 : MODIS NDVI/EVI 500 m 16-day\n"
+                "modis-11A1-061 : MODIS land surface temperature daily\n"
+                "modis-11A2-061 : MODIS land surface temperature 8-day\n"
+                "esa-worldcover : ESA WorldCover land cover 10 m\n"
+                "io-lulc-9-class : IO/Esri land use land cover\n"
+                "usda-cdl : USDA cropland data layer\n"
+                "jrc-gsw-occurrence : JRC global surface water\n"
+                "noaa-cdr-sea-surface-temp-whoi : NOAA sea surface temperature\n"
+                "noaa-mrms-qpe-1h-pass1 : NOAA MRMS hourly precipitation\n"
+                "nasa-nex-gddp-cmip6 : NASA NEX GDDP CMIP6 climate projections\n"
+                "chloris-biomass : Chloris above-ground biomass"
+            )
+            source_note = "These are the collections available on Planetary Computer."
+
         prompt = f"""You are a geospatial data assistant. Given a user query, return the most relevant STAC satellite/geospatial collection IDs from the list below.
 
 AVAILABLE COLLECTIONS (ID : description):
-sentinel-2-l2a : Sentinel-2 optical imagery (10 m)
-landsat-c2-l2 : Landsat Collection 2 Level-2 (30 m)
-hls2-s30 : Harmonized Landsat-Sentinel (Sentinel) 30 m
-hls2-l30 : Harmonized Landsat-Sentinel (Landsat) 30 m
-naip : NAIP aerial imagery (US, <1 m)
-modis-09A1-061 : MODIS surface reflectance 8-day 500 m
-modis-09Q1-061 : MODIS surface reflectance 8-day 250 m
-cop-dem-glo-30 : Copernicus DEM 30 m
-cop-dem-glo-90 : Copernicus DEM 90 m
-alos-dem : ALOS DEM 30 m
-3dep-lidar-hag : USGS 3DEP LiDAR height above ground
-sentinel-1-rtc : Sentinel-1 SAR RTC
-sentinel-1-grd : Sentinel-1 SAR GRD
-modis-14A1-061 : MODIS thermal anomalies / fire daily
-modis-14A2-061 : MODIS fire 8-day
-modis-64A1-061 : MODIS burned area monthly
-modis-10A1-061 : MODIS snow cover daily
-modis-10A2-061 : MODIS snow cover 8-day
-modis-13Q1-061 : MODIS NDVI/EVI 250 m 16-day
-modis-13A1-061 : MODIS NDVI/EVI 500 m 16-day
-modis-11A1-061 : MODIS land surface temperature daily
-modis-11A2-061 : MODIS land surface temperature 8-day
-esa-worldcover : ESA WorldCover land cover 10 m
-io-lulc-9-class : IO/Esri land use land cover
-usda-cdl : USDA cropland data layer
-jrc-gsw-occurrence : JRC global surface water
-noaa-cdr-sea-surface-temp-whoi : NOAA sea surface temperature
-noaa-mrms-qpe-1h-pass1 : NOAA MRMS hourly precipitation
-nasa-nex-gddp-cmip6 : NASA NEX GDDP CMIP6 climate projections
-chloris-biomass : Chloris above-ground biomass
+{collection_list}
+
+{source_note}
 
 USER QUERY: "{query}"
 
