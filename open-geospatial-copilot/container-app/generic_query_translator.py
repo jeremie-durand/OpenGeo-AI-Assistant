@@ -419,7 +419,14 @@ Provide a 2-3 sentence helpful response. Be specific about what might have gone 
             return f"No results found for '{natural_query}'. Try adjusting the location name, time range, or collection type."
 
     def determine_stac_source(self, query: str, entities: Dict[str, Any]) -> str:
-        """Route to the appropriate STAC endpoint. Always Planetary Computer for now."""
+        """Route to the appropriate STAC endpoint.
+
+        Uses the local/private STAC API (STAC_API_URL) when configured,
+        otherwise falls back to Planetary Computer.
+        """
+        import os
+        if os.getenv("STAC_API_URL", "").strip():
+            return "local_stac"
         return "planetary_computer"
 
     # ------------------------------------------------------------------

@@ -18,23 +18,27 @@ class AnthropicClient:
         }
 
     async def chat(self, messages: List[Dict[str, str]], **kwargs: Any) -> Dict[str, Any]:
-        # Anthropic expects a single prompt string, not OpenAI-style messages
-        prompt = self._messages_to_prompt(messages)
-        payload = {
+        payload: Dict[str, Any] = {
             "model": self.model,
             "max_tokens": kwargs.get("max_tokens", 1024),
             "temperature": kwargs.get("temperature", 0.7),
-            "system": kwargs.get("system", ""),
             "messages": messages,
-            "stream": False
         }
+        # Anthropic rejects "system" when it is an empty string
+        system = kwargs.get("system", "")
+        if system:
+            payload["system"] = system
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.base_url}/messages",
                 headers=self.headers,
                 json=payload,
-                timeout=30
+                timeout=60
             )
+            if response.status_code >= 400:
+                logger.error(
+                    f"[Anthropic] {response.status_code} — {response.text}"
+                )
             response.raise_for_status()
             return response.json()
 
