@@ -23,14 +23,14 @@ interface HealthCheckData {
   checks?: {
     azure_openai?: { status: string; endpoint?: string; model?: string; available_models?: string[] };
     llm_client?: { status: string; provider?: string; model?: string };
-    stac_api?: { status: string; api_url?: string };
+    planetary_computer?: { status: string };
     private_stac_api?: { status: string; api_url?: string };
     azure_maps?: { status: string };
   };
   connectivity_tests?: {
     azure_openai?: { status: string; endpoint?: string; model?: string; available_models?: string[] };
     llm_client?: { status: string; provider?: string; model?: string };
-    stac_api?: { status: string; api_url?: string };
+    planetary_computer?: { status: string };
     private_stac_api?: { status: string; api_url?: string };
     azure_maps?: { status: string };
   };
@@ -174,8 +174,8 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
 
                   <div className="health-status-item">
                     <span className="health-label">Planetary Computer:</span>
-                    <span className={`health-value ${isServiceOk(svc.stac_api?.status) ? 'success' : 'error'}`}>
-                      {isServiceOk(svc.stac_api?.status) ? 'Connected' : 'Disconnected'}
+                    <span className={`health-value ${isServiceOk(svc.planetary_computer?.status) ? 'success' : 'error'}`}>
+                      {isServiceOk(svc.planetary_computer?.status) ? 'Connected' : 'Disconnected'}
                     </span>
                   </div>
 

@@ -1506,7 +1506,16 @@ async def health_check():
             checks["llm_client"] = {"status": "error", "error": str(e)}
             all_healthy = False
 
-        # 2. Private STAC API — quick GET, no search (only if STAC_API_URL is configured)
+        # 2. Planetary Computer — quick catalog GET
+        try:
+            pc_catalog = "https://planetarycomputer.microsoft.com/api/stac/v1"
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as session:
+                async with session.get(pc_catalog) as resp:
+                    checks["planetary_computer"] = {"status": "connected" if resp.status == 200 else "degraded"}
+        except Exception:
+            checks["planetary_computer"] = {"status": "disconnected"}
+
+        # 3. Private STAC API — quick GET (only if STAC_API_URL is configured)
         stac_api_url = os.getenv("STAC_API_URL", "").strip()
         if stac_api_url:
             try:
@@ -1523,7 +1532,7 @@ async def health_check():
             checks["private_stac_api"] = {"status": "not_configured"}
 
         overall = "healthy" if all_healthy else "degraded"
-        logger.info(f"[BLDG] Health: {overall} | llm_client={checks['llm_client']['status']} private_stac={checks['private_stac_api']['status']}")
+        logger.info(f"[BLDG] Health: {overall} | llm={checks['llm_client']['status']} pc={checks['planetary_computer']['status']} private_stac={checks['private_stac_api']['status']}")
 
         return JSONResponse(
             content={
