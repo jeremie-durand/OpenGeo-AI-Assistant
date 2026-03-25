@@ -337,7 +337,7 @@ class EnhancedVisionAgent:
         """Initialize the vision agent (lazy — actual setup on first use)."""
         self.sessions: Dict[str, VisionSession] = {}
         self.memory_ttl = timedelta(minutes=30)
-        self._llm_client = None
+        self._llm = None
         self._initialized = False
         logger.info("EnhancedVisionAgent created (will initialize on first use)")
 
@@ -345,18 +345,16 @@ class EnhancedVisionAgent:
         """Lazy initialization of LLM client."""
         if self._initialized:
             return
-        # Import and initialize local LLM client (OpenAI/Anthropic)
-        from semantic_translator import get_llm_client
-        self._llm_client = get_llm_client()
+        from llm_client import get_llm_client
+        compat = get_llm_client()
+        self._llm = compat._llm  # raw LLMClient (has .provider, .model, .chat())
         self._initialized = True
-
-    # Azure initialization removed
+        logger.info(f"EnhancedVisionAgent initialised (provider={self._llm.provider}, model={self._llm.model})")
 
     def _get_or_create_session(self, session_id: str) -> VisionSession:
         """Get existing session or create a new one."""
         if session_id in self.sessions:
             return self.sessions[session_id]
-        self._ensure_initialized()
         session = VisionSession(session_id=session_id)
         self.sessions[session_id] = session
         logger.info(f"Created vision session: {session_id}")
@@ -372,12 +370,117 @@ class EnhancedVisionAgent:
             session.updated_at = datetime.utcnow()
 
     def get_or_create_session(self, session_id: str) -> VisionSession:
-        """Synchronous version — get session or create a placeholder (thread created on analyze)."""
         if session_id not in self.sessions:
             self.sessions[session_id] = VisionSession(session_id=session_id)
         return self.sessions[session_id]
 
-    def analyze(
+    # ------------------------------------------------------------------
+    # LLM helpers
+    # ------------------------------------------------------------------
+
+    async def _llm_text(self, messages: List[Dict], max_tokens: int = 1200, temperature: float = 0.4, **kwargs) -> str:
+        response = await self._llm.chat(messages, max_tokens=max_tokens, temperature=temperature, **kwargs)
+        if isinstance(response, dict):
+            blocks = response.get("content", [])
+            if blocks and isinstance(blocks, list):
+                item = blocks[0]
+                return item.get("text", "") if isinstance(item, dict) else str(item)
+            choices = response.get("choices", [])
+            if choices:
+                return choices[0].get("message", {}).get("content", "")
+        return str(response)
+
+    async def _call_llm(
+        self,
+        user_query: str,
+        session: VisionSession,
+        screenshot_base64: Optional[str],
+        raster_result: Optional[str],
+    ) -> str:
+        """
+        Single LLM call with screenshot + context + question.
+        Including the image directly ensures the model actually sees the map.
+        """
+        bounds = session.map_bounds or {}
+        lat = bounds.get("center_lat") or bounds.get("pin_lat")
+        lng = bounds.get("center_lng") or bounds.get("pin_lng")
+
+        context_lines = []
+        if lat is not None and lng is not None:
+            context_lines.append(f"Map center: ({lat:.4f}, {lng:.4f})")
+        if session.loaded_collections:
+            context_lines.append(f"Data layers loaded: {', '.join(session.loaded_collections)}")
+        if raster_result:
+            context_lines.append(f"\n[Raster/Point Data]\n{raster_result}")
+        context_str = "\n".join(context_lines) if context_lines else ""
+
+        system_prompt = (
+            "You are a Geospatial Intelligence (GEOINT) Vision Analysis Agent.\n"
+            "Analyze the satellite/map image provided and answer the user's question.\n\n"
+            "Guidelines:\n"
+            "- Look at the image carefully to identify cities, water bodies, terrain, vegetation, infrastructure\n"
+            "- Use raster data when available for quantitative answers\n"
+            "- Be specific — name visible cities, rivers, landmarks\n"
+            "- End with a concise **Summary** answering the user's question directly\n"
+        )
+        if context_str:
+            system_prompt += f"\nContext:\n{context_str}"
+
+        # Build conversation history prefix (last 6 turns)
+        history = list(session.conversation_history[-6:])
+
+        if screenshot_base64:
+            clean = screenshot_base64
+            if screenshot_base64.startswith("data:image"):
+                clean = screenshot_base64.split(",", 1)[1]
+
+            if self._llm.provider == "anthropic":
+                # Anthropic: system as kwarg, image in user content
+                user_msg = {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_query},
+                        {"type": "image", "source": {
+                            "type": "base64", "media_type": "image/jpeg", "data": clean
+                        }},
+                    ],
+                }
+                messages = history + [user_msg]
+                return await self._llm_text(messages, max_tokens=1200, temperature=0.3)
+            else:
+                # OpenAI-compatible: system message + image_url in user content
+                sys_msg = {"role": "system", "content": system_prompt}
+                user_msg = {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_query},
+                        {"type": "image_url", "image_url": {
+                            "url": f"data:image/jpeg;base64,{clean}", "detail": "high"
+                        }},
+                    ],
+                }
+                messages = [sys_msg] + history + [user_msg]
+                return await self._llm_text(messages, max_tokens=1200, temperature=0.3)
+        else:
+            # No screenshot — text only
+            if self._llm.provider == "anthropic":
+                user_msg = {"role": "user", "content": user_query}
+                messages = history + [user_msg]
+                return await self._llm_text(
+                    messages, max_tokens=1200, temperature=0.4,
+                    system=system_prompt,
+                )
+            else:
+                sys_msg = {"role": "system", "content": system_prompt}
+                user_msg = {"role": "user", "content": user_query}
+                messages = [sys_msg] + history + [user_msg]
+                return await self._llm_text(messages, max_tokens=1200, temperature=0.4)
+
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
+
+    async def analyze(
         self,
         user_query: str,
         session_id: str = "default",
@@ -389,15 +492,12 @@ class EnhancedVisionAgent:
         conversation_history: Optional[List[Dict]] = None,
         **kwargs
     ) -> Dict[str, Any]:
-        """
-        Analyze a user query with vision tools.
-
-        Same interface as the previous SK-based agent for drop-in compatibility.
-        """
+        """Analyze a user query using vision + raster tools."""
         try:
             self._ensure_initialized()
             session = self._get_or_create_session(session_id)
-            # Update session with new context
+
+            # Update session context
             if imagery_base64:
                 session.screenshot_base64 = imagery_base64
             if map_bounds:
@@ -408,8 +508,12 @@ class EnhancedVisionAgent:
                 session.tile_urls = tile_urls
             if stac_items:
                 session.stac_items = stac_items
-            # Set module-level context for vision_tools
-            from agents.vision_tools import set_session_context, get_tool_calls, clear_tool_calls
+
+            # Set module-level context for sync raster tools
+            from agents.vision_tools import (
+                set_session_context, clear_tool_calls, get_tool_calls,
+                sample_raster_value, analyze_raster,
+            )
             set_session_context(
                 screenshot_base64=session.screenshot_base64,
                 map_bounds=session.map_bounds,
@@ -418,27 +522,51 @@ class EnhancedVisionAgent:
                 tile_urls=session.tile_urls,
             )
             clear_tool_calls()
-            # Call LLM client for analysis
-            result = self._llm_client.analyze(
+
+            import asyncio
+
+            # === Step 1: Raster point sampling (when STAC data is loaded) ===
+            raster_result: Optional[str] = None
+            if session.stac_items or session.tile_urls:
+                data_type = "auto"
+                if session.loaded_collections:
+                    det = _detect_raster_data_type(session.loaded_collections)
+                    if det:
+                        data_type = det[0]
+                try:
+                    loop = asyncio.get_event_loop()
+                    raster_result = await loop.run_in_executor(None, sample_raster_value, data_type)
+                    if raster_result and len(raster_result) < 30:
+                        raster_result = None  # too short = likely "no data" message
+                except Exception as e:
+                    logger.warning(f"sample_raster_value failed: {e}")
+
+            # === Step 2: Single LLM call with screenshot + context + question ===
+            response_text = await self._call_llm(
                 user_query=user_query,
-                session_context={
-                    "screenshot_base64": session.screenshot_base64,
-                    "map_bounds": session.map_bounds,
-                    "stac_items": session.stac_items,
-                    "loaded_collections": session.loaded_collections,
-                    "tile_urls": session.tile_urls,
-                },
-                conversation_history=session.conversation_history,
-                **kwargs
+                session=session,
+                screenshot_base64=session.screenshot_base64,
+                raster_result=raster_result,
             )
-            session.last_analysis = result.get("response", "")
+
+            session.last_analysis = response_text
             session.add_turn("user", user_query)
-            session.add_turn("assistant", result.get("response", ""))
-            return result
+            session.add_turn("assistant", response_text)
+
+            return {
+                "response": response_text,
+                "analysis": response_text,
+                "tools_used": get_tool_calls(),
+                "confidence": 0.9,
+                "session_id": session_id,
+            }
+
         except Exception as e:
             logger.error(f"[FAIL] EnhancedVisionAgent.analyze error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {
-                "response": "Analysis failed due to an internal error.",
+                "response": "Vision analysis failed due to an internal error.",
                 "analysis": "",
                 "tools_used": [],
                 "error": str(e),
