@@ -23,7 +23,9 @@ from calendar import monthrange
 
 logger = logging.getLogger(__name__)
 
-STAC_URL = "http://localhost:8081"
+import os as _os
+_stac_api_url = _os.getenv("STAC_API_URL", "").strip()
+STAC_URL = _stac_api_url.rsplit("/search", 1)[0].rstrip("/") if _stac_api_url else "https://planetarycomputer.microsoft.com/api/stac/v1"
 
 # Module-level capture of the last compare_temporal_imagery result.
 # The Azure AI Agent SDK's run_steps API may not reliably expose tool outputs
