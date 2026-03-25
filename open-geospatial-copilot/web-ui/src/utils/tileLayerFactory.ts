@@ -86,7 +86,7 @@
         maxZoom,
         tileSize: renderingConfig.tileSize || 256,
         bounds: bounds && bounds.length === 4 ? [[bounds[1], bounds[0]], [bounds[3], bounds[2]]] : undefined,
-        // Add more options as needed
+        crossOrigin: 'anonymous',  // Required for canvas screenshot compositing
       };
 
       // Create and return the Leaflet tile layer

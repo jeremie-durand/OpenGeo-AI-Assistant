@@ -240,7 +240,8 @@ const MapView: React.FC<MapViewProps> = ({
         });
         window.L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
           attribution: '© Esri World Imagery',
-          maxZoom: 22
+          maxZoom: 22,
+          crossOrigin: 'anonymous'
         }).addTo(leafletMap);
         setMap(leafletMap);
         setMapLoaded(true);
@@ -282,7 +283,7 @@ const MapView: React.FC<MapViewProps> = ({
     return new Promise((resolve) => {
       try {
         console.log('[SNAP] MapView: Starting screenshot capture...');
-        
+
         const mapContainer = mapRef.current;
         if (!mapContainer) {
           console.warn('MapView: Cannot capture screenshot - map container not found');
@@ -290,90 +291,88 @@ const MapView: React.FC<MapViewProps> = ({
           return;
         }
 
-        const canvases = mapContainer.querySelectorAll<HTMLCanvasElement>('canvas');
-        console.log(`[SNAP] MapView: Found ${canvases.length} canvas element(s)`);
-        
-        if (canvases.length === 0) {
-          console.warn('MapView: Cannot capture screenshot - no canvas elements found');
+        // Leaflet renders tiles as <img> elements, not onto a <canvas>.
+        // We composite all tile images onto an offscreen canvas.
+        const containerRect = mapContainer.getBoundingClientRect();
+        const width = Math.round(containerRect.width);
+        const height = Math.round(containerRect.height);
+
+        if (width === 0 || height === 0) {
+          console.warn('MapView: Map container has zero size');
           resolve(null);
           return;
         }
 
-        // Find the largest canvas (main map canvas, not overlays)
-        let largestCanvas: HTMLCanvasElement | null = null;
-        let maxArea = 0;
-        
-        canvases.forEach((canvas, index) => {
-          const area = canvas.width * canvas.height;
-          console.log(`[SNAP] Canvas ${index}: ${canvas.width}x${canvas.height} (${area} pixels)`);
-          if (area > maxArea) {
-            maxArea = area;
-            largestCanvas = canvas;
-          }
-        });
-        
-        if (!largestCanvas) {
-          console.error('MapView: No valid canvas found');
+        const offscreen = document.createElement('canvas');
+        offscreen.width = width;
+        offscreen.height = height;
+        const ctx = offscreen.getContext('2d');
+        if (!ctx) {
           resolve(null);
           return;
         }
-        
-        const canvas: HTMLCanvasElement = largestCanvas;
-        console.log(`[SNAP] MapView: Using canvas: ${canvas.width}x${canvas.height}`);
-        
-        // FIX: Force Azure Maps to render if it's the active map
-        // No Azure Maps logic needed for Leaflet
-        
-        // CRITICAL: For WebGL, we MUST capture during the next animation frame
-        // This is the only reliable way to get the rendered content
-        // Using double requestAnimationFrame to ensure render completes
-        console.log('[SNAP] Scheduling capture for next animation frame...');
-        
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            console.log('[SNAP] Animation frame triggered - capturing NOW');
-            
-            try {
-              // Try direct capture first (works during animation frame)
-              // Using JPEG with 85% quality to reduce size from ~6MB to ~500KB
-              const direct = canvas.toDataURL('image/jpeg', 0.85);
-              
-              if (direct && direct.length > 5000) {
-                console.log(`Direct capture succeeded (${Math.round(direct.length/1024)}KB)`);
-                resolve(direct);
-                return;
-              }
-              
-              console.warn(`Direct capture too small (${direct?.length || 0} bytes), trying 2D copy...`);
-            
-            // Fallback: copy to 2D canvas
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            const ctx = tempCanvas.getContext('2d');
-            
-            if (ctx) {
-              ctx.drawImage(canvas, 0, 0);
-              // Using JPEG with 85% quality to reduce size from ~6MB to ~500KB
-              const screenshot = tempCanvas.toDataURL('image/jpeg', 0.85);
-              
-              if (screenshot && screenshot.length > 5000) {
-                console.log(`2D copy succeeded (${Math.round(screenshot.length/1024)}KB)`);
-                resolve(screenshot);
-                return;
-              }
-            }
-            
-            console.error('All capture methods failed - canvas is black/empty');
-            resolve(null);
-            
-            } catch (err) {
-              console.error('Screenshot capture error:', err);
-              resolve(null);
-            }
-          });
+
+        // Dark background (matches map theme)
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, width, height);
+
+        // Draw all loaded tile <img> elements at their screen positions
+        let drawn = 0;
+        const imgs = mapContainer.querySelectorAll<HTMLImageElement>('img');
+        console.log(`[SNAP] Found ${imgs.length} img elements in map container`);
+
+        imgs.forEach((img) => {
+          if (!img.complete || img.naturalWidth === 0) return;
+          const r = img.getBoundingClientRect();
+          // Skip images outside the container viewport
+          if (r.right <= containerRect.left || r.left >= containerRect.right ||
+              r.bottom <= containerRect.top || r.top >= containerRect.bottom) return;
+          const x = Math.round(r.left - containerRect.left);
+          const y = Math.round(r.top - containerRect.top);
+          const w = Math.round(r.width);
+          const h = Math.round(r.height);
+          try {
+            ctx.drawImage(img, x, y, w, h);
+            drawn++;
+          } catch (e) {
+            // Skip CORS-blocked image
+          }
         });
-        
+
+        console.log(`[SNAP] Composited ${drawn} tile images onto ${width}x${height} canvas`);
+
+        // Also composite any canvas overlay layers (vector renderers, etc.)
+        const canvases = mapContainer.querySelectorAll<HTMLCanvasElement>('canvas');
+        canvases.forEach((c) => {
+          if (c.width === 0 || c.height === 0) return;
+          const r = c.getBoundingClientRect();
+          try {
+            ctx.drawImage(c, Math.round(r.left - containerRect.left), Math.round(r.top - containerRect.top));
+          } catch (e) {}
+        });
+
+        if (drawn === 0) {
+          console.warn('[SNAP] No tile images could be drawn — tiles may still be loading');
+          resolve(null);
+          return;
+        }
+
+        try {
+          const dataURL = offscreen.toDataURL('image/jpeg', 0.85);
+          if (dataURL && dataURL.length > 5000) {
+            console.log(`[SNAP] Screenshot succeeded (${Math.round(dataURL.length / 1024)}KB)`);
+            resolve(dataURL);
+          } else {
+            console.warn(`[SNAP] Screenshot too small (${dataURL?.length || 0} bytes)`);
+            resolve(null);
+          }
+        } catch (e) {
+          // toDataURL throws SecurityError if canvas is tainted by cross-origin images
+          // Fix: add crossOrigin: 'anonymous' to tile layers so images are CORS-enabled
+          console.error('[SNAP] Canvas tainted by cross-origin image — cannot export:', e);
+          resolve(null);
+        }
+
       } catch (error) {
         console.error('MapView: Error in screenshot setup:', error);
         resolve(null);
@@ -2886,24 +2885,8 @@ const MapView: React.FC<MapViewProps> = ({
         await new Promise(resolve => setTimeout(resolve, 2500));
       }
       
-      // For Azure Maps, we need to force a render and wait a bit longer
-      // Azure Maps uses WebGL which doesn't preserve drawing buffer by default
-      if (mapProvider === 'azure') {
-        console.log('[SNAP] Azure Maps detected - forcing map render...');
-        // Trigger a map update to ensure fresh render
-        if (map && typeof (map as any).render === 'function') {
-          try {
-            (map as any).render();
-          } catch (e) {
-            console.log('[SNAP] Note: render() not available, proceeding anyway');
-          }
-        }
-        // Wait longer for Azure Maps to fully render
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      } else {
-        // Leaflet renders faster
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
+      // Wait for Leaflet tiles to finish loading before capturing
+      await new Promise(resolve => setTimeout(resolve, 800));
       
       const screenshot = await captureMapScreenshot();
       
@@ -2912,7 +2895,7 @@ const MapView: React.FC<MapViewProps> = ({
         if (onGeointAnalysis) {
           onGeointAnalysis({
             type: 'error',
-            message: 'Failed to capture map screenshot. The map canvas appears to be empty. This is a known issue with Azure Maps WebGL rendering. Please try switching to Leaflet map style (bottom right button) and try again.'
+            message: 'Failed to capture the map screenshot. The map tiles may still be loading. Please wait a moment for tiles to finish loading and try again.'
           });
         }
         return;
@@ -2943,7 +2926,7 @@ const MapView: React.FC<MapViewProps> = ({
         if (onGeointAnalysis) {
           onGeointAnalysis({
             type: 'error',
-            message: 'Map screenshot appears to be empty. Azure Maps WebGL canvas is not preserving the drawing buffer. Please switch to Leaflet map style and try again.'
+            message: 'Map screenshot appears to be empty. The map tiles may not have loaded yet. Please wait a moment and try again.'
           });
         }
         return;
