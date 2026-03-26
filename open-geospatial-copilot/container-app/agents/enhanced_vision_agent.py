@@ -2,7 +2,6 @@
 Enhanced Vision Agent - Local-first LLM Client
 
 Refactored to use a configurable local LLM client (OpenAI/Anthropic) for vision analysis and tool orchestration.
-Removes Azure dependencies and Agent Service logic.
 
 This agent:
 1. Maintains conversation memory via VisionSession (persistent threads)
@@ -327,7 +326,6 @@ class EnhancedVisionAgent:
     """
     Local-first vision analysis agent using a configurable LLM client (OpenAI/Anthropic).
 
-    Replaces Azure Agent Service with:
     - Custom LLM client for agent creation and management
     - vision_tools for 13 standalone tool functions
     - Session threads for persistent conversation
@@ -575,7 +573,7 @@ class EnhancedVisionAgent:
             }
 
     # ====================================================================
-    # FALLBACK: Direct Azure OpenAI Vision API (when Agent Service fails)
+    # FALLBACK: Direct LLM Vision API (when Agent Service fails)
     # ====================================================================
 
     async def _fallback_direct_openai(
@@ -588,32 +586,27 @@ class EnhancedVisionAgent:
         is_value_q: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """
-        Fallback to direct Azure OpenAI Chat Completions API with Vision.
+        Fallback to direct LLM Chat Completions API with Vision.
 
         Called when the Agent Service is unavailable (404, network disabled, etc.).
-        Sends the screenshot + user query directly to GPT-5 Vision without tools.
+        Sends the screenshot + user query directly to the LLM without tools.
         If pre-sampled raster data is available, it is injected into the prompt.
         """
         import aiohttp
 
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "")
-        # Fallback: try AZURE_AI_PROJECT_ENDPOINT if AZURE_OPENAI_ENDPOINT is not set
-        # Azure AI Foundry project endpoints support the OpenAI chat completions API
-        if not endpoint:
-            endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT", "")
-            if endpoint:
-                logger.info("[SYNC] Using AZURE_AI_PROJECT_ENDPOINT for fallback (AZURE_OPENAI_ENDPOINT not set)")
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
-        api_key = os.getenv("AZURE_OPENAI_API_KEY", "")
-        use_managed_identity = os.getenv("AZURE_OPENAI_USE_MANAGED_IDENTITY", "").lower() == "true"
+        endpoint = os.getenv("LLM_BASE_URL", "")
+        deployment = os.getenv("LLM_MODEL", "gpt-4o")
+        api_key = os.getenv("LLM_API_KEY", "")
 
         if not endpoint:
-            logger.error("No AZURE_OPENAI_ENDPOINT for fallback")
+            logger.error("No LLM_BASE_URL for fallback")
             return None
 
         # Build auth headers
-        headers = {"Content-Type": "application/json"}
-        headers["api-key"] = api_key
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
 
         # Build context
         context_parts = []
@@ -685,6 +678,7 @@ class EnhancedVisionAgent:
             })
 
         payload = {
+            "model": deployment,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
@@ -692,8 +686,7 @@ class EnhancedVisionAgent:
             "max_completion_tokens": 1500,
         }
 
-        # Determine the correct URL (handle both Azure OpenAI and AI Foundry endpoints)
-        url = f"{endpoint.rstrip('/')}/openai/deployments/{deployment}/chat/completions?api-version=2024-12-01-preview"
+        url = f"{endpoint.rstrip('/')}/chat/completions"
 
         logger.info(f"[SYNC] Fallback: calling {deployment} directly at {endpoint}")
 
