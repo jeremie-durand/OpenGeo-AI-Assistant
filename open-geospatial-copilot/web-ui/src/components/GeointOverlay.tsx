@@ -7,7 +7,7 @@
  * - Line-of-sight analysis visualization
  * - Elevation profile displays
  * 
- * Integrates with Azure Maps and processes GEOINT service responses.
+ * Integrates with the main map component to render dynamic overlays based on analysis results returned from the backend.
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -21,7 +21,7 @@ declare global {
 }
 
 interface GeointOverlayProps {
-  map: any; // Azure Maps instance
+  map: any;
   geointData: GeointAnalysisResult | null;
   isVisible: boolean;
   onVisibilityToggle: (visible: boolean) => void;
