@@ -1004,13 +1004,15 @@ class SemanticQueryTranslator:
                 recent_history = self.get_recent_chat_history(conversation_id)
                 
                 if recent_history:
+                    last_location = context.get('last_location', 'None')
+                    has_map = "Yes" if context.get('has_rendered_map') else "No"
                     context_info = f"""
 **CONVERSATION CONTEXT:**
 Recent chat history:
 {recent_history}
 
-Current location focus: {context.get('last_location', 'None')}
-Data currently displayed: {'Yes' if context.get('has_rendered_map') else 'No'}
+Current location focus: {last_location}
+Data currently displayed: {has_map}
 """
 
             prompt = f"""You are an expert at classifying Earth observation queries.
@@ -1021,7 +1023,7 @@ Analyze this query and classify it into one of 4 intent types.
 If data is currently displayed (has_rendered_map=Yes), AND the query asks about:
 - "on the map" / "the map" / "this area" / "this region" / "this location"
 - Geographic features visible (rivers, cities, bodies of water, coastline)
-- What's visible or can be seen
+- What is visible or can be seen
 - Follow-up questions without "show/load/display"
 -> This is a **vision** query (analyze current view, don't load new data!)
 
@@ -1242,13 +1244,15 @@ Response: {{"intent_type": "stac", "needs_satellite_data": true, "needs_vision_a
                 recent_history = self.get_recent_chat_history(conversation_id)
                 
                 if recent_history:
+                    last_location = context.get('last_location', 'None')
+                    has_map = "Yes" if context.get('has_rendered_map') else "No"
                     context_info = f"""
 **CONVERSATION CONTEXT:**
 Recent chat history:
 {recent_history}
 
-Current location focus: {context.get('last_location', 'None')}
-Data currently displayed: {'Yes' if context.get('has_rendered_map') else 'No'}
+Current location focus: {last_location}
+Data currently displayed: {has_map}
 """
 
             prompt = f"""Classify this Earth observation query considering the conversation context:
