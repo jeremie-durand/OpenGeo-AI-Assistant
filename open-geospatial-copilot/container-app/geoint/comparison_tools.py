@@ -132,12 +132,31 @@ def _parse_time_period(time_str: str) -> Optional[str]:
         'august': 8, 'aug': 8, 'september': 9, 'sep': 9, 'sept': 9,
         'october': 10, 'oct': 10, 'november': 11, 'nov': 11, 'december': 12, 'dec': 12
     }
+    # Pass-through: already a STAC range (YYYY-MM-DD/YYYY-MM-DD)
+    if re.match(r'^\d{4}-\d{2}-\d{2}/\d{4}-\d{2}-\d{2}$', time_str):
+        return time_str
+    # ISO YYYY-MM (LLM natural output)
+    yyyy_mm = re.match(r'^(\d{4})-(\d{2})$', time_str)
+    if yyyy_mm:
+        year, month = int(yyyy_mm.group(1)), int(yyyy_mm.group(2))
+        if 1 <= month <= 12:
+            last_day = monthrange(year, month)[1]
+            return f"{year}-{month:02d}-01/{year}-{month:02d}-{last_day:02d}"
+    # ISO YYYY-MM-DD single date → expand to full month
+    yyyy_mm_dd = re.match(r'^(\d{4})-(\d{2})-\d{2}$', time_str)
+    if yyyy_mm_dd:
+        year, month = int(yyyy_mm_dd.group(1)), int(yyyy_mm_dd.group(2))
+        if 1 <= month <= 12:
+            last_day = monthrange(year, month)[1]
+            return f"{year}-{month:02d}-01/{year}-{month:02d}-{last_day:02d}"
+    # MM/YYYY
     mm_yyyy = re.match(r'^(\d{1,2})/(\d{4})$', time_str)
     if mm_yyyy:
         month, year = int(mm_yyyy.group(1)), int(mm_yyyy.group(2))
         if 1 <= month <= 12:
             last_day = monthrange(year, month)[1]
             return f"{year}-{month:02d}-01/{year}-{month:02d}-{last_day:02d}"
+    # Month YYYY (e.g. "January 2020")
     month_year = re.search(r'(\w+)\s+(\d{4})', time_str.lower())
     if month_year:
         month_str, year_str = month_year.groups()
@@ -146,6 +165,7 @@ def _parse_time_period(time_str: str) -> Optional[str]:
             year = int(year_str)
             last_day = monthrange(year, month)[1]
             return f"{year}-{month:02d}-01/{year}-{month:02d}-{last_day:02d}"
+    # Year only
     year_only = re.match(r'^(\d{4})$', time_str)
     if year_only:
         year = int(year_only.group(1))
@@ -347,6 +367,7 @@ def compare_temporal_imagery(location: str, before_period: str, after_period: st
         after_date = _parse_time_period(after_period)
 
         if not before_date or not after_date:
+            logger.error(f"[compare_temporal_imagery] Date parse failed — before='{before_period}' -> {before_date!r}, after='{after_period}' -> {after_date!r}")
             result = {"status": "error", "message": f"Could not parse date ranges. Before: '{before_period}', After: '{after_period}'. Use MM/YYYY or Month YYYY format."}
             return json.dumps(result)
 

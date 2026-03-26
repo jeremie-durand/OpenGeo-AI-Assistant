@@ -1,8 +1,7 @@
 """
 GEOINT Comparison Agent — Provider-agnostic rewrite
 
-Uses LLM_PROVIDER / LLM_API_KEY / LLM_MODEL (same as the rest of the app).
-No Azure AI Agent Service dependency.
+Uses LLM_PROVIDER / LLM_API_KEY / LLM_MODEL
 
 Flow per query:
   1. LLM parses the query → extracts location, before_period, after_period, analysis_type
