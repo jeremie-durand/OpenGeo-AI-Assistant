@@ -259,9 +259,7 @@ export class EarthCopilotMapIntegration {
         this.mapInstance.removeSource('earth-copilot-bbox');
       }
 
-      // For Azure Maps, use different API
       if (this.mapInstance.sources && this.mapInstance.layers) {
-        // Azure Maps implementation
         const dataSource = new (window as any).atlas.source.DataSource();
         this.mapInstance.sources.add(dataSource);
         dataSource.add(bbox);
