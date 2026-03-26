@@ -417,7 +417,7 @@ Return ONLY valid JSON array, e.g.: ["get_elevation_analysis", "get_slope_analys
             fallback = f"Location ({latitude:.4f}, {longitude:.4f})"
             try:
                 from semantic_translator import geocoding_plugin
-                rg = await geocoding_plugin.azure_maps_reverse_geocode(latitude, longitude)
+                rg = await geocoding_plugin.reverse_geocode(latitude, longitude)
                 data = json.loads(rg)
                 if not data.get("error"):
                     n = data.get("name", "")
