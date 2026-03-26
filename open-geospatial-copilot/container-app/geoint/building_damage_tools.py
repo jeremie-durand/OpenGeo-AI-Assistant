@@ -1,8 +1,7 @@
 """
-GEOINT Building Damage Assessment Tools for Azure AI Agent Service
+GEOINT Building Damage Assessment Tools
 
-Standalone functions for building damage analysis, compatible with
-Azure AI Agent Service FunctionTool.
+Standalone functions for building damage analysis
 
 Usage:
     from geoint.building_damage_tools import create_building_damage_functions
