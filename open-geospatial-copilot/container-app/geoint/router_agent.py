@@ -27,11 +27,7 @@ import json
 
 from semantic_kernel import Kernel
 from semantic_kernel.agents import ChatCompletionAgent
-from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
-from semantic_kernel.connectors.ai.function_choice_behavior import FunctionChoiceBehavior
 from semantic_kernel.contents.chat_history import ChatHistory
-from semantic_kernel.contents.chat_message_content import ChatMessageContent
-from semantic_kernel.contents.utils.author_role import AuthorRole
 from semantic_kernel.functions import kernel_function
 
 # Import comprehensive collection keywords from CollectionMapper
@@ -535,7 +531,7 @@ class RouterAgent:
         if self._initialized:
             return
 
-        logger.info(" Initializing RouterAgent (direct LLM mode, no Azure SK required)...")
+        logger.info(" Initializing RouterAgent (direct LLM mode...")
 
         from llm_client import get_llm_client
         self._llm_client = get_llm_client()
@@ -840,7 +836,8 @@ class RouterAgent:
         # and looks like a place name (1-5 words, no question marks, no verbs),
         # route directly to navigate_to. This catches bare location names like
         # "Timbuktu", "Mount Fuji", "Rio de Janeiro" that aren't in LOCATION_NAMES.
-        # The location_resolver will geocode them via Azure Maps API.
+        # The location_resolver will geocode them if possible. This prevents the LLM 
+        # from misclassifying them as contextual questions.
         # ====================================================================
         analytical_keywords = [
             "what", "how", "why", "describe", "analyze", "explain", "identify",
