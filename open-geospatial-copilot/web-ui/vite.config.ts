@@ -8,7 +8,7 @@ export default defineConfig(({ command, mode }) => {
   // Load env variables from .env files
   const env = loadEnv(mode, process.cwd(), '');
   
-  // For local development proxy - use Azure backend or localhost
+  // For local development proxy
   // Set LOCAL_BACKEND_URL in .env.local to point to your deployed backend
   const LOCAL_BACKEND = env.LOCAL_BACKEND_URL || 'http://localhost:8000';
   
