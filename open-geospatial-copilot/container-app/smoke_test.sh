@@ -1,5 +1,6 @@
 #!/bin/bash
-# Smoke test for Earth Copilot backend (local, Azure-free)
+# Smoke test for Earth Copilot backend API. 
+# This script sends a test query to the API and checks for a valid response.
 
 set -e
 
