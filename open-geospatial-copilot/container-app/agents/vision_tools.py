@@ -1721,7 +1721,7 @@ def query_knowledge(question: str) -> str:
     try:
         client = _get_vision_client()
         if not client:
-            return "Knowledge query unavailable - Azure OpenAI client not initialized."
+            return "Knowledge query unavailable - LLM client not initialized."
 
         ctx = _session_context
         context_parts = []
@@ -1740,9 +1740,7 @@ Context:
 
 Guidelines: Provide accurate, educational answers. Include relevant facts. Be concise but informative."""
 
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
         response = client.chat.completions.create(
-            model=deployment,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": question}
@@ -1793,9 +1791,7 @@ def identify_features(feature_type: str) -> str:
 {location_hint}
 For each feature: name, type, notable characteristics. Be specific."""
 
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
         response = client.chat.completions.create(
-            model=deployment,
             messages=[{"role": "user", "content": [
                 {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}", "detail": "high"}}
@@ -2053,10 +2049,8 @@ def compare_temporal(location: str, time_period_1: str, time_period_2: str,
         if client:
             summary_1 = _summarize_stac_results(features_1, time_period_1)
             summary_2 = _summarize_stac_results(features_2, time_period_2)
-            deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
             try:
                 resp = client.chat.completions.create(
-                    model=deployment,
                     messages=[
                         {"role": "system", "content": f"""Geospatial analyst comparing imagery.
 Location: {location}, Collection: {collection}, Focus: {analysis_focus}
@@ -2100,7 +2094,7 @@ def create_vision_functions() -> Set[Callable]:
     """Create the set of vision analysis tool functions for FunctionTool.
 
     Returns a set of all 13 tool functions that can be registered with
-    Azure AI Agent Service FunctionTool.
+    FunctionTool to enable the Vision Agent's capabilities.
     """
     return {
         analyze_screenshot,
