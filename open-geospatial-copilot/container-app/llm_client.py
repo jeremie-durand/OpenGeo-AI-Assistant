@@ -77,8 +77,7 @@ class _ChatProxy:
 class OpenAICompatClient:
     """Wraps an LLMClient to expose the OpenAI `.chat.completions.create()` interface.
 
-    This lets every call-site that was written against the Azure/OpenAI SDK work
-    with any configured provider (openai or anthropic) without modification.
+    This lets every call-site that was written for OpenAI work with any provider supported by LLMClient, without needing to
     """
 
     def __init__(self, llm_client: "LLMClient"):
