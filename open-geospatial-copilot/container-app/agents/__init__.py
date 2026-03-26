@@ -2,10 +2,9 @@
 Agents Package for Earth Copilot Container App
 
 This package contains agents for AI-powered analysis tasks:
-- EnhancedVisionAgent: Azure AI Agent Service agent with 13 vision tools for analyzing
-  satellite imagery, answering contextual questions, and providing quantitative analysis.
+- EnhancedVisionAgent: Advanced geospatial analysis using GPT-5 vision and various tools.
 
-Refactored from Semantic Kernel to Azure AI Agent Service (AgentsClient + FunctionTool).
+Refactored from Semantic Kernel-based implementation to be provider-agnostic, using LLMClient for LLM interactions.
 
 Tools available in EnhancedVisionAgent:
 1. analyze_screenshot - GPT-5 vision analysis of map screenshot
