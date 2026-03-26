@@ -70,7 +70,7 @@ async def _llm_text(client, messages: List[Dict], max_tokens: int = 512, tempera
 # ---------------------------------------------------------------------------
 
 class GenericQueryTranslator:
-    """Provider-agnostic query translator used when Azure/SK is not configured."""
+    """Provider-agnostic query translator used when LLM_PROVIDER is set to "generic"."""
 
     def __init__(self):
         from llm_client import get_llm_client as _get
