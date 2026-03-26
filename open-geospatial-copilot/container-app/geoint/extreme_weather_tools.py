@@ -23,6 +23,7 @@ Usage:
     tool = FunctionTool(functions)
 """
 
+import os
 import logging
 import json
 import time
@@ -31,9 +32,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
 
+# ============================================================
+# DATA SOURCE CONFIGURATION
+# ============================================================
+# WEATHER_DATA_SOURCE: "planetary_computer" (default) or "open_meteo"
+# OPEN_METEO_API_KEY:  Optional. Leave unset for the free tier (no key needed).
+#                      Set to your key for the Open-Meteo commercial API.
+_WEATHER_DATA_SOURCE = os.environ.get("WEATHER_DATA_SOURCE", "planetary_computer").lower()
+_OPEN_METEO_API_KEY  = os.environ.get("OPEN_METEO_API_KEY", "")
+
 # Module-level STAC catalog (lazy-loaded)
 _catalog = None
-_stac_endpoint = "http://localhost:8081"
+_stac_endpoint = "https://planetarycomputer.microsoft.com/api/stac/v1"
 
 # ============================================================
 # STAC SEARCH CACHE — avoid redundant identical STAC queries
@@ -512,6 +522,117 @@ def _sample_netcdf(
 
 
 # ============================================================
+# OPEN-METEO BACKEND
+# ============================================================
+# Maps CMIP6 variable names → (open-meteo daily param, raw unit, converter, display unit)
+_OM_VAR_MAP: Dict[str, tuple] = {
+    'tasmax':  ('temperature_2m_max',           '°C',        lambda v: round(v * 9/5 + 32, 1), '°F'),
+    'tasmin':  ('temperature_2m_min',           '°C',        lambda v: round(v * 9/5 + 32, 1), '°F'),
+    'tas':     ('temperature_2m_mean',          '°C',        lambda v: round(v * 9/5 + 32, 1), '°F'),
+    'pr':      ('precipitation_sum',            'mm/day',    lambda v: round(v, 2),             'mm/day'),
+    'sfcWind': ('wind_speed_10m_mean',          'km/h',      lambda v: round(v / 3.6, 2),       'm/s'),
+    'hurs':    ('relative_humidity_2m_mean',    '%',         lambda v: round(v, 1),             '%'),
+    'rsds':    ('shortwave_radiation_sum',      'MJ/m²/day', lambda v: round(v * 1e6 / 86400, 1), 'W/m²'),
+}
+# Open-Meteo HighResMIP models used when WEATHER_DATA_SOURCE=open_meteo
+_OM_MODELS = "EC_Earth3P_HR,MRI_AGCM3_2_S,CMCC_CM2_VHR4"
+
+
+def _query_open_meteo(cmip_variables: list, latitude: float, longitude: float, year: int) -> Dict[str, Any]:
+    """
+    Query Open-Meteo Climate API for one full year and return results keyed by CMIP6 variable name.
+
+    Returns dict: {cmip_var: {display_value, display_mean, display_max, display_min, display_unit, ...}}
+    or {cmip_var: {"error": "..."}} on failure.
+
+    Notes:
+    - Open-Meteo Climate API is free (no key required for the public tier).
+    - Supports years 1950-2050. Years beyond 2050 are capped at 2050.
+    - SSP scenario selection is not supported; HighResMIP CMIP6 models are used regardless.
+    """
+    import httpx
+    import statistics
+
+    actual_year = min(max(year, 1950), 2050)
+    start_date = f"{actual_year}-01-01"
+    end_date   = f"{actual_year}-12-31"
+
+    # Build list of Open-Meteo daily params for the requested CMIP variables
+    om_params   = []
+    om_to_cmip  = {}  # om_param -> cmip_var
+    for cmip_var in cmip_variables:
+        if cmip_var in _OM_VAR_MAP:
+            om_param = _OM_VAR_MAP[cmip_var][0]
+            om_params.append(om_param)
+            om_to_cmip[om_param] = cmip_var
+
+    if not om_params:
+        return {}
+
+    if _OPEN_METEO_API_KEY:
+        base_url = "https://customer-climate-api.open-meteo.com/v1/climate"
+    else:
+        base_url = "https://climate-api.open-meteo.com/v1/climate"
+
+    params: Dict[str, Any] = {
+        "latitude":   latitude,
+        "longitude":  longitude,
+        "start_date": start_date,
+        "end_date":   end_date,
+        "models":     _OM_MODELS,
+        "daily":      ",".join(om_params),
+    }
+    if _OPEN_METEO_API_KEY:
+        params["apikey"] = _OPEN_METEO_API_KEY
+
+    try:
+        with httpx.Client(timeout=30) as client:
+            resp = client.get(base_url, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as e:
+        logger.error(f"[OpenMeteo] API request failed: {e}")
+        return {cmip_var: {"error": str(e)} for cmip_var in cmip_variables if cmip_var in _OM_VAR_MAP}
+
+    daily = data.get("daily", {})
+    results: Dict[str, Any] = {}
+
+    for om_param, cmip_var in om_to_cmip.items():
+        _, _, convert_fn, display_unit = _OM_VAR_MAP[cmip_var]
+
+        # Multi-model response: keys are like "temperature_2m_max_EC_Earth3P_HR"
+        # Single-model response: key is just "temperature_2m_max"
+        raw_values: list = []
+        for key, values in daily.items():
+            if (key == om_param or key.startswith(om_param + "_")) and isinstance(values, list):
+                raw_values.extend(v for v in values if v is not None)
+
+        if not raw_values:
+            results[cmip_var] = {"error": f"No data returned by Open-Meteo for {om_param}"}
+            continue
+
+        mean_val = statistics.mean(raw_values)
+        max_val  = max(raw_values)
+        min_val  = min(raw_values)
+        yr_note  = f"(year capped at 2050)" if year > 2050 else ""
+        results[cmip_var] = {
+            "display_value":  convert_fn(mean_val),
+            "display_mean":   convert_fn(mean_val),
+            "display_max":    convert_fn(max_val),
+            "display_min":    convert_fn(min_val),
+            "display_unit":   display_unit,
+            "variable_name":  CLIMATE_VAR_INFO.get(cmip_var, {}).get('name', cmip_var),
+            "grid_resolution": "~10 km (HighResMIP)",
+            "models":          _OM_MODELS,
+        }
+        if yr_note:
+            results[cmip_var]["note"] = yr_note
+
+    logger.info(f"[OpenMeteo] Sampled {list(results.keys())} for ({latitude},{longitude}) year={actual_year}")
+    return results
+
+
+# ============================================================
 # PUBLIC TOOL FUNCTIONS (registered with Agent Service)
 # ============================================================
 
@@ -527,8 +648,25 @@ def get_temperature_projection(latitude: float, longitude: float, scenario: str 
     :return: JSON string with projected temperature values and model metadata
     """
     try:
-        logger.info(f"[TOOL] get_temperature_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year}")
-        
+        logger.info(f"[TOOL] get_temperature_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]")
+
+        if _WEATHER_DATA_SOURCE == "open_meteo":
+            om = _query_open_meteo(['tasmax', 'tasmin', 'tas'], latitude, longitude, year)
+            out: Dict[str, Any] = {
+                "location": {"latitude": latitude, "longitude": longitude},
+                "scenario": scenario,
+                "year": year,
+                "data_source": "Open-Meteo HighResMIP (CMIP6)",
+                "note": "SSP scenario selection is not supported by Open-Meteo; HighResMIP models are used.",
+                "projections": {},
+            }
+            for key, proj_key in [('tasmax', 'daily_max_temperature'), ('tasmin', 'daily_min_temperature'), ('tas', 'daily_mean_temperature')]:
+                if key in om and 'error' not in om[key]:
+                    out["projections"][proj_key] = {"value": om[key]["display_value"], "unit": om[key]["display_unit"], "description": om[key]["variable_name"]}
+            if not out["projections"]:
+                out["error"] = "Open-Meteo returned no temperature data"
+            return json.dumps(out)
+
         temp_vars = ['tasmax', 'tasmin', 'tas']
         results = {}
         models_used = set()
@@ -612,8 +750,28 @@ def get_precipitation_projection(latitude: float, longitude: float, scenario: st
     :return: JSON string with projected precipitation values and model metadata
     """
     try:
-        logger.info(f"[TOOL] get_precipitation_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year}")
-        
+        logger.info(f"[TOOL] get_precipitation_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]")
+
+        if _WEATHER_DATA_SOURCE == "open_meteo":
+            om = _query_open_meteo(['pr'], latitude, longitude, year)
+            pr = om.get('pr', {})
+            if 'error' in pr:
+                return json.dumps({"error": pr["error"], "location": {"latitude": latitude, "longitude": longitude}})
+            out = {
+                "location": {"latitude": latitude, "longitude": longitude},
+                "scenario": scenario,
+                "year": year,
+                "data_source": "Open-Meteo HighResMIP (CMIP6)",
+                "note": "SSP scenario selection is not supported by Open-Meteo; HighResMIP models are used.",
+                "precipitation": {
+                    "annual_mean_mm_per_day": pr["display_mean"],
+                    "annual_total_mm_estimate": round(pr["display_mean"] * 365, 1),
+                    "peak_daily_mm": pr["display_max"],
+                    "unit": pr["display_unit"],
+                },
+            }
+            return json.dumps(out)
+
         items = _search_cmip6_items(latitude, longitude, 'pr', scenario, year, limit=5)
         
         if not items:
@@ -706,8 +864,34 @@ def get_wind_projection(latitude: float, longitude: float, scenario: str = "ssp5
     :return: JSON string with projected wind speed values and model metadata
     """
     try:
-        logger.info(f"[TOOL] get_wind_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year}")
-        
+        logger.info(f"[TOOL] get_wind_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]")
+
+        if _WEATHER_DATA_SOURCE == "open_meteo":
+            om = _query_open_meteo(['sfcWind'], latitude, longitude, year)
+            wd = om.get('sfcWind', {})
+            if 'error' in wd:
+                return json.dumps({"error": wd["error"], "location": {"latitude": latitude, "longitude": longitude}})
+            mean_wind = wd["display_mean"]
+            if mean_wind < 3:   wind_class = "Calm"
+            elif mean_wind < 6: wind_class = "Light breeze"
+            elif mean_wind < 10: wind_class = "Moderate wind"
+            elif mean_wind < 17: wind_class = "Strong wind"
+            else:               wind_class = "Severe / storm-force"
+            out = {
+                "location": {"latitude": latitude, "longitude": longitude},
+                "scenario": scenario,
+                "year": year,
+                "data_source": "Open-Meteo HighResMIP (CMIP6)",
+                "note": "SSP scenario selection is not supported by Open-Meteo; HighResMIP models are used.",
+                "wind": {
+                    "annual_mean_m_s": mean_wind,
+                    "peak_daily_m_s": wd["display_max"],
+                    "classification": wind_class,
+                    "unit": wd["display_unit"],
+                },
+            }
+            return json.dumps(out)
+
         items = _search_cmip6_items(latitude, longitude, 'sfcWind', scenario, year, limit=5)
         
         if not items:
@@ -812,8 +996,25 @@ def get_humidity_projection(latitude: float, longitude: float, scenario: str = "
     :return: JSON string with projected humidity values and model metadata
     """
     try:
-        logger.info(f"[TOOL] get_humidity_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year}")
-        
+        logger.info(f"[TOOL] get_humidity_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]")
+
+        if _WEATHER_DATA_SOURCE == "open_meteo":
+            om = _query_open_meteo(['hurs'], latitude, longitude, year)
+            hr = om.get('hurs', {})
+            out: Dict[str, Any] = {
+                "location": {"latitude": latitude, "longitude": longitude},
+                "scenario": scenario,
+                "year": year,
+                "data_source": "Open-Meteo HighResMIP (CMIP6)",
+                "note": "SSP scenario selection is not supported by Open-Meteo. Specific humidity (huss) is not available from Open-Meteo.",
+                "humidity": {},
+            }
+            if 'error' not in hr:
+                out["humidity"]["relative_humidity"] = {"value": hr["display_value"], "unit": hr["display_unit"], "description": hr["variable_name"]}
+            else:
+                out["error"] = hr["error"]
+            return json.dumps(out)
+
         results = {}
         models_used = set()
         
@@ -893,8 +1094,36 @@ def get_climate_overview(latitude: float, longitude: float, scenario: str = "ssp
     :return: JSON string with multi-variable climate overview
     """
     try:
-        logger.info(f"[TOOL] get_climate_overview at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year}")
-        
+        logger.info(f"[TOOL] get_climate_overview at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]")
+
+        if _WEATHER_DATA_SOURCE == "open_meteo":
+            om_vars = ['tasmax', 'tasmin', 'tas', 'pr', 'sfcWind', 'hurs']
+            om = _query_open_meteo(om_vars, latitude, longitude, year)
+            overview_om: Dict[str, Any] = {}
+            for v in om_vars:
+                if v in om and 'error' not in om[v]:
+                    entry: Dict[str, Any] = {"value": om[v]["display_value"], "unit": om[v]["display_unit"], "description": om[v]["variable_name"]}
+                    if "display_max" in om[v]:
+                        entry["peak"] = om[v]["display_max"]
+                    overview_om[v] = entry
+            summary_parts = []
+            if 'tasmax' in overview_om: summary_parts.append(f"Max Temp: {overview_om['tasmax']['value']}°F")
+            if 'tasmin' in overview_om: summary_parts.append(f"Min Temp: {overview_om['tasmin']['value']}°F")
+            if 'tas'    in overview_om: summary_parts.append(f"Mean Temp: {overview_om['tas']['value']}°F")
+            if 'pr'     in overview_om: summary_parts.append(f"Precip: {overview_om['pr']['value']} mm/day")
+            if 'sfcWind' in overview_om: summary_parts.append(f"Wind: {overview_om['sfcWind']['value']} m/s")
+            if 'hurs'   in overview_om: summary_parts.append(f"Humidity: {overview_om['hurs']['value']}%")
+            return json.dumps({
+                "location": {"latitude": latitude, "longitude": longitude},
+                "scenario": scenario,
+                "scenario_description": "SSP2-4.5 (moderate)" if scenario == "ssp245" else "SSP5-8.5 (worst-case)" if scenario == "ssp585" else scenario,
+                "year": year,
+                "data_source": "Open-Meteo HighResMIP (CMIP6)",
+                "note": "SSP scenario selection is not supported by Open-Meteo; HighResMIP models are used.",
+                "climate_summary": " | ".join(summary_parts) if summary_parts else "No data sampled",
+                "variables": overview_om,
+            })
+
         overview_vars = ['tasmax', 'tasmin', 'tas', 'pr', 'sfcWind', 'hurs']
         overview = {}
         models_used = set()
@@ -999,8 +1228,24 @@ def compare_climate_scenarios(latitude: float, longitude: float, year: int = 203
     :return: JSON string comparing key climate variables across both SSP scenarios
     """
     try:
-        logger.info(f"[TOOL] compare_climate_scenarios at ({latitude:.4f}, {longitude:.4f}), {year}")
-        
+        logger.info(f"[TOOL] compare_climate_scenarios at ({latitude:.4f}, {longitude:.4f}), {year} [source={_WEATHER_DATA_SOURCE}]")
+
+        if _WEATHER_DATA_SOURCE == "open_meteo":
+            om = _query_open_meteo(['tasmax', 'pr'], latitude, longitude, year)
+            comparison_om: Dict[str, Any] = {}
+            for v in ['tasmax', 'pr']:
+                d = om.get(v, {})
+                if 'error' not in d:
+                    comparison_om[v] = {"value": d["display_value"], "unit": d["display_unit"]}
+            return json.dumps({
+                "location": {"latitude": latitude, "longitude": longitude},
+                "year": year,
+                "data_source": "Open-Meteo HighResMIP (CMIP6)",
+                "note": "Open-Meteo does not support SSP scenario comparison; a single HighResMIP projection is shown.",
+                "comparison": comparison_om,
+                "scenario_difference": {},
+            })
+
         compare_vars = ['tasmax', 'pr']
         scenarios = ['ssp245', 'ssp585']
         comparison = {var: {} for var in compare_vars}
@@ -1095,11 +1340,28 @@ def get_radiation_projection(latitude: float, longitude: float, scenario: str = 
     :return: JSON string with projected radiation values and model metadata
     """
     try:
-        logger.info(f"[TOOL] get_radiation_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year}")
-        
+        logger.info(f"[TOOL] get_radiation_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]")
+
+        if _WEATHER_DATA_SOURCE == "open_meteo":
+            om = _query_open_meteo(['rsds'], latitude, longitude, year)
+            rs = om.get('rsds', {})
+            out: Dict[str, Any] = {
+                "location": {"latitude": latitude, "longitude": longitude},
+                "scenario": scenario,
+                "year": year,
+                "data_source": "Open-Meteo HighResMIP (CMIP6)",
+                "note": "SSP scenario selection is not supported by Open-Meteo. Longwave radiation (rlds) is not available from Open-Meteo.",
+                "radiation": {},
+            }
+            if 'error' not in rs:
+                out["radiation"]["shortwave_solar"] = {"value": rs["display_value"], "unit": rs["display_unit"], "description": rs["variable_name"]}
+            else:
+                out["error"] = rs["error"]
+            return json.dumps(out)
+
         results = {}
         models_used = set()
-        
+
         # Parallel sampling of both radiation variables
         def _sample_radiation_var(var):
             """Sample one radiation variable — runs in worker thread."""
