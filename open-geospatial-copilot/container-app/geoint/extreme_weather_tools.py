@@ -1,5 +1,5 @@
 """
-Extreme Weather & Climate Projection Tools for Azure AI Agent Service
+Extreme Weather & Climate Projection Tools
 
 Standalone module that fetches NASA NEX-GDDP-CMIP6 climate data directly
 from Planetary Computer STAC. No prior STAC search or session state required.
@@ -310,7 +310,7 @@ def _sample_netcdf(
     
     Uses xarray with h5netcdf engine and fsspec for remote HTTP access.
     This avoids GDAL's netCDF driver which requires userfaultfd (blocked
-    by Docker's default seccomp profile in Azure Container Apps).
+    by Docker's default seccomp profile in many environments) and can have slow cold-cache performance.
     
     Args:
         aggregate: How to aggregate across time dimension.
