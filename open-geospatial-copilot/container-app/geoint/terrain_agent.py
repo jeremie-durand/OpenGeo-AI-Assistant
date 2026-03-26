@@ -2,7 +2,6 @@
 GEOINT Terrain Agent — Provider-agnostic rewrite
 
 Uses LLM_PROVIDER / LLM_API_KEY / LLM_MODEL (same as the rest of the app).
-No Azure AI Agent Service dependency.
 
 Flow per query:
   1. LLM selects which terrain tools to call
