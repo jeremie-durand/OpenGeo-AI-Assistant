@@ -1,7 +1,7 @@
 /**
  * Tile Layer Factory
  * 
- * Creates and configures Azure Maps TileLayer instances with optimized settings
+ * Creates and configures TileLayer instances with optimized settings
  * based o    // High-resolution optical: enable deep zoom
     // Covers: sentinel-2-l2a, landsat-c2-l2, landsat-8-c2-l2, landsat-9-c2-l2, naip, hls (all variants)
     if (collectionLower.includes('sentinel-2') || 
