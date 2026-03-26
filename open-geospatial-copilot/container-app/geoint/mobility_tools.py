@@ -1,7 +1,7 @@
 """
-GEOINT Mobility Analysis Tools for Azure AI Agent Service
+GEOINT Mobility Analysis Tools
 
-Standalone synchronous functions compatible with Azure AI Agent Service FunctionTool.
+Standalone synchronous functions for mobility analysis of terrain between two points.
 Each function uses docstring-based parameter descriptions and returns JSON strings.
 
 IMPORTANT: All functions are fully synchronous (no asyncio wrappers) to avoid
@@ -924,7 +924,7 @@ def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> D
 def analyze_two_point_traverse(latitude_a: float, longitude_a: float, latitude_b: float, longitude_b: float) -> str:
     """Analyze terrain traversability between two points (A and B) simultaneously.
     Runs mobility analysis at both endpoints IN PARALLEL, plus corridor waypoint
-    sampling, elevation transect, Azure Maps road route, and weather conditions.
+    sampling, elevation transect, and weather conditions.
     Returns a comprehensive mobility assessment covering the entire A→B corridor.
 
     :param latitude_a: Start point (Point A) latitude
