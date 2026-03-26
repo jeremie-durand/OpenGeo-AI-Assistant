@@ -11,6 +11,9 @@ fire_preview.png
 # Personal working notes - not for OSS
 documentation/melisa/
 
+# MCP server - not yet refactored
+open-geospatial-copilot/mcp-server/
+
 # Compiled ARM templates (auto-generated from Bicep)
 earth-copilot/infra/main.json
 
