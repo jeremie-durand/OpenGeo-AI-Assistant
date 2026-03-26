@@ -1,8 +1,7 @@
 """
-GEOINT Comparison Analysis Tools for Azure AI Agent Service
+GEOINT Comparison Analysis Tools
 
-Refactored from ComparisonAgent class methods to standalone functions
-compatible with Azure AI Agent Service FunctionTool.
+Refactored from ComparisonAgent class methods to standalone functions for easier registration with AsyncFunctionTool and direct invocation from agent steps.
 
 Usage:
     from geoint.comparison_tools import create_comparison_functions
@@ -28,8 +27,6 @@ _stac_api_url = _os.getenv("STAC_API_URL", "").strip()
 STAC_URL = _stac_api_url.rsplit("/search", 1)[0].rstrip("/") if _stac_api_url else "https://planetarycomputer.microsoft.com/api/stac/v1"
 
 # Module-level capture of the last compare_temporal_imagery result.
-# The Azure AI Agent SDK's run_steps API may not reliably expose tool outputs
-# when using enable_auto_function_calls. This provides a reliable fallback.
 _last_comparison_result: Optional[Dict] = None
 
 def get_last_comparison_result() -> Optional[Dict]:
