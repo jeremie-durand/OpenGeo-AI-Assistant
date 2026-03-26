@@ -16,8 +16,12 @@ The project is inspired by and reuses open source patterns from [Earth Copilot](
 
 This project extends and adapts the original Earth Copilot codebase with the following changes:
 
-- Removed all dependencies on Microsoft Azure tools  
+- Removed all dependencies to Microsoft Azure tools:
+  - Azure OpenAI -> LLM is now decided by the user with `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL` environemnt variables
+  - Azure Maps -> Leaflet and other open-source tools
+
 - Implemented custom large language model (LLM) options instead of relying solely on OpenAI
+- Implemented Open-Meteo API
 
 ## Quick Deploy
 
