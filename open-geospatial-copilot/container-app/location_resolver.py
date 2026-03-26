@@ -12,7 +12,6 @@ from typing import Dict, List, Optional, Any
 import asyncio
 import aiohttp
 import logging
-import os
 import re
 
 # Load environment variables
@@ -76,8 +75,8 @@ class EnhancedLocationResolver:
     
     Fixes the Nominatim geographic region failures by using multiple strategies:
     1. [OK] PREDEFINED REGIONS (Highest accuracy for major geographic features)
-    2. [OK] AZURE MAPS (Microsoft's service - enterprise GIS)
-    3. [OK] MAPBOX (Geographic region specialist)
+    2. [OK] LLM-ENHANCED NOMINATIM (LLM-assisted query reformulation for better geocoding)
+    3. [OK] EXTERNAL GEOCODING SERVICES (Fallback to Google Maps Geocoding API for hard cases)
     4. [OK] IMPROVED NOMINATIM (Enhanced queries as fallback)
     
     NO MORE FALLBACK COORDINATES - All resolution via proper geocoding
@@ -752,53 +751,11 @@ class EnhancedLocationResolver:
         self.logger = logging.getLogger(__name__)
         self.cache = LocationCache()
         
-        # Azure Maps authentication - supports both API key and Managed Identity
-        self.azure_maps_key = os.getenv('AZURE_MAPS_SUBSCRIPTION_KEY')
-        self.azure_maps_client_id = os.getenv('AZURE_MAPS_CLIENT_ID')
-        self.azure_maps_use_managed_identity = False
-        self._token_provider = None
-
-        # Deprecated Azure configs kept for backward compatibility; not used in local mode
-        self.mapbox_token = os.getenv('MAPBOX_ACCESS_TOKEN')
-        self.azure_openai_endpoint = None
-        self.azure_openai_api_key = None
-        self.model_name = os.getenv('AZURE_OPENAI_MODEL_NAME', 'gpt-4')
-        
         self.logger.info(f"[OK] Enhanced Location Resolver initialized with {len(self.STORED_LOCATIONS)} stored global locations (countries, cities, landmarks, natural wonders) + dynamic API resolution")
-    
-    def _get_azure_maps_auth(self) -> tuple[dict, dict]:
-        """Deprecated: Azure Maps auth is no longer used in local mode."""
-        raise RuntimeError("Azure Maps is not supported in local mode")
 
-    def _is_azure_maps_configured(self) -> bool:
-        """Azure Maps is not used in local mode."""
-        return False
-    
     async def health_check(self) -> Dict[str, Any]:
-        """
-        [BLDG] LOCATION RESOLVER HEALTH CHECK
-        
-        Tests all configured location resolution services:
-        1. Azure Maps API connectivity and authentication
-        2. Azure OpenAI/GPT API connectivity  
-        3. Nominatim OSM API availability
-        
-        Returns health status for each service
-        """
-        health_status = {
-            "azure_maps": {"status": "not_configured", "message": ""},
-            "azure_openai": {"status": "not_configured", "message": ""},
-            "nominatim": {"status": "unknown", "message": ""}
-        }
-        
-        # Azure Maps is not used in local mode
-        health_status["azure_maps"] = {"status": "not_applicable", "message": "Azure Maps disabled in local mode"}
-        
-        # Test Azure OpenAI
-        # Azure OpenAI is not used in local mode
-        health_status["azure_openai"] = {"status": "not_applicable", "message": "Azure OpenAI disabled in local mode"}
-        
-        # Test Nominatim (always available as fallback)
+        """Test Nominatim OSM API availability."""
+        health_status: Dict[str, Any] = {"nominatim": {"status": "unknown", "message": ""}}
         try:
             test_result = await self._strategy_improved_nominatim("New York")
             if test_result:
@@ -807,33 +764,19 @@ class EnhancedLocationResolver:
                 health_status["nominatim"] = {"status": "degraded", "message": "OSM available but test failed"}
         except Exception as e:
             health_status["nominatim"] = {"status": "unhealthy", "message": f"OSM unavailable: {str(e)}"}
-        
         return health_status
     
     async def resolve_location_to_bbox(self, location_name: str, location_type: str = "region") -> Optional[List[float]]:
         """
-        [TARGET] AZURE-FIRST DYNAMIC LOCATION RESOLUTION WITH SEMANTIC PREPROCESSING
-        
-        Azure ecosystem focused location resolution (NO hardcoded coordinates):
-        1. Semantic preprocessing (translate ambiguous terms to API-friendly queries)
-        2. Cache check (performance optimization)
-        3. Azure Maps API (Microsoft native, enterprise-grade geocoding)
-        4. Azure OpenAI/GPT (AI-powered intelligent location understanding)
-        5. Nominatim API (OSM fallback, free alternative)
-        
-        Prioritizes Microsoft Azure services for:
-        - Integration consistency with Azure ecosystem
-        - Enterprise-grade reliability and support
-        - AI-enhanced location understanding via GPT
-        
-        Handles ANY location type:
-        - Precise addresses: "1600 Pennsylvania Avenue, Washington DC"
-        - Landmarks: "Times Square", "Statue of Liberty"
-        - Geographic regions: "Silicon Valley", "Rocky Mountains"  
-        - Parks/Natural features: "Yellowstone", "Grand Canyon"
-        - Complex descriptions: "the area around Manhattan where Wall Street is"
-        
-        Returns: [west, south, east, north] bounding box or None
+        Resolve a location name to a [west, south, east, north] bounding box.
+
+        Resolution order:
+        1. Stored locations (instant lookup)
+        2. Cache
+        3. International Nominatim
+        4. GeoNames alternative
+
+        Returns: [west, south, east, north] or None
         """
         self.logger.info(f"[SEARCH] Resolving location: '{location_name}' (type: {location_type})")
         
@@ -938,34 +881,6 @@ class EnhancedLocationResolver:
                 return bbox
         
         self.logger.error(f"[FAIL] Could not resolve location: {location_name}")
-        return None
-    
-    async def _strategy_azure_maps(self, location_name: str, location_type: str = "region") -> Optional[List[float]]:
-        """[BLUE] Azure Maps Search with intelligent administrative division handling and validation"""
-        
-        # Strategy 1: Try Structured Geocoding first for administrative divisions
-        if location_type in ['state', 'region', 'province', 'country'] or self._looks_like_admin_division(location_name):
-            bbox = await self._azure_maps_structured_search(location_name)
-            if bbox and self._is_reasonable_admin_bbox(bbox):
-                self.logger.info(f"Found admin division bbox for {location_name}: {bbox}")
-                return bbox
-        
-        # Strategy 2: Smart fuzzy search with intelligent result ranking
-        bbox = await self._azure_maps_fuzzy_search(location_name)
-        if bbox and self._is_reasonable_admin_bbox(bbox):
-            return bbox
-        
-        # Strategy 3: For cities, try population-priority search
-        if self._looks_like_city(location_name):
-            bbox = await self._azure_maps_with_population_priority(location_name)
-            if bbox and self._is_reasonable_admin_bbox(bbox):
-                return bbox
-        
-        # Strategy 4: Fallback to address search
-        return await self._azure_maps_address_search(location_name)
-    
-    async def _azure_maps_with_population_priority(self, location_name: str) -> Optional[List[float]]:
-        """Stub: Azure Maps population-priority search removed. Always returns None."""
         return None
     
     def _looks_like_admin_division(self, location_name: str) -> bool:
@@ -1076,18 +991,6 @@ class EnhancedLocationResolver:
         
         return bbox
     
-    async def _azure_maps_structured_search(self, location_name: str) -> Optional[List[float]]:
-        """Stub: Azure Maps structured search removed. Always returns None."""
-        return None
-    
-    async def _azure_maps_fuzzy_search(self, location_name: str) -> Optional[List[float]]:
-        """Stub: Azure Maps fuzzy search removed. Always returns None."""
-        return None
-    
-    async def _azure_maps_address_search(self, location_name: str) -> Optional[List[float]]:
-        """Stub: Azure Maps address search removed. Always returns None."""
-        return None
-    
     def _is_reasonable_admin_bbox(self, bbox: List[float]) -> bool:
         """Check if bounding box is reasonable for an administrative division"""
         if not bbox or len(bbox) != 4:
@@ -1102,135 +1005,6 @@ class EnhancedLocationResolver:
         # Cities typically have < 0.5° extent
         return width >= 0.3 or height >= 0.3
     
-    def _extract_azure_bounds(self, result: Dict) -> Optional[List[float]]:
-        """Extract bounds from Azure Maps result"""
-        viewport = result.get("viewport", {})
-        if viewport:
-            top_left = viewport.get("topLeftPoint", {})
-            bottom_right = viewport.get("btmRightPoint", {})
-            if top_left and bottom_right:
-                return [
-                    top_left.get("lon"),    # west
-                    bottom_right.get("lat"), # south
-                    bottom_right.get("lon"), # east
-                    top_left.get("lat")     # north
-                ]
-        return None
-    
-    async def _strategy_azure_openai(self, location_name: str, location_type: str) -> Optional[List[float]]:
-        """[BOT] Strategy 2.5: Azure OpenAI for intelligent location resolution"""
-        
-        if not self.azure_openai_endpoint or not self.azure_openai_api_key:
-            self.logger.debug("Azure OpenAI not configured, skipping AI resolution")
-            return None
-        
-        try:
-            # Enhanced prompt with international awareness and specific context
-            international_context = ""
-            specific_context = ""
-            
-            if self._likely_international_location(location_name):
-                international_context = "\n\nIMPORTANT: This appears to be an INTERNATIONAL location. Prioritize the most famous/populous version globally, not US alternatives."
-                
-                # Add specific context for well-known locations
-                name_lower = location_name.lower()
-                location_hints = {
-                    'paris': 'This is Paris, the capital of France in Europe.',
-                    'london': 'This is London, the capital of the United Kingdom.',
-                    'tokyo': 'This is Tokyo, the capital of Japan.',
-                    'beijing': 'This is Beijing, the capital of China.',
-                    'sydney': 'This is Sydney, the largest city in Australia.',
-                    'mumbai': 'This is Mumbai, the financial capital of India.',
-                    'berlin': 'This is Berlin, the capital of Germany.',
-                    'rome': 'This is Rome, the capital of Italy.',
-                    'tuscany': 'This is Tuscany, a region in central Italy.',
-                    'provence': 'This is Provence, a region in southeastern France.'
-                }
-                
-                if name_lower in location_hints:
-                    specific_context = f"\n\nCONTEXT: {location_hints[name_lower]}"
-            
-            prompt = f"""You are a geographic expert with global knowledge. Provide precise bounding box coordinates for: {location_name}
-
-Return ONLY valid JSON in this exact format:
-{{"bbox": [west_longitude, south_latitude, east_longitude, north_latitude], "confidence": 0.0_to_1.0, "country": "country_name"}}
-
-Guidelines:
-- Use decimal degrees: longitude (-180 to +180), latitude (-90 to +90)  
-- Ensure west < east and south < north
-- For cities: tight bounding box around urban area
-- For landmarks: appropriate buffer around the feature
-- For regions: encompass the full geographic area
-- Confidence: 0.9 for well-known places, 0.7 for regions, 0.5 for uncertain
-- Always prioritize the most famous/populous location globally{international_context}{specific_context}
-
-Location: {location_name}"""
-
-            headers = {
-                "Content-Type": "application/json",
-                "api-key": self.azure_openai_api_key
-            }
-            
-            payload = {
-                "messages": [{"role": "user", "content": prompt}],
-                "max_completion_tokens": 150,
-                "temperature": 0.0,
-                "response_format": {"type": "json_object"}
-            }
-            
-            url = f"{self.azure_openai_endpoint}/openai/deployments/{self.model_name}/chat/completions?api-version=2024-06-01"
-            
-            async with aiohttp.ClientSession() as session:
-                timeout = aiohttp.ClientTimeout(total=15)
-                async with session.post(url, json=payload, headers=headers, timeout=timeout) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if data.get("choices"):
-                            content = data["choices"][0]["message"]["content"]
-                            
-                            try:
-                                import json
-                                location_data = json.loads(content)
-                                bbox = location_data.get("bbox")
-                                confidence = location_data.get("confidence", 0.0)
-                                
-                                if bbox and len(bbox) == 4 and confidence >= 0.5:
-                                    west, south, east, north = bbox
-                                    if (-180 <= west < east <= 180 and -90 <= south < north <= 90):
-                                        return bbox
-                                    
-                            except json.JSONDecodeError:
-                                self.logger.warning(f"Failed to parse Azure OpenAI response for {location_name}")
-                    
-        except Exception as e:
-            self.logger.warning(f"Azure OpenAI error for {location_name}: {e}")
-        
-        return None
-    
-    async def _strategy_mapbox(self, location_name: str) -> Optional[List[float]]:
-        """[PKG] Strategy 3: Mapbox Geocoding API"""
-        encoded_query = location_name.replace(" ", "%20")
-        url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{encoded_query}.json"
-        params = {
-            "access_token": self.mapbox_token,
-            "limit": 1,
-            "types": "region,place,district,country"
-        }
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        features = data.get("features", [])
-                        if features:
-                            feature = features[0]
-                            bbox = feature.get("bbox")
-                            return bbox if bbox else None
-        except Exception as e:
-            self.logger.error(f"Mapbox error: {e}")
-        
-        return None
     async def _strategy_improved_nominatim(self, location_name: str) -> Optional[List[float]]:
         """[GLOBE] Strategy 5: Improved Nominatim queries (fallback)"""
         
