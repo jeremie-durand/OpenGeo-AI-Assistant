@@ -266,7 +266,7 @@ class GeointMobilityAgent:
             """Reverse geocode and build a display name."""
             fallback = f"Location ({lat:.4f}, {lon:.4f})"
             try:
-                rg = await geocoding_plugin.azure_maps_reverse_geocode(lat, lon)
+                rg = await geocoding_plugin.reverse_geocode(lat, lon)
                 data = json.loads(rg)
                 if not data.get("error"):
                     n = data.get("name", "")
