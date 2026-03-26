@@ -55,363 +55,146 @@ def log_pipeline_step(session_id: str, step_name: str, stage: str, data: dict, e
 try:
     from tile_selector import TileSelector
     TILE_SELECTOR_AVAILABLE = True
-    class GeocodingPlugin:
-        """Semantic geocoding plugin backed by OpenStreetMap Nominatim.
+except ImportError:
+    TILE_SELECTOR_AVAILABLE = False
 
-        This provides an AI-callable tool that can:
-        1. Verify that a location exists
-        2. Return a bounding box for the location
-        3. Reverse geocode coordinates to a human-readable place
+class GeocodingPlugin:
+    """Semantic geocoding plugin backed by OpenStreetMap Nominatim.
 
-        Implementation notes:
-        - Uses public Nominatim endpoints (no Azure Maps dependency)
-        - Respects Nominatim usage policy with a custom User-Agent
-        - Mirrors the previous Azure Maps tool interfaces so existing
-          call sites can keep using azure_maps_geocode/azure_maps_reverse_geocode
-          names without pulling in Azure-specific SDKs or configuration.
-        """
+    This provides an AI-callable tool that can:
+    1. Verify that a location exists
+    2. Return a bounding box for the location
+    3. Reverse geocode coordinates to a human-readable place
 
-        def __init__(self):
-            # No Azure Maps configuration; purely Nominatim-based
-            self.user_agent = "EarthCopilot/2.1 (geocoding-plugin)"
+    Implementation notes:
+    - Uses public Nominatim endpoints
+    - Respects Nominatim usage policy with a custom User-Agent
+    - Includes error handling for timeouts, no results, and API errors
+    """
 
-        async def azure_maps_geocode(self, location_name: str) -> str:
-            """Geocode a location name using OpenStreetMap Nominatim.
+    def __init__(self):
+        self.user_agent = "EarthCopilot/2.1 (geocoding-plugin)"
 
-            The method name is kept for backward compatibility with existing
-            tools wiring, but the implementation no longer uses Azure Maps.
-            """
-            url = "https://nominatim.openstreetmap.org/search"
-            params = {
-                "q": location_name,
-                "format": "json",
-                "limit": 1,
-                "addressdetails": 1,
-                "dedupe": 1,
-            }
-            headers = {"User-Agent": self.user_agent}
+    async def geocode(self, location_name: str) -> str:
+        """Geocode a location name using OpenStreetMap Nominatim."""
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {
+            "q": location_name,
+            "format": "json",
+            "limit": 1,
+            "addressdetails": 1,
+            "dedupe": 1,
+        }
+        headers = {"User-Agent": self.user_agent}
 
-            try:
-                import aiohttp
-
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                        if response.status != 200:
-                            text = await response.text()
-                            logger.error(f"[MAP] Nominatim geocode error {response.status}: {text}")
-                            return json.dumps({
-                                "error": f"Geocoding service error: {response.status}",
-                                "location_name": location_name,
-                            })
-
-                        data = await response.json()
-                        if not data:
-                            logger.warning(f"[MAP] Nominatim: No results for '{location_name}'")
-                            return json.dumps({
-                                "error": "Location not found",
-                                "location_name": location_name,
-                                "suggestion": "Try a more specific location name or check spelling",
-                            })
-
-                        result = data[0]
-                        bbox_raw = result.get("boundingbox")
-                        if bbox_raw and len(bbox_raw) == 4:
-                            # Nominatim: [min_lat, max_lat, min_lon, max_lon]
-                            bbox = [
-                                float(bbox_raw[2]),
-                                float(bbox_raw[0]),
-                                float(bbox_raw[3]),
-                                float(bbox_raw[1]),
-                            ]
-                        else:
-                            # Fallback around the point
-                            lat = float(result.get("lat"))
-                            lon = float(result.get("lon"))
-                            buffer = 0.1
-                            bbox = [lon - buffer, lat - buffer, lon + buffer, lat + buffer]
-
-                        address = result.get("display_name", location_name)
-                        country = (result.get("address") or {}).get("country", "Unknown")
-                        location_type = result.get("type", "region")
-
-                        logger.info(f"[MAP] Nominatim geocode: '{location_name}' -> {address}, bbox={bbox}")
-                        return json.dumps(
-                            {
-                                "name": address,
-                                "type": location_type,
-                                "country": country,
-                                "bbox": bbox,
-                                "confidence": 0.9,
-                                "original_query": location_name,
-                            }
-                        )
-            except asyncio.TimeoutError:
-                logger.error(f"[MAP] Nominatim timeout for '{location_name}'")
-                return json.dumps({"error": "Geocoding request timed out", "location_name": location_name})
-            except Exception as e:
-                logger.error(f"[MAP] Nominatim exception for '{location_name}': {e}")
-                return json.dumps({"error": str(e), "location_name": location_name})
-
-        async def azure_maps_reverse_geocode(self, latitude: float, longitude: float) -> str:
-            """Reverse geocode coordinates via OpenStreetMap Nominatim.
-
-            The method name is preserved for compatibility but no Azure
-            services are used.
-            """
-            url = "https://nominatim.openstreetmap.org/reverse"
-            params = {
-                "lat": latitude,
-                "lon": longitude,
-                "format": "json",
-                "addressdetails": 1,
-            }
-            headers = {"User-Agent": self.user_agent}
-
-            try:
-                import aiohttp
-
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                        if response.status != 200:
-                            text = await response.text()
-                            logger.error(f"[MAP] Nominatim reverse error {response.status}: {text}")
-                            return json.dumps({
-                                "error": f"Reverse geocoding service error: {response.status}",
-                                "coordinates": [latitude, longitude],
-                            })
-
-                        data = await response.json()
-                        address = data.get("display_name", "Unknown location")
-                        addr_details = data.get("address", {})
-
-                        country = addr_details.get("country", "")
-                        region = addr_details.get("state", "") or addr_details.get("region", "")
-
-                        logger.info(f"[MAP] Nominatim reverse geocode: ({latitude}, {longitude}) -> {address}")
-                        return json.dumps(
-                            {
-                                "name": address,
-                                "region": region,
-                                "country": country,
-                                "freeform": address,
-                                "coordinates": [latitude, longitude],
-                            }
-                        )
-            except asyncio.TimeoutError:
-                logger.error(f"[MAP] Nominatim reverse timeout for ({latitude}, {longitude})")
-                return json.dumps({"error": "Reverse geocoding request timed out", "coordinates": [latitude, longitude]})
-            except Exception as e:
-                logger.error(f"[MAP] Nominatim reverse exception for ({latitude}, {longitude}): {e}")
-                return json.dumps({"error": str(e), "coordinates": [latitude, longitude]})
-            Returns error message if location cannot be found.
-        
-        Examples:
-            Input: "Moscow"
-            Output: {"name": "Moscow", "type": "city", "country": "Russia", "bbox": [37.36, 55.57, 37.89, 55.92], "confidence": 0.95}
-            
-            Input: "Tashkent"
-            Output: {"name": "Tashkent", "type": "city", "country": "Uzbekistan", "bbox": [69.1, 41.2, 69.4, 41.4], "confidence": 0.92}
-        """
-        if not self.azure_maps_key:
-            return json.dumps({"error": "Azure Maps API key not configured", "location_name": location_name})
-        
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
-                url = f"{cloud_cfg.azure_maps_base_url}/search/address/json"
-                params = {
-                    "api-version": "1.0",
-                    "subscription-key": self.azure_maps_key,
-                    "query": location_name,
-                    "limit": 1
-                }
-                
-                timeout = aiohttp.ClientTimeout(total=10)
-                async with session.get(url, params=params, timeout=timeout) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if data.get("results") and len(data["results"]) > 0:
-                            result = data["results"][0]
-                            
-                            # Extract location type
-                            entity_type = result.get("entityType", "unknown")
-                            type_mapping = {
-                                "Municipality": "city",
-                                "CountrySecondarySubdivision": "region",
-                                "CountrySubdivision": "state",
-                                "Country": "country",
-                                "PostalCodeArea": "postal",
-                                "Neighbourhood": "neighborhood",
-                                "MunicipalitySubdivision": "district",
-                            }
-                            location_type = type_mapping.get(entity_type, "region")
-                            
-                            # Extract bbox
-                            if "viewport" in result:
-                                viewport = result["viewport"]
-                                bbox = [
-                                    viewport["topLeftPoint"]["lon"],
-                                    viewport["btmRightPoint"]["lat"],
-                                    viewport["btmRightPoint"]["lon"],
-                                    viewport["topLeftPoint"]["lat"]
-                                ]
-                            else:
-                                # Fallback to position with buffer
-                                position = result["position"]
-                                lat, lon = position["lat"], position["lon"]
-                                buffer = 0.1
-                                bbox = [lon - buffer, lat - buffer, lon + buffer, lat + buffer]
-                            
-                            # Extract country
-                            address = result.get("address", {})
-                            country = address.get("country", "Unknown")
-                            display_name = address.get("freeformAddress", location_name)
-                            
-                            # Calculate confidence based on score
-                            score = result.get("score", 0)
-                            confidence = min(0.99, score / 10) if score else 0.8
-                            
-                            logger.info(f"[MAP] Azure Maps geocode: '{location_name}' -> {display_name} ({country}), bbox={bbox}")
-                            
-                            return json.dumps({
-                                "name": display_name,
-                                "type": location_type,
-                                "country": country,
-                                "bbox": bbox,
-                                "confidence": round(confidence, 2),
-                                "original_query": location_name
-                            })
-                        else:
-                            logger.warning(f"[MAP] Azure Maps: No results for '{location_name}'")
-                            return json.dumps({
-                                "error": "Location not found",
-                                "location_name": location_name,
-                                "suggestion": "Try a more specific location name or check spelling"
-                            })
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"[MAP] Azure Maps API error {response.status}: {error_text}")
+                async with session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    if response.status != 200:
+                        text = await response.text()
+                        logger.error(f"[MAP] Nominatim geocode error {response.status}: {text}")
                         return json.dumps({
-                            "error": f"Azure Maps API error: {response.status}",
-                            "location_name": location_name
+                            "error": f"Geocoding service error: {response.status}",
+                            "location_name": location_name,
                         })
+
+                    data = await response.json()
+                    if not data:
+                        logger.warning(f"[MAP] Nominatim: No results for '{location_name}'")
+                        return json.dumps({
+                            "error": "Location not found",
+                            "location_name": location_name,
+                            "suggestion": "Try a more specific location name or check spelling",
+                        })
+
+                    result = data[0]
+                    bbox_raw = result.get("boundingbox")
+                    if bbox_raw and len(bbox_raw) == 4:
+                        # Nominatim: [min_lat, max_lat, min_lon, max_lon]
+                        bbox = [
+                            float(bbox_raw[2]),
+                            float(bbox_raw[0]),
+                            float(bbox_raw[3]),
+                            float(bbox_raw[1]),
+                        ]
+                    else:
+                        # Fallback around the point
+                        lat = float(result.get("lat"))
+                        lon = float(result.get("lon"))
+                        buffer = 0.1
+                        bbox = [lon - buffer, lat - buffer, lon + buffer, lat + buffer]
+
+                    address = result.get("display_name", location_name)
+                    country = (result.get("address") or {}).get("country", "Unknown")
+                    location_type = result.get("type", "region")
+
+                    logger.info(f"[MAP] Nominatim geocode: '{location_name}' -> {address}, bbox={bbox}")
+                    return json.dumps(
+                        {
+                            "name": address,
+                            "type": location_type,
+                            "country": country,
+                            "bbox": bbox,
+                            "confidence": 0.9,
+                            "original_query": location_name,
+                        }
+                    )
         except asyncio.TimeoutError:
-            logger.error(f"[MAP] Azure Maps timeout for '{location_name}'")
+            logger.error(f"[MAP] Nominatim timeout for '{location_name}'")
             return json.dumps({"error": "Geocoding request timed out", "location_name": location_name})
         except Exception as e:
-            logger.error(f"[MAP] Azure Maps exception for '{location_name}': {e}")
+            logger.error(f"[MAP] Nominatim exception for '{location_name}': {e}")
             return json.dumps({"error": str(e), "location_name": location_name})
-    
-    async def azure_maps_reverse_geocode(self, latitude: float, longitude: float) -> str:
-        """
-        Reverse geocode coordinates to a location name using Azure Maps API.
-        
-        This tool converts latitude/longitude coordinates to a human-readable location name.
-        
-        Args:
-            latitude: The latitude coordinate
-            longitude: The longitude coordinate
-        
-        Returns:
-            JSON string with location data including name, type, country, and address components.
-            Returns error message if location cannot be resolved.
-        
-        Examples:
-            Input: (38.652708, 22.155403)
-            Output: {"name": "Mount Parnassus", "region": "Central Greece", "country": "Greece", "freeform": "Mount Parnassus, Central Greece, Greece"}
-        """
-        if not self.azure_maps_key:
-            return json.dumps({"error": "Azure Maps API key not configured", "coordinates": [latitude, longitude]})
-        
+
+    async def reverse_geocode(self, latitude: float, longitude: float) -> str:
+        """Reverse geocode coordinates via OpenStreetMap Nominatim."""
+        url = "https://nominatim.openstreetmap.org/reverse"
+        params = {
+            "lat": latitude,
+            "lon": longitude,
+            "format": "json",
+            "addressdetails": 1,
+        }
+        headers = {"User-Agent": self.user_agent}
+
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
-                # Azure Maps Reverse Geocode API endpoint
-                url = f"{cloud_cfg.azure_maps_base_url}/reverseGeocode"
-                params = {
-                    "api-version": "2023-06-01",
-                    "subscription-key": self.azure_maps_key,
-                    "coordinates": f"{longitude},{latitude}"  # Note: Azure Maps uses lon,lat order
-                }
-                
-                timeout = aiohttp.ClientTimeout(total=10)
-                async with session.get(url, params=params, timeout=timeout) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        features = data.get("features", [])
-                        
-                        if features and len(features) > 0:
-                            feature = features[0]
-                            properties = feature.get("properties", {})
-                            address = properties.get("address", {})
-                            
-                            # Extract meaningful location name
-                            # Priority: locality > municipality > countrySubdivision > country
-                            locality = address.get("locality", "")
-                            municipality = address.get("municipality", "")
-                            county = address.get("countrySecondarySubdivision", "")
-                            region = address.get("countrySubdivision", "")
-                            country = address.get("country", "")
-                            freeform = address.get("formattedAddress", "")
-                            
-                            # Also check adminDistricts array (Azure Maps v2 format)
-                            admin_districts = address.get("adminDistricts", [])
-                            admin_name = ""
-                            if admin_districts:
-                                # adminDistricts is a list of {"shortName": "X"} dicts
-                                for ad in admin_districts:
-                                    n = ad.get("shortName", "") or ad.get("name", "")
-                                    if n:
-                                        admin_name = n
-                                        break
-                            
-                            # Build a meaningful name — use formattedAddress as final
-                            # fallback before "Unknown Location" since it's populated
-                            # even when structured fields are empty (common in Asia/Africa)
-                            name = locality or municipality or county or region or admin_name or country or freeform or "Unknown Location"
-                            
-                            result = {
-                                "name": name,
-                                "locality": locality,
-                                "municipality": municipality,
-                                "county": county,
-                                "region": region,
-                                "country": country,
-                                "freeform": freeform,
-                                "coordinates": {"latitude": latitude, "longitude": longitude}
-                            }
-                            
-                            logger.info(f"[MAP] Azure Maps reverse geocode: ({latitude}, {longitude}) -> {name}, {country}")
-                            return json.dumps(result)
-                        else:
-                            logger.warning(f"[MAP] Azure Maps: No results for ({latitude}, {longitude})")
-                            return json.dumps({
-                                "error": "Location not found",
-                                "name": f"Location ({latitude:.4f}, {longitude:.4f})",
-                                "coordinates": {"latitude": latitude, "longitude": longitude}
-                            })
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"[MAP] Azure Maps reverse geocode API error {response.status}: {error_text}")
+                async with session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    if response.status != 200:
+                        text = await response.text()
+                        logger.error(f"[MAP] Nominatim reverse error {response.status}: {text}")
                         return json.dumps({
-                            "error": f"Azure Maps API error: {response.status}",
-                            "name": f"Location ({latitude:.4f}, {longitude:.4f})",
-                            "coordinates": {"latitude": latitude, "longitude": longitude}
+                            "error": f"Reverse geocoding service error: {response.status}",
+                            "coordinates": [latitude, longitude],
                         })
+
+                    data = await response.json()
+                    address = data.get("display_name", "Unknown location")
+                    addr_details = data.get("address", {})
+
+                    country = addr_details.get("country", "")
+                    region = addr_details.get("state", "") or addr_details.get("region", "")
+
+                    logger.info(f"[MAP] Nominatim reverse geocode: ({latitude}, {longitude}) -> {address}")
+                    return json.dumps(
+                        {
+                            "name": address,
+                            "region": region,
+                            "country": country,
+                            "freeform": address,
+                            "coordinates": [latitude, longitude],
+                        }
+                    )
         except asyncio.TimeoutError:
-            logger.error(f"[MAP] Azure Maps reverse geocode timeout for ({latitude}, {longitude})")
-            return json.dumps({
-                "error": "Reverse geocoding request timed out",
-                "name": f"Location ({latitude:.4f}, {longitude:.4f})",
-                "coordinates": {"latitude": latitude, "longitude": longitude}
-            })
+            logger.error(f"[MAP] Nominatim reverse timeout for ({latitude}, {longitude})")
+            return json.dumps({"error": "Reverse geocoding request timed out", "coordinates": [latitude, longitude]})
         except Exception as e:
-            logger.error(f"[MAP] Azure Maps reverse geocode exception for ({latitude}, {longitude}): {e}")
-            return json.dumps({
-                "error": str(e),
-                "name": f"Location ({latitude:.4f}, {longitude:.4f})",
-                "coordinates": {"latitude": latitude, "longitude": longitude}
-            })
+            logger.error(f"[MAP] Nominatim reverse exception for ({latitude}, {longitude}): {e}")
+            return json.dumps({"error": str(e), "coordinates": [latitude, longitude]})
 
 # Create global instance for use by the kernel
 geocoding_plugin = GeocodingPlugin()
@@ -595,15 +378,12 @@ class SemanticQueryTranslator:
         "nasa nex-gddp-cmip6": ["nasa-nex-gddp-cmip6"],
     }
     
-    def __init__(self, azure_openai_endpoint: str, azure_openai_api_key: str, model_name: str, azure_credential=None):
-        if not SK_AVAILABLE:
-            raise ImportError("Semantic Kernel is not available")
-        
-        # Store configuration for lazy initialization (GPT-5 optimized)
-        self.azure_openai_endpoint = azure_openai_endpoint
-        self.azure_openai_api_key = azure_openai_api_key
-        self.azure_credential = azure_credential  # For managed identity authentication
-        self.model_name = model_name
+    def __init__(self):
+        # Read LLM configuration from environment variables
+        self.llm_base_url = os.getenv('LLM_BASE_URL', '')
+        self.llm_api_key = os.getenv('LLM_API_KEY', '')
+        self.llm_credential = None
+        self.model_name = os.getenv('LLM_MODEL', 'gpt-4o')
         
         # STAC API endpoints
         self.stac_endpoints = {
@@ -630,8 +410,7 @@ class SemanticQueryTranslator:
         # [BOT] Model override for runtime model switching
         self._model_override = None
         
-        logger.info("[OK] Using consolidated EnhancedLocationResolver (Azure Maps -> Nominatim -> Azure OpenAI)")
-        logger.info(f"[OK] Authentication mode: {'Managed Identity' if azure_credential else 'API Key'}")
+        logger.info("[OK] Using consolidated EnhancedLocationResolver (Nominatim)")
         
         # Initialize STAC query checker (disabled for streamlined version)
         self.query_checker = None  # Disabled for streamlined version
@@ -1182,8 +961,8 @@ Response: {{"intent_type": "stac", "needs_satellite_data": true, "needs_vision_a
             
             # Use fast model for intent classification (lightweight task)
             from semantic_kernel.functions.kernel_arguments import KernelArguments
-            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import AzureChatPromptExecutionSettings
-            _cls_settings = AzureChatPromptExecutionSettings(
+            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import OpenAIChatPromptExecutionSettings
+            _cls_settings = OpenAIChatPromptExecutionSettings(
                 service_id="chat-completion-4o",  # Fast model (gpt-4o-mini)
                 temperature=0.3,
                 max_completion_tokens=200
@@ -1280,8 +1059,8 @@ Query: "{query}"
             
             # Use fast model for fallback classification (lightweight task)
             from semantic_kernel.functions.kernel_arguments import KernelArguments
-            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import AzureChatPromptExecutionSettings
-            _cls_settings = AzureChatPromptExecutionSettings(
+            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import OpenAIChatPromptExecutionSettings
+            _cls_settings = OpenAIChatPromptExecutionSettings(
                 service_id="chat-completion-4o",  # Fast model (gpt-4o-mini)
                 temperature=0.3,
                 max_completion_tokens=50
@@ -1529,156 +1308,107 @@ Query: "{query}"
             
         try:
             logger.info(f"   [SYNC] Starting kernel initialization...")
-            logger.info(f"   Azure OpenAI Endpoint: {self.azure_openai_endpoint}")
+            logger.info(f"   LLM Base URL: {self.llm_base_url}")
             logger.info(f"   Model Name: {self.get_active_model()}")
-            logger.info(f"   API Key present: {bool(self.azure_openai_api_key)}")
-            logger.info(f"   Azure Credential present: {bool(self.azure_credential)}")
+            logger.info(f"   API Key present: {bool(self.llm_api_key)}")
             
             self.kernel = Kernel()
             logger.info(f"   [OK] Kernel object created")
             
-            # Add Azure OpenAI service with optimal GPT configuration for SK 1.37.0+
-            # Use stable API version that works well with GPT-5
-            base_url = f"{self.azure_openai_endpoint}/openai" if not self.azure_openai_endpoint.endswith('/openai') else self.azure_openai_endpoint
-            logger.info(f"   Base URL: {base_url}")
-            
             # Get the active model (supports runtime override)
             active_model = self.get_active_model()
-            
-            # Determine authentication method
-            ad_token_provider = None
-            if self.azure_credential and not self.azure_openai_api_key:
-                # Use managed identity - create token provider for fresh tokens
-                logger.info(f"   [KEY] Using managed identity authentication...")
-                # Token provider is a callable that returns fresh tokens
-                def get_token():
-                    token_response = self.azure_credential.get_token(cloud_cfg.cognitive_services_scope)
-                    logger.debug(f"   [SYNC] Refreshed Azure AD token (expires: {token_response.expires_on})")
-                    return token_response.token
-                ad_token_provider = get_token
-                # Verify token works on first call
-                test_token = ad_token_provider()
-                logger.info(f"   [OK] Verified Azure AD token acquisition")
-            
-            # Primary service: GPT-5 for complex reasoning tasks
-            if ad_token_provider:
-                azure_chat_service = AzureChatCompletion(
-                    deployment_name=active_model,
-                    ad_token_provider=ad_token_provider,
-                    base_url=base_url,
-                    api_version="2024-10-21",  # Stable API version with full GPT support
-                    service_id="chat-completion"  # Explicitly set service ID
-                )
-                logger.info(f"   [OK] AzureChatCompletion service created with managed identity ({active_model})")
-            else:
-                azure_chat_service = AzureChatCompletion(
-                    deployment_name=active_model,
-                    api_key=self.azure_openai_api_key,
-                    base_url=base_url,
-                    api_version="2024-10-21",  # Stable API version with full GPT support
-                    service_id="chat-completion"  # Explicitly set service ID
-                )
-                logger.info(f"   [OK] AzureChatCompletion service created with API key ({active_model})")
-            
-            self.kernel.add_service(azure_chat_service)
+            logger.info(f"   Base URL: {self.llm_base_url}")
+
+            # Primary service
+            from semantic_kernel.connectors.ai.open_ai import OpenAIChatCompletion
+            chat_service = OpenAIChatCompletion(
+                ai_model_id=active_model,
+                api_key=self.llm_api_key,
+                base_url=self.llm_base_url,
+                service_id="chat-completion"
+            )
+            self.kernel.add_service(chat_service)
             logger.info(f"   [OK] {active_model} service added to kernel")
-            
-            # Secondary service for lightweight tasks (classification, extraction, datetime parsing)
-            # Uses AZURE_OPENAI_FAST_DEPLOYMENT (gpt-4o-mini) for speed — these tasks
-            # don't need GPT-5's deep reasoning, just fast structured output.
-            fast_model = os.getenv("AZURE_OPENAI_FAST_DEPLOYMENT", "gpt-4o-mini")
+
+            # Secondary service for lightweight tasks (classification, extraction)
+            fast_model = os.getenv("LLM_FAST_MODEL", active_model)
             try:
-                if ad_token_provider:
-                    azure_chat_service_4o = AzureChatCompletion(
-                        deployment_name=fast_model,
-                        ad_token_provider=ad_token_provider,
-                        base_url=base_url,
-                        api_version="2024-10-21",
-                        service_id="chat-completion-4o"
-                    )
-                else:
-                    azure_chat_service_4o = AzureChatCompletion(
-                        deployment_name=fast_model,
-                        api_key=self.azure_openai_api_key,
-                        base_url=base_url,
-                        api_version="2024-10-21",
-                        service_id="chat-completion-4o"
-                    )
-                logger.info(f"   [OK] AzureChatCompletion FAST service created ({fast_model}) for lightweight tasks")
-                
-                self.kernel.add_service(azure_chat_service_4o)
+                chat_service_fast = OpenAIChatCompletion(
+                    ai_model_id=fast_model,
+                    api_key=self.llm_api_key,
+                    base_url=self.llm_base_url,
+                    service_id="chat-completion-4o"
+                )
+                self.kernel.add_service(chat_service_fast)
                 logger.info(f"   [OK] Fast {fast_model} service added to kernel for classification/extraction")
             except Exception as e:
                 logger.warning(f"   [WARN] Failed to add secondary service: {e}")
-                # Not fatal - will continue with primary service
             
             # ================================================================
-            # [MAP] REGISTER GEOCODING PLUGIN - Azure Maps tool for function calling
+            # [MAP] REGISTER GEOCODING PLUGIN - Nominatim tool for function calling
             # ================================================================
-            # This enables the location extraction agent to call Azure Maps
+            # This enables the location extraction agent to call Nominatim
             # when the fast keyword match doesn't find a known location
             try:
                 from semantic_kernel.functions import kernel_function
-                
+
                 # Create the geocoding function with proper decorator
                 @kernel_function(
-                    name="azure_maps_geocode",
-                    description="Geocode a location name using Azure Maps API. Returns bbox coordinates and location metadata. Use this to verify locations and get accurate coordinates."
+                    name="geocode",
+                    description="Geocode a location name using Nominatim. Returns bbox coordinates and location metadata. Use this to verify locations and get accurate coordinates."
                 )
                 async def geocode_location(location_name: str) -> str:
-                    """Geocode a location using Azure Maps"""
-                    return await geocoding_plugin.azure_maps_geocode(location_name)
-                
+                    """Geocode a location using Nominatim."""
+                    return await geocoding_plugin.geocode(location_name)
+
                 # Add as a plugin to the kernel
                 self.kernel.add_function(plugin_name="geocoding", function=geocode_location)
-                logger.info(f"   [OK] Geocoding plugin registered (azure_maps_geocode tool available)")
+                logger.info(f"   [OK] Geocoding plugin registered (geocode tool available)")
             except Exception as e:
                 logger.warning(f"   [WARN] Failed to register geocoding plugin: {e}")
                 # Not fatal - will fall back to non-tool location extraction
-            
+
             self._kernel_initialized = True
             logger.info(f"   [OK] Kernel initialization SUCCESSFUL!")
-            auth_mode = "Managed Identity" if ad_token_provider else "API Key"
-            logger.info(f"   [OK] Semantic Kernel initialized with {self.model_name} at {base_url} ({auth_mode}, API v2024-10-21)")
-            
+            logger.info(f"   [OK] Semantic Kernel initialized with {self.model_name}")
+
         except Exception as e:
             logger.error(f"   [FAIL] Kernel initialization FAILED!")
             logger.error(f"   Exception type: {type(e).__name__}")
             logger.error(f"   Exception message: {str(e)}")
             logger.error(f"   Traceback:")
             logger.error(traceback.format_exc())
-            # Raise error - require proper Azure OpenAI connection
             self.kernel = None
             self._kernel_initialized = False
     
     async def test_connection(self) -> bool:
-        """Test connection to Azure OpenAI model for health check"""
+        """Test connection to LLM for health check"""
         try:
-            logger.info(f"[SEARCH] Testing Azure OpenAI {self.model_name} connectivity...")
+            logger.info(f"[SEARCH] Testing LLM {self.model_name} connectivity...")
             await self._ensure_kernel_initialized()
-            
+
             if not self.kernel:
                 return False
-            
+
             # Create a simple test prompt
             test_prompt = "Test connection - respond with 'OK'"
-            
+
             # Create chat history for testing
             from semantic_kernel.contents import ChatHistory
             chat_history = ChatHistory()
             chat_history.add_user_message(test_prompt)
-            
+
             # Get the chat completion service
             chat_completion = self.kernel.get_service("chat-completion")
-            
+
             # Test with minimal settings and timeout
-            from semantic_kernel.connectors.ai.open_ai import AzureChatPromptExecutionSettings
-            execution_settings = AzureChatPromptExecutionSettings(
-                temperature=1.0,  # GPT-5 default temperature
-                max_completion_tokens=200,  # Sufficient for intent classification
+            from semantic_kernel.connectors.ai.open_ai import OpenAIChatPromptExecutionSettings
+            execution_settings = OpenAIChatPromptExecutionSettings(
+                temperature=1.0,
+                max_completion_tokens=200,
                 service_id="chat-completion"
             )
-            
+
             # Try to get a response with timeout
             response = await asyncio.wait_for(
                 chat_completion.get_chat_message_content(
@@ -1686,32 +1416,25 @@ Query: "{query}"
                     settings=execution_settings,
                     kernel=self.kernel
                 ),
-                timeout=30.0  # 30 second timeout for GPT models
+                timeout=30.0
             )
-            
-            # Check if we got a valid response
-            # GPT-5 may return response with usage data but empty content in some cases
-            # This is normal - the model is working, just using reasoning tokens internally
+
             if response:
                 if response.content:
-                    logger.info(f"[OK] Azure OpenAI {self.model_name} connectivity test successful: {response.content[:50]}...")
+                    logger.info(f"[OK] LLM {self.model_name} connectivity test successful: {response.content[:50]}...")
                 else:
-                    logger.info(f"[OK] Azure OpenAI {self.model_name} connectivity test successful (reasoning model response)")
+                    logger.info(f"[OK] LLM {self.model_name} connectivity test successful (reasoning model response)")
                 return True
             else:
-                logger.warning("[WARN] Azure OpenAI responded but with no response object")
+                logger.warning("[WARN] LLM responded but with no response object")
                 return False
-                
-        except Exception as e:
-            logger.error(f"[FAIL] Azure OpenAI connectivity test failed: {e}")
-            logger.error(f"[FAIL] Full traceback: {traceback.format_exc()}")
-            return False
-                
+
         except asyncio.TimeoutError:
-            logger.error("[FAIL] Azure OpenAI connectivity test timed out")
+            logger.error("[FAIL] LLM connectivity test timed out")
             return False
         except Exception as e:
-            logger.error(f"[FAIL] Azure OpenAI connectivity test failed: {e}")
+            logger.error(f"[FAIL] LLM connectivity test failed: {e}")
+            logger.error(f"[FAIL] Full traceback: {traceback.format_exc()}")
             return False
     
     # ========================================================================
@@ -1835,11 +1558,11 @@ Format: ["collection-id"]"""
             logger.info("[TOOL] AGENT 1: Creating execution settings...")
             # Execute with Semantic Kernel
             from semantic_kernel.functions.kernel_arguments import KernelArguments
-            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import AzureChatPromptExecutionSettings
+            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import OpenAIChatPromptExecutionSettings
             
             # Use fast model (gpt-4o-mini) for structured classification tasks
             # Collection mapping is a lightweight task — just returns a JSON array of IDs
-            execution_settings = AzureChatPromptExecutionSettings(
+            execution_settings = OpenAIChatPromptExecutionSettings(
                 service_id="chat-completion-4o",  # Fast model (gpt-4o-mini)
                 temperature=0.3,  # Lower temp for precise classification
                 max_completion_tokens=300  # Reduced tokens (just need JSON array)
@@ -2178,7 +1901,7 @@ Format: ["collection-id"]"""
         reliable than GPT for known locations.
         
         If a location is NOT found here, the location_extraction_agent will use GPT-5
-        with the azure_maps_geocode tool to resolve unknown locations.
+        with the geocode tool to resolve unknown locations.
         
         Args:
             query: User's natural language query
@@ -2626,7 +2349,6 @@ ESSENTIAL FIRE:
                     print(f"[OK] DEBUG: STEP 6 SUCCESS - bbox: {bbox}")
                 else:
                     logger.error(f"[FAIL] Failed to resolve '{location_name}' to coordinates")
-                    logger.error(f"[WARN] Check API keys: Azure Maps, Google Maps, Mapbox")
                     print(f"[FAIL][ALERT] DEBUG: STEP 6 FAILED - Could not resolve bbox")
                     raise ValueError(f"Unable to resolve location '{location_name}'. Check API keys.")
             else:
@@ -2730,8 +2452,8 @@ ESSENTIAL FIRE:
         # This ensures the actual query text is sent to GPT-5, not the literal "{{$query}}" string
         entity_extraction_prompt = f"""You are an expert at extracting location information from satellite imagery queries.
 
-IMPORTANT: You have access to a tool called 'azure_maps_geocode' that can geocode location names.
-If you're unsure about a location or need to verify it exists, use the azure_maps_geocode tool.
+IMPORTANT: You have access to a tool called 'geocode' that can geocode location names.
+If you're unsure about a location or need to verify it exists, use the geocode tool.
 The tool returns the canonical name, type, country, and bounding box for any location.
 
 Extract location information from this query and return ONLY a valid JSON object:
@@ -2795,12 +2517,12 @@ Return only the JSON object. No explanations or additional text."""
 
         try:
             from semantic_kernel.functions.kernel_arguments import KernelArguments
-            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import AzureChatPromptExecutionSettings
+            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import OpenAIChatPromptExecutionSettings
             
             # Use fast model (gpt-4o-mini) for location extraction with function calling
             # Location extraction is a structured entity extraction task (extract city/region name)
             # gpt-4o-mini supports function calling and is much faster for this task
-            execution_settings = AzureChatPromptExecutionSettings(
+            execution_settings = OpenAIChatPromptExecutionSettings(
                 service_id="chat-completion-4o",  # Fast model (gpt-4o-mini)
                 temperature=0.3,  # Lower temp for precise extraction
                 max_completion_tokens=500,  # Increased for function calling responses
@@ -2810,7 +2532,7 @@ Return only the JSON object. No explanations or additional text."""
                 )
             )
             
-            logger.info("[TOOL] Function calling enabled - fast model can use azure_maps_geocode tool")
+            logger.info("[TOOL] Function calling enabled - fast model can use geocode tool")
 
             # Execute using simplified invoke_prompt (no template needed with f-string)
             arguments = KernelArguments(settings=execution_settings)
@@ -3164,7 +2886,7 @@ IMPORTANT:
 - Prioritize quality over quantity"""
 
                 # Use GPT-5 for tile selection
-                execution_settings = AzureChatPromptExecutionSettings(
+                execution_settings = OpenAIChatPromptExecutionSettings(
                     max_completion_tokens=2000,
                     temperature=1.0,  # GPT-5 only supports default temperature
                     top_p=0.95
@@ -4323,11 +4045,11 @@ IMPORTANT:
         
         try:
             from semantic_kernel.functions.kernel_arguments import KernelArguments
-            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import AzureChatPromptExecutionSettings
+            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import OpenAIChatPromptExecutionSettings
             
             # Use fast model (gpt-4o-mini) for datetime parsing
             # Datetime translation is a lightweight structured task — just returns JSON dates
-            execution_settings = AzureChatPromptExecutionSettings(
+            execution_settings = OpenAIChatPromptExecutionSettings(
                 service_id="chat-completion-4o",  # Fast model (gpt-4o-mini)
                 temperature=0.3,  # Lower temp for precise date parsing
                 max_completion_tokens=300 if mode == "comparison" else 150  # Reduced tokens for JSON output
@@ -4724,11 +4446,11 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
 
         try:
             from semantic_kernel.functions.kernel_arguments import KernelArguments
-            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import AzureChatPromptExecutionSettings
+            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import OpenAIChatPromptExecutionSettings
             
             # Use fast model (gpt-4o-mini) for cloud intent detection
             # Cloud filtering is a simple yes/no + threshold task — perfect for fast model
-            execution_settings = AzureChatPromptExecutionSettings(
+            execution_settings = OpenAIChatPromptExecutionSettings(
                 service_id="chat-completion-4o",  # Fast model (gpt-4o-mini)
                 temperature=0.3,  # Lower temp for precise classification
                 max_completion_tokens=100  # Reduced tokens for simple JSON response
@@ -4855,15 +4577,13 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
     
     async def resolve_location_to_bbox(self, location_name: str, location_type: str = "region") -> Optional[List[float]]:
         """
-        [TARGET] Use consolidated EnhancedLocationResolver
-        
+        Use consolidated EnhancedLocationResolver.
+
         Strategy order (via EnhancedLocationResolver):
         1. Predefined regions (highest accuracy)
-        2. Azure Maps API (primary)  
-        3. Mapbox (geographic specialist)
-        4. Google Maps (comprehensive)
-        5. Nominatim (fallback)
-        
+        2. Nominatim (OSM-based geocoding)
+        3. GeoNames (fallback)
+
         Returns: [west, south, east, north] bounding box or None
         """
         logger.info("=" * 80)
@@ -4980,55 +4700,6 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
             logger.warning(f"Nominatim failed for {location_name}: {e}")
         return None
     
-    async def _resolve_via_azure_maps(self, location_name: str) -> Optional[List[float]]:
-        """Use Azure Maps API as fallback"""
-        azure_maps_key = os.getenv("AZURE_MAPS_SUBSCRIPTION_KEY")
-        if not azure_maps_key:
-            logger.info("Azure Maps API key not available, skipping Azure Maps resolution")
-            return None
-            
-        try:
-            import aiohttp
-            async with aiohttp.ClientSession() as session:
-                url = f"{cloud_cfg.azure_maps_base_url}/search/address/json"
-                params = {
-                    "api-version": "1.0",
-                    "subscription-key": azure_maps_key,
-                    "query": location_name,
-                    "limit": 1
-                }
-                
-                timeout = aiohttp.ClientTimeout(total=15)
-                async with session.get(url, params=params, timeout=timeout) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if data.get("results"):
-                            result = data["results"][0]
-                            
-                            # Azure Maps returns viewport in different format
-                            if "viewport" in result:
-                                viewport = result["viewport"]
-                                bbox = [
-                                    viewport["topLeftPoint"]["lon"],
-                                    viewport["btmRightPoint"]["lat"],
-                                    viewport["btmRightPoint"]["lon"],
-                                    viewport["topLeftPoint"]["lat"]
-                                ]
-                            else:
-                                # Fallback to position with buffer
-                                position = result["position"]
-                                lat, lon = position["lat"], position["lon"]
-                                buffer = 0.1
-                                bbox = [lon - buffer, lat - buffer, lon + buffer, lat + buffer]
-                            
-                            logger.info(f"[MAP] Azure Maps resolved {location_name}: {bbox}")
-                            return bbox
-                    else:
-                        logger.warning(f"Azure Maps API error {response.status}: {await response.text()}")
-        except Exception as e:
-            logger.warning(f"Azure Maps failed for {location_name}: {e}")
-        return None
-    
     async def _resolve_via_mapbox(self, location_name: str) -> Optional[List[float]]:
         """Use Mapbox Geocoding API as fallback"""
         mapbox_token = os.getenv("MAPBOX_ACCESS_TOKEN")
@@ -5064,7 +4735,7 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
         return None
     
     async def _resolve_via_semantic_kernel(self, location_name: str, location_type: str) -> Optional[List[float]]:
-        """Use Azure OpenAI directly for geographic location resolution with enhanced debugging"""
+        """Use Semantic Kernel with enhanced strategies for location resolution"""
         
         logger.info(f"[TOOL] SEMANTIC KERNEL DEBUG: Starting location resolution for '{location_name}'")
         
@@ -5072,7 +4743,7 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
         await self._ensure_kernel_initialized()
         
         if not self._kernel_initialized:
-            logger.error(f"[FAIL] Azure OpenAI not available for location resolution: {location_name}")
+            logger.error(f"[FAIL] Semantic Kernel not initialized for location resolution: {location_name}")
             return None
         
         try:
@@ -5098,14 +4769,13 @@ Guidelines:
 
 Location to analyze: {location_name}"""
 
-            # Use Azure OpenAI directly with enhanced strategies
-            azure_openai_endpoint = self.azure_openai_endpoint
-            azure_openai_api_key = self.azure_openai_api_key
+            llm_base_url = self.llm_base_url
+            llm_api_key = self.llm_api_key
             model_name = self.model_name
-            
+
             headers = {
                 "Content-Type": "application/json",
-                "api-key": azure_openai_api_key
+                "api-key": llm_api_key
             }
             
             # [SYNC] Strategy 1: JSON mode with pure geographic knowledge
@@ -5143,7 +4813,7 @@ Location to analyze: {location_name}"""
             ]
             
             async with aiohttp.ClientSession() as session:
-                url = f"{azure_openai_endpoint}/openai/deployments/{model_name}/chat/completions?api-version=2024-06-01"
+                url = f"{llm_base_url}/openai/deployments/{model_name}/chat/completions?api-version=2024-06-01"
                 timeout = aiohttp.ClientTimeout(total=30)
                 
                 # [SYNC] Try multiple strategies in order
@@ -5152,7 +4822,7 @@ Location to analyze: {location_name}"""
                         logger.info(f"[SYNC] Trying location resolution strategy: {strategy_name} for {location_name}")
                         
                         async with session.post(url, headers=headers, json=payload, timeout=timeout) as response:
-                            logger.info(f"[WEB] Azure OpenAI response status: {response.status} for {strategy_name}")
+                            logger.info(f"[WEB] response status: {response.status} for {strategy_name}")
                             
                             if response.status == 200:
                                 result = await response.json()
@@ -5160,11 +4830,11 @@ Location to analyze: {location_name}"""
                                 # Enhanced response processing
                                 if "choices" in result and result["choices"]:
                                     content = result["choices"][0]["message"]["content"]
-                                    logger.info(f"[SEARCH] Raw Azure OpenAI content ({strategy_name}): '{content}'")
+                                    logger.info(f"[SEARCH] ({strategy_name}): '{content}'")
                                     
                                     # Check if response is empty
                                     if not content or content.strip() == "":
-                                        logger.warning(f"[WARN] Empty response from Azure OpenAI for {location_name} with {strategy_name}")
+                                        logger.warning(f"[WARN] Empty response for {location_name} with {strategy_name}")
                                         continue  # Try next strategy
                                         
                                     # Enhanced JSON parsing
@@ -5197,36 +4867,36 @@ Location to analyze: {location_name}"""
                                                 -90 <= south <= 90 and -90 <= north <= 90 and
                                                 west < east and south < north):
                                                 
-                                                logger.info(f"[OK] Azure OpenAI successfully resolved {location_name}: {bbox} (confidence: {confidence:.2f}, strategy: {strategy_name})")
+                                                logger.info(f"[OK] Successfully resolved {location_name}: {bbox} (confidence: {confidence:.2f}, strategy: {strategy_name})")
                                                 return bbox
                                             else:
-                                                logger.warning(f"[WARN] Invalid coordinates from Azure OpenAI for {location_name}: {bbox} (strategy: {strategy_name})")
+                                                logger.warning(f"[WARN] Invalid coordinates for {location_name}: {bbox} (strategy: {strategy_name})")
                                         else:
-                                            logger.warning(f"[WARN] Low confidence or invalid bbox from Azure OpenAI for {location_name}: {location_data} (strategy: {strategy_name})")
+                                            logger.warning(f"[WARN] Low confidence or invalid bbox for {location_name}: {location_data} (strategy: {strategy_name})")
                                             
                                     except json.JSONDecodeError as e:
-                                        logger.error(f"[FAIL] Failed to parse Azure OpenAI response for {location_name} with {strategy_name}: '{cleaned_content}'")
+                                        logger.error(f"[FAIL] Failed to parse Semantic Kernel response for {location_name} with {strategy_name}: '{cleaned_content}'")
                                         logger.error(f"JSON error: {e}")
                                         continue  # Try next strategy
                                 else:
-                                    logger.warning(f"[WARN] No choices in Azure OpenAI response for {location_name} with {strategy_name}")
+                                    logger.warning(f"[WARN] No choices in Semantic Kernel response for {location_name} with {strategy_name}")
                             else:
                                 error_text = await response.text()
-                                logger.error(f"[FAIL] Azure OpenAI API error {response.status} for {strategy_name}: {error_text}")
+                                logger.error(f"[FAIL] Semantic Kernel API error {response.status} for {strategy_name}: {error_text}")
                                 continue  # Try next strategy
                                 
                     except asyncio.TimeoutError:
-                        logger.error(f"[TIME] Azure OpenAI timeout resolving {location_name} with {strategy_name}")
+                        logger.error(f"[TIME] Semantic Kernel timeout resolving {location_name} with {strategy_name}")
                         continue  # Try next strategy
                     except Exception as e:
-                        logger.error(f"[FAIL] Azure OpenAI error resolving {location_name} with {strategy_name}: {e}")
+                        logger.error(f"[FAIL] Semantic Kernel error resolving {location_name} with {strategy_name}: {e}")
                         continue  # Try next strategy
                 
                 # All strategies failed
-                logger.error(f"[FAIL] ALL Azure OpenAI strategies failed for {location_name}")
+                logger.error(f"[FAIL] ALL Semantic Kernel strategies failed for {location_name}")
             
         except Exception as e:
-            logger.error(f"[FAIL] Critical error in Azure OpenAI resolution for {location_name}: {e}")
+            logger.error(f"[FAIL] Critical error in Semantic Kernel resolution for {location_name}: {e}")
         
         return None
     
@@ -7227,20 +6897,19 @@ Location to analyze: {location_name}"""
             raise
     
     async def _fallback_contextual_response(self, query: str, classification: Dict[str, Any], stac_response: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        """Generate contextual response using direct Azure OpenAI HTTP call when Semantic Kernel fails"""
-        
+        """Generate contextual response using direct LLM HTTP call when Semantic Kernel fails"""
+
         try:
-            # Use direct HTTP call to Azure OpenAI instead of hardcoded responses
             response_content = await self._direct_llm_call_for_contextual_analysis(query, classification, stac_response)
-            
+
             return {
                 "message": response_content,
                 "query_type": "direct_llm_contextual",
                 "has_satellite_data": stac_response is not None and stac_response.get("success", False),
                 "has_contextual_analysis": True,
                 "location_focus": classification.get("location_focus"),
-                "fallback_used": False,  # Not a fallback anymore, it's a direct LLM call
-                "method": "direct_azure_openai_http"
+                "fallback_used": False,
+                "method": "direct_llm_http"
             }
             
         except Exception as e:
@@ -7256,7 +6925,7 @@ Location to analyze: {location_name}"""
             }
     
     async def _direct_llm_call_for_contextual_analysis(self, query: str, classification: Dict[str, Any], stac_response: Optional[Dict[str, Any]]) -> str:
-        """Make direct HTTP call to Azure OpenAI for contextual analysis when Semantic Kernel fails"""
+        """Make direct HTTP call to the LLM for contextual analysis when Semantic Kernel fails"""
         
         import aiohttp
         import json
@@ -7307,25 +6976,24 @@ Keep your response focused, informative, and directly relevant to the user's que
 
         user_prompt = f"Context: {context_text}\n\nUser Question: {query}\n\nProvide a comprehensive, educational response:"
         
-        # Prepare the request
         headers = {
             "Content-Type": "application/json",
-            "api-key": self.azure_openai_api_key
+            "Authorization": f"Bearer {self.llm_api_key}"
         }
-        
+
         payload = {
+            "model": self.model_name,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            "max_completion_tokens": 800,  # Reduced to encourage concise responses
+            "max_completion_tokens": 800,
             "temperature": 0.7,
             "top_p": 0.9
         }
-        
-        url = f"{self.azure_openai_endpoint}/openai/deployments/{self.model_name}/chat/completions?api-version=2024-02-01"
-        
-        # Make the HTTP request
+
+        url = f"{self.llm_base_url}/chat/completions"
+
         timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
@@ -7334,7 +7002,7 @@ Keep your response focused, informative, and directly relevant to the user's que
                     return result["choices"][0]["message"]["content"].strip()
                 else:
                     error_text = await response.text()
-                    raise Exception(f"Azure OpenAI API call failed: {response.status} - {error_text}")
+                    raise Exception(f"LLM API call failed: {response.status} - {error_text}")
     
     def _extract_bbox_from_features(self, features: List[Dict]) -> Optional[List[float]]:
         """Extract bounding box from STAC features"""
@@ -8438,7 +8106,7 @@ If NOT GEOINT (regular map/satellite data request):
 
 async def process_query_with_openai(query: str) -> Dict[str, Any]:
     """
-    Standalone function wrapper for processing queries with Azure OpenAI
+    Standalone function wrapper for processing queries with OpenAI-compatible LLMs.
     
     This function provides backward compatibility for code that expects
     a standalone process_query_with_openai function.
@@ -8452,23 +8120,8 @@ async def process_query_with_openai(query: str) -> Dict[str, Any]:
     try:
         logger.info(f"[SEARCH] Processing standalone query: '{query}'")
         
-        # Get configuration from environment
-        endpoint = os.getenv('AZURE_OPENAI_ENDPOINT')
-        api_key = os.getenv('AZURE_OPENAI_API_KEY') 
-        model = os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME', os.getenv('AZURE_OPENAI_MODEL_NAME', 'gpt-5'))
-        
-        if not endpoint or not api_key:
-            logger.error("[FAIL] Missing Azure OpenAI configuration")
-            return {
-                "error": "Missing Azure OpenAI configuration",
-                "required_env_vars": ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY"]
-            }
-        
-        logger.info(f"[OK] Using Azure OpenAI endpoint: {endpoint}")
-        logger.info(f"[OK] Using model: {model}")
-        
         # Initialize translator and process query
-        translator = SemanticQueryTranslator(endpoint, api_key, model)
+        translator = SemanticQueryTranslator()
         result = await translator.translate_query(query)
         
         logger.info(f"[OK] Successfully processed query via standalone function")
@@ -8510,20 +8163,8 @@ def process_query_with_openai_sync(query: str) -> Dict[str, Any]:
 
 # For module-level access without instantiation
 async def create_semantic_translator() -> SemanticQueryTranslator:
-    """
-    Factory function to create a configured SemanticQueryTranslator instance
-    
-    Returns:
-        Configured SemanticQueryTranslator instance
-    """
-    endpoint = os.getenv('AZURE_OPENAI_ENDPOINT')
-    api_key = os.getenv('AZURE_OPENAI_API_KEY')
-    model = os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME', os.getenv('AZURE_OPENAI_MODEL_NAME', 'gpt-5'))
-    
-    if not endpoint or not api_key:
-        raise ValueError("Missing required Azure OpenAI configuration")
-
-    return SemanticQueryTranslator(endpoint, api_key, model)
+    """Factory function to create a configured SemanticQueryTranslator instance."""
+    return SemanticQueryTranslator()
 
 
 # ---------------------------------------------------------------------------
