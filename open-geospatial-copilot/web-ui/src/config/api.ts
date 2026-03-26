@@ -3,7 +3,6 @@
 
 // Environment-specific API configuration
 // In production, VITE_API_BASE_URL is set dynamically during GitHub Actions build
-// by querying the Azure Container App URL
 const isDevelopment = import.meta.env.DEV;
 const API_BASE_URL = isDevelopment 
   ? 'http://localhost:8000'  // Local development backend
