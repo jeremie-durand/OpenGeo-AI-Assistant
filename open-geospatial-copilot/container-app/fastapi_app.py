@@ -2002,43 +2002,6 @@ async def unified_query_processor(request: Request):
                             }
                         else:
                             logger.warning(f"[WARN] Could not resolve location '{location}' via stored locations")
-                            # Try Azure Maps as a last resort before giving up
-                            try:
-                                maps_bbox = await resolver._strategy_azure_maps(location)
-                                if maps_bbox and len(maps_bbox) == 4:
-                                    center_lng = (maps_bbox[0] + maps_bbox[2]) / 2
-                                    center_lat = (maps_bbox[1] + maps_bbox[3]) / 2
-                                    logger.info(f"[OK] Azure Maps fallback resolved: {location_display} -> ({center_lat:.4f}, {center_lng:.4f})")
-                                    
-                                    if router_agent and session_id:
-                                        navigate_context = {
-                                            "last_bbox": maps_bbox,
-                                            "last_location": location_display,
-                                            "has_rendered_map": False,
-                                            "query_count": router_agent.tools.session_contexts.get(session_id, {}).get("query_count", 0) + 1
-                                        }
-                                        router_agent.update_session_context(session_id, navigate_context)
-                                    
-                                    return {
-                                        "success": True,
-                                        "action": "navigate_to",
-                                        "response": f"Navigating to {location_display}.",
-                                        "user_response": f"Navigating to {location_display}.",
-                                        "navigate_to": {
-                                            "latitude": center_lat,
-                                            "longitude": center_lng,
-                                            "zoom": zoom_level,
-                                            "bbox": maps_bbox,
-                                            "location_name": location_display
-                                        },
-                                        "processing_type": "map_navigation",
-                                        "timestamp": datetime.utcnow().isoformat()
-                                    }
-                            except Exception as maps_err:
-                                logger.warning(f"[WARN] Azure Maps fallback also failed: {maps_err}")
-                            
-                            # All resolution failed — return contextual response, NOT STAC
-                            logger.info(f"[MAP] All geocoding failed for '{location}', returning contextual response instead of falling through to STAC")
                             return {
                                 "success": True,
                                 "action": "contextual",
@@ -3392,12 +3355,10 @@ async def unified_query_processor(request: Request):
                 if tilejson_asset and "href" in tilejson_asset:
                     feature_bbox = feature.get("bbox")
                     
-                    # [OK] VALIDATION: Skip features with invalid bbox (prevents Azure Maps null value errors)
                     if not feature_bbox or len(feature_bbox) != 4:
                         logger.warning(f"[WARN] Skipping feature {feature.get('id')} - invalid bbox: {feature_bbox}")
                         continue
-                    
-                    # [OK] VALIDATION: Ensure all bbox values are numbers (not None)
+
                     if any(v is None or not isinstance(v, (int, float)) for v in feature_bbox):
                         logger.warning(f"[WARN] Skipping feature {feature.get('id')} - bbox contains null values: {feature_bbox}")
                         continue
@@ -4882,20 +4843,8 @@ async def geoint_building_damage_analysis(request: Request):
             logger.info("Building Damage: Analyzing loaded map imagery via screenshot")
             
             # Reverse geocode for location context
-            location_name = f"({latitude:.4f}, {longitude:.4f})"
-            try:
-                from semantic_translator import geocoding_plugin
-                rg = await geocoding_plugin.azure_maps_reverse_geocode(latitude, longitude)
-                import json as json_mod
-                data = json_mod.loads(rg)
-                if not data.get("error"):
-                    name = data.get("name", "")
-                    region = data.get("region", "")
-                    country = data.get("country", "")
-                    parts = [p for p in [name, region, country] if p and p != name]
-                    location_name = f"{name}, {', '.join(parts)}" if name and parts else name or location_name
-            except Exception:
-                pass
+            geo_key = f"{latitude:.4f}:{longitude:.4f}"
+            location_name = _reverse_geocode_cache.get(geo_key, f"({latitude:.4f}, {longitude:.4f})")
             
             clean_b64 = screenshot
             if clean_b64.startswith('data:image'):
@@ -5161,30 +5110,13 @@ async def geoint_extreme_weather_analysis(request: Request):
                 if "error" not in overview_data:
                     # Resolve location name (cached)
                     geo_key = f"{latitude:.4f}:{longitude:.4f}"
-                    location_name = _reverse_geocode_cache.get(geo_key)
-                    if not location_name:
-                        try:
-                            from semantic_translator import geocoding_plugin
-                            geo_result = await geocoding_plugin.azure_maps_reverse_geocode(latitude, longitude)
-                            geo_data = json.loads(geo_result)
-                            if not geo_data.get("error"):
-                                name = geo_data.get("name", "")
-                                region = geo_data.get("region", "")
-                                country = geo_data.get("country", "")
-                                parts = [p for p in [name, region, country] if p and p != name]
-                                location_name = f"{name}, {', '.join(parts)}" if name and parts else name or f"({latitude:.4f}, {longitude:.4f})"
-                            else:
-                                location_name = f"({latitude:.4f}, {longitude:.4f})"
-                            _reverse_geocode_cache[geo_key] = location_name
-                        except Exception:
-                            location_name = f"({latitude:.4f}, {longitude:.4f})"
+                    location_name = _reverse_geocode_cache.get(geo_key, f"({latitude:.4f}, {longitude:.4f})")
                     
                     # Single LLM call to format the raw data into prose
                     from semantic_translator import get_llm_client
                     _fmt_client = get_llm_client()
                     
                     fmt_resp = await _fmt_client.chat.completions.create(
-                        model=os.environ.get("AZURE_OPENAI_FAST_DEPLOYMENT", "gpt-4o-mini"),
                         messages=[
                             {"role": "system", "content": "You are a climate analyst. Format the provided climate projection data into a clear, informative summary. Use the same style and formatting as your normal extreme weather analysis responses. Include all available metrics with their values and units."},
                             {"role": "user", "content": f"Format this climate projection data for {location_name} (SSP5-8.5, 2030) into a comprehensive summary:\n\n{raw_result}"}
@@ -5265,30 +5197,13 @@ async def geoint_extreme_weather_analysis(request: Request):
                 if "error" not in comparison_data:
                     # Resolve location name (cached)
                     geo_key = f"{latitude:.4f}:{longitude:.4f}"
-                    location_name = _reverse_geocode_cache.get(geo_key)
-                    if not location_name:
-                        try:
-                            from semantic_translator import geocoding_plugin
-                            geo_result = await geocoding_plugin.azure_maps_reverse_geocode(latitude, longitude)
-                            geo_data = json.loads(geo_result)
-                            if not geo_data.get("error"):
-                                name = geo_data.get("name", "")
-                                region = geo_data.get("region", "")
-                                country = geo_data.get("country", "")
-                                parts = [p for p in [name, region, country] if p and p != name]
-                                location_name = f"{name}, {', '.join(parts)}" if name and parts else name or f"({latitude:.4f}, {longitude:.4f})"
-                            else:
-                                location_name = f"({latitude:.4f}, {longitude:.4f})"
-                            _reverse_geocode_cache[geo_key] = location_name
-                        except Exception:
-                            location_name = f"({latitude:.4f}, {longitude:.4f})"
+                    location_name = _reverse_geocode_cache.get(geo_key, f"({latitude:.4f}, {longitude:.4f})")
                     
                     # Single LLM call to format comparison data into prose
                     from semantic_translator import get_llm_client
                     _fmt_client = get_llm_client()
                     
                     fmt_resp = await _fmt_client.chat.completions.create(
-                        model=os.environ.get("AZURE_OPENAI_FAST_DEPLOYMENT", "gpt-4o-mini"),
                         messages=[
                             {"role": "system", "content": (
                                 "You are a climate analyst. Format the provided climate scenario comparison data "
@@ -5418,24 +5333,7 @@ async def geoint_extreme_weather_analysis(request: Request):
                     
                     if all_data_parts:
                         geo_key = f"{latitude:.4f}:{longitude:.4f}"
-                        location_name = _reverse_geocode_cache.get(geo_key)
-                        if not location_name:
-                            try:
-                                from semantic_translator import \
-                                    geocoding_plugin
-                                geo_result = await geocoding_plugin.azure_maps_reverse_geocode(latitude, longitude)
-                                geo_data = json.loads(geo_result)
-                                if not geo_data.get("error"):
-                                    name = geo_data.get("name", "")
-                                    region = geo_data.get("region", "")
-                                    country = geo_data.get("country", "")
-                                    parts = [p for p in [name, region, country] if p and p != name]
-                                    location_name = f"{name}, {', '.join(parts)}" if name and parts else name or f"({latitude:.4f}, {longitude:.4f})"
-                                else:
-                                    location_name = f"({latitude:.4f}, {longitude:.4f})"
-                                _reverse_geocode_cache[geo_key] = location_name
-                            except Exception:
-                                location_name = f"({latitude:.4f}, {longitude:.4f})"
+                        location_name = _reverse_geocode_cache.get(geo_key, f"({latitude:.4f}, {longitude:.4f})")
                         
                         from semantic_translator import get_llm_client
                         _fmt_client = get_llm_client()
@@ -5443,7 +5341,6 @@ async def geoint_extreme_weather_analysis(request: Request):
                         scenario_desc = "SSP2-4.5 (moderate)" if scenario == "ssp245" else "SSP5-8.5 (worst-case)"
                         combined_data = "\n\n".join(all_data_parts)
                         fmt_resp = await _fmt_client.chat.completions.create(
-                            model=os.environ.get("AZURE_OPENAI_FAST_DEPLOYMENT", "gpt-4o-mini"),
                             messages=[
                                 {"role": "system", "content": (
                                     "You are a climate analyst. The user asked about a climate trend. "
@@ -5502,7 +5399,6 @@ async def geoint_extreme_weather_analysis(request: Request):
                         
                         scenario_desc = "SSP2-4.5 (moderate)" if scenario == "ssp245" else "SSP5-8.5 (worst-case)"
                         fmt_resp = await _fmt_client.chat.completions.create(
-                            model=os.environ.get("AZURE_OPENAI_FAST_DEPLOYMENT", "gpt-4o-mini"),
                             messages=[
                                 {"role": "system", "content": (
                                     "You are a climate analyst. Format the provided climate projection data "
@@ -5776,7 +5672,6 @@ async def geoint_comparison_analysis(request: Request):
                 # FALLBACK: Use process-comparison-query logic + direct
                 # STAC search instead of the Agent Service comparison agent.
                 # This avoids the separate AgentsClient that may fail when
-                # Azure OpenAI has public access disabled.
                 # --------------------------------------------------------
                 try:
                     logger.info("[SEARCH] FALLBACK: Using direct STAC comparison approach")
