@@ -39,7 +39,7 @@ class ChatVisionAnalyzer:
     """
     
     def __init__(self):
-        """Initialize chat vision analyzer with Azure OpenAI."""
+        """Initialize chat vision analyzer with LLM client"""
         from semantic_translator import get_llm_client
         self.client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
         self.deployment_name = self.client.model
