@@ -12,9 +12,9 @@ interface VEDASearchConfig {
   searchEndpoint: string;
   searchApiKey: string;
   searchIndex: string;
-  openaiEndpoint: string;
-  openaiApiKey: string;
-  openaiDeployment: string;
+  llmBaseUrl: string;
+  llmApiKey: string;
+  llmModel: string;
 }
 
 interface VEDACollection {
@@ -38,20 +38,20 @@ class VEDASearchService {
   constructor() {
     // Get config from environment or use defaults for dev
     this.config = {
-      searchEndpoint: import.meta.env.VITE_AZURE_SEARCH_ENDPOINT || 'https://your-search-service.search.windows.net',
-      searchApiKey: import.meta.env.VITE_AZURE_SEARCH_API_KEY || '',
-      searchIndex: import.meta.env.VITE_AZURE_SEARCH_INDEX || 'veda-collections-index',
-      openaiEndpoint: import.meta.env.VITE_AZURE_OPENAI_ENDPOINT || '',
-      openaiApiKey: import.meta.env.VITE_AZURE_OPENAI_API_KEY || '',
-      openaiDeployment: import.meta.env.VITE_AZURE_OPENAI_DEPLOYMENT || 'gpt-5'
+      searchEndpoint: import.meta.env.VITE_SEARCH_ENDPOINT || '',
+      searchApiKey: import.meta.env.VITE_SEARCH_API_KEY || '',
+      searchIndex: import.meta.env.VITE_SEARCH_INDEX || 'veda-collections-index',
+      llmBaseUrl: import.meta.env.VITE_LLM_BASE_URL || '',
+      llmApiKey: import.meta.env.VITE_LLM_API_KEY || '',
+      llmModel: import.meta.env.VITE_LLM_MODEL || 'gpt-4o'
     };
   }
 
   /**
-   * Search collections using Azure AI Search vector search
+   * Search collections using vector search
    */
   private async searchCollections(query: string, collection_id?: string): Promise<VEDACollection[]> {
-    console.log(' Searching Azure AI Search for collections...');
+    console.log(' Searching indexed collections...');
     
     try {
       // First try to get embeddings for the query
@@ -62,7 +62,7 @@ class VEDASearchService {
         return await this.searchCollectionsTextOnly(query, collection_id);
       }
 
-      console.log(' Using vector search with query embeddings');
+      console.log(' Using vector search with query embeddings');;
 
       // Perform vector search
       const searchBody = {
@@ -79,7 +79,7 @@ class VEDASearchService {
         filter: collection_id ? `id eq '${collection_id}'` : undefined
       };
 
-      console.log('� Azure AI Search request:', {
+      console.log(' Search request:', {
         endpoint: `${this.config.searchEndpoint}/indexes/${this.config.searchIndex}/docs/search`,
         searchText: query,
         vectorSearch: true,
@@ -98,7 +98,7 @@ class VEDASearchService {
       );
 
       const results = response.data.value || [];
-      console.log(` Found ${results.length} collections from Azure AI Search`);
+      console.log(` Found ${results.length} collections from search index`);
 
       return results.map((result: any) => ({
         id: result.id,
@@ -109,7 +109,7 @@ class VEDASearchService {
       }));
 
     } catch (error: any) {
-      console.error(' Azure AI Search failed:', error?.response?.data || error.message);
+      console.error(' Search index query failed:', error?.response?.data || error.message);
       console.log(' Falling back to text-only search...');
       return await this.searchCollectionsTextOnly(query, collection_id);
     }
@@ -158,7 +158,7 @@ class VEDASearchService {
   }
 
   /**
-   * Generate embeddings for query using Azure OpenAI
+   * Generate embeddings for query using LLM embeddings endpoint
    */
   private async getQueryEmbeddings(query: string): Promise<number[]> {
     try {
@@ -177,7 +177,7 @@ class VEDASearchService {
       
       for (const deployment of possibleEmbeddingDeployments) {
         try {
-          const embeddingsUrl = `${this.config.openaiEndpoint}/openai/deployments/${deployment}/embeddings?api-version=2024-06-01`;
+          const embeddingsUrl = `${this.config.llmBaseUrl.replace(/\/$/, '')}/embeddings`;
           console.log(' Trying embeddings deployment:', deployment);
           console.log(' Embeddings URL:', embeddingsUrl);
           
@@ -186,7 +186,7 @@ class VEDASearchService {
             encoding_format: "float"
           }, {
             headers: {
-              'api-key': this.config.openaiApiKey,
+              'Authorization': `Bearer ${this.config.llmApiKey}`,
               'Content-Type': 'application/json'
             }
           });
@@ -221,7 +221,7 @@ class VEDASearchService {
       console.log(' Generating LLM response for query:', query);
       console.log(' Using collections:', collections.length);
       
-      const chatUrl = `${this.config.openaiEndpoint}/openai/deployments/${this.config.openaiDeployment}/chat/completions?api-version=2024-06-01`;
+      const chatUrl = `${this.config.llmBaseUrl.replace(/\/$/, '')}/chat/completions`;
       console.log(' Chat URL:', chatUrl);
       
       const systemPrompt = `You are a VEDA (Visualization, Exploration, and Data Analysis) Earth Science data expert. 
@@ -239,6 +239,7 @@ class VEDASearchService {
       const userPrompt = `${query}${collectionsContext}`;
 
       const response = await axios.post(chatUrl, {
+        model: this.config.llmModel,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -247,7 +248,7 @@ class VEDASearchService {
         temperature: 0.7
       }, {
         headers: {
-          'api-key': this.config.openaiApiKey,
+          'Authorization': `Bearer ${this.config.llmApiKey}`,
           'Content-Type': 'application/json'
         }
       });
@@ -271,27 +272,27 @@ class VEDASearchService {
     try {
       console.log(' VEDA Search called:', { query, collection_id });
       
-      // Check if we have the required configuration for real Azure services
-      const hasRealConfig = this.config.searchApiKey && 
-                           this.config.openaiApiKey && 
-                           this.config.searchEndpoint.includes('search.windows.net') && 
-                           this.config.openaiEndpoint.includes('openai.azure.com');
-      
+      // Check if we have the required configuration for real search services
+      const hasRealConfig = this.config.searchApiKey &&
+                           this.config.llmApiKey &&
+                           !!this.config.searchEndpoint &&
+                           !!this.config.llmBaseUrl;
+
       console.log(' VEDA Config Check:', {
         hasRealConfig,
         hasSearchApiKey: !!this.config.searchApiKey,
-        hasOpenAIApiKey: !!this.config.openaiApiKey,
+        hasLlmApiKey: !!this.config.llmApiKey,
         searchEndpoint: this.config.searchEndpoint,
-        openaiEndpoint: this.config.openaiEndpoint,
+        llmBaseUrl: this.config.llmBaseUrl,
         searchIndex: this.config.searchIndex
       });
-      
+
       if (!hasRealConfig) {
-        console.log(' Missing Azure configuration: using simulated VEDA search');
+        console.log(' Missing search/LLM configuration: using simulated VEDA search');
         return this.simulateVEDASearch(query, collection_id);
       }
-      
-      console.log('� Attempting real Azure AI Search with indexed VEDA data');
+
+      console.log(' Attempting real search with indexed VEDA data');
       
       try {
         // Production: Search indexed VEDA collections
@@ -308,7 +309,7 @@ class VEDASearchService {
           return {
             answer,
             collections: simulatedCollections,
-            reasoning: `No results found in indexed VEDA data. Generated response using Azure OpenAI GPT-5 with ${simulatedCollections.length} simulated relevant datasets.`
+            reasoning: `No results found in indexed VEDA data. Generated response using LLM with ${simulatedCollections.length} simulated relevant datasets.`
           };
         }
         
@@ -316,14 +317,14 @@ class VEDASearchService {
         console.log(' Generating response with real indexed VEDA data...');
         const answer = await this.generateResponse(query, collections);
         
-        console.log(' Successfully used real Azure AI Search + real indexed VEDA data');
+        console.log(' Successfully used real search index + real indexed VEDA data');
         return {
           answer,
           collections,
           reasoning: `Found ${collections.length} relevant VEDA datasets using AI-powered semantic search on indexed NASA VEDA collections`
         };
-      } catch (azureError) {
-        console.error(' Azure AI Search failed, using hybrid approach:', azureError);
+      } catch (searchError) {
+        console.error(' Search index failed, using hybrid approach:', searchError);
         
         // Hybrid fallback: simulated collections + real LLM
         const simulatedCollections = this.getSimulatedCollections(query, collection_id);
@@ -335,7 +336,7 @@ class VEDASearchService {
           return {
             answer,
             collections: simulatedCollections,
-            reasoning: `Azure AI Search unavailable. Generated dynamic response using Azure OpenAI GPT-5 with ${simulatedCollections.length} relevant VEDA datasets`
+            reasoning: `Search index unavailable. Generated dynamic response using LLM with ${simulatedCollections.length} relevant VEDA datasets`
           };
         } catch (llmError) {
           console.error(' LLM generation also failed, full simulation:', llmError);
