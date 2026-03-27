@@ -37,14 +37,7 @@ def check_module(module_name, min_version=None, exact_version=None):
 def test_semantic_kernel_imports():
     """Test semantic kernel specific imports that commonly fail."""
     print("\n Testing Semantic Kernel imports...")
-    
-    try:
-        from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
-        print(" AzureChatCompletion import successful")
-    except ImportError as e:
-        print(f" AzureChatCompletion import failed: {e}")
-        return False
-    
+
     try:
         from semantic_kernel.functions import KernelFunction, KernelArguments
         print(" KernelFunction, KernelArguments import successful")
@@ -75,7 +68,6 @@ def main():
     
     # Core dependencies with minimum versions
     core_deps = {
-        'azure.functions': '1.18.0',
         'aiohttp': '3.9.0',
         'requests': '2.31.0',
         'pystac_client': '0.7.0'
