@@ -1,7 +1,6 @@
 """
-GEOINT Building Damage Agent - Azure AI Agent Service with Function Tools
+GEOINT Building Damage Agent
 
-Refactored from plain Python class to Azure AI Agent Service.
 Uses AgentsClient with AsyncFunctionTool/AsyncToolSet for automatic function calling.
 
 This agent:
@@ -95,7 +94,7 @@ class BuildingDamageSession:
 
 class BuildingDamageAgent:
     """
-    Azure AI Agent Service-based building damage assessment agent.
+    GEOINT Building Damage Assessment Agent
     """
 
     def __init__(self):
@@ -133,20 +132,13 @@ class BuildingDamageAgent:
         raise last_error
 
     async def _do_initialize(self):
-        logger.info("Initializing BuildingDamageAgent with Azure AI Agent Service...")
+        logger.info("Initializing BuildingDamageAgent...")
 
-        # Prefer AI Foundry project endpoint (services.ai.azure.com) for Agent Service API
-        # Falls back to AZURE_OPENAI_ENDPOINT (cognitiveservices.azure.com) if not set
-        endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
-
-        if not endpoint:
-            raise ValueError("AZURE_AI_PROJECT_ENDPOINT or AZURE_OPENAI_ENDPOINT environment variable is required")
-
-        logger.info(f"BuildingDamageAgent using endpoint: {endpoint}, model: {deployment}")
+        model = os.getenv("LLM_MODEL", "gpt-4o")
+        logger.info(f"BuildingDamageAgent using model: {model}")
 
         from semantic_translator import get_llm_client
-        self._agents_client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
+        self._agents_client = get_llm_client(model=model, vision=True)
         self._agent_id = self._agents_client.model
         self._initialized = True
         logger.info(f"BuildingDamageAgent initialized: model={self._agent_id}")
