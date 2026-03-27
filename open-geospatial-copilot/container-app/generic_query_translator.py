@@ -20,6 +20,7 @@ Exposes the same public interface used by fastapi_app.py:
 
 import json
 import logging
+import os
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -41,24 +42,49 @@ def _normalize_json_text(text: str) -> str:
 
 
 def _parse_json(text: str) -> Any:
-    """Extract and parse the first JSON object/array found in *text*."""
+    """Extract and parse the first JSON object/array found in *text*.
+
+    Handles:
+    - Markdown code fences (```json ... ```)
+    - Python literals: None/True/False → null/true/false
+    - Single-quoted Python dicts: {'key': 'val'} via ast.literal_eval
+    """
+    import ast
+
     text = text.strip()
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0].strip()
     elif "```" in text:
         text = text.split("```")[1].split("```")[0].strip()
     text = _normalize_json_text(text)
-    # Try the whole string first; fall back to a greedy object search.
+
+    # 1. Try standard JSON parse on the whole string.
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", text, re.DOTALL)
+        pass
+
+    # 2. Try extracting the first {...} or [...] block and re-parsing.
+    for pattern in (r"\{.*\}", r"\[.*\]"):
+        match = re.search(pattern, text, re.DOTALL)
         if match:
-            return json.loads(_normalize_json_text(match.group()))
-        match = re.search(r"\[.*\]", text, re.DOTALL)
-        if match:
-            return json.loads(_normalize_json_text(match.group()))
-        raise
+            candidate = _normalize_json_text(match.group())
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                # 3. Fall back to ast.literal_eval for Python-style dicts/lists.
+                try:
+                    return ast.literal_eval(candidate)
+                except (ValueError, SyntaxError):
+                    pass
+
+    # 4. Last resort: ast.literal_eval on the full text.
+    try:
+        return ast.literal_eval(text)
+    except (ValueError, SyntaxError):
+        pass
+
+    raise json.JSONDecodeError("Could not parse LLM output as JSON", text, 0)
 
 
 async def _llm_text(client, messages: List[Dict], max_tokens: int = 512, temperature: float = 0.2) -> str:
@@ -88,6 +114,7 @@ class GenericQueryTranslator:
         self._llm = self._compat._llm  # raw LLMClient
         self.conversation_contexts: Dict[str, Any] = {}
         self._model_override: Optional[str] = None
+        self._local_collection_ids: Optional[set] = None  # cached after first discovery
 
     # ------------------------------------------------------------------
     # Public interface — model switching
@@ -159,6 +186,7 @@ class GenericQueryTranslator:
         # Try to discover collections from the configured local STAC API first
         discovered = await self._discover_stac_collections()
         if discovered:
+            self._local_collection_ids = {c["id"] for c in discovered}
             collection_list = "\n".join(f"{c['id']} : {c['title']}" for c in discovered)
             source_note = "These are the collections available in the configured local STAC API."
         else:
@@ -469,11 +497,27 @@ Provide a 2-3 sentence helpful response. Be specific about what might have gone 
     def determine_stac_source(self, query: str, entities: Dict[str, Any]) -> str:
         """Route to the appropriate STAC endpoint.
 
-        Uses the local/private STAC API (STAC_API_URL) when configured,
-        otherwise falls back to Planetary Computer.
+        Uses the local/private STAC API only when STAC_API_URL is configured AND
+        the requested collections are actually present there (based on the cache
+        populated by collection_mapping_agent).  Falls back to Planetary Computer
+        when the collection is not available locally.
         """
-        import os
-        if os.getenv("STAC_API_URL", "").strip():
+        if not os.getenv("STAC_API_URL", "").strip():
+            return "planetary_computer"
+
+        requested = entities.get("collections", [])
+        local_ids = self._local_collection_ids
+
+        # No cache yet (collection_mapping_agent hasn't run or failed) — use PC
+        # as a safe default since common collections (Landsat, Sentinel) live there.
+        if local_ids is None:
+            return "planetary_computer"
+
+        # Empty local catalog — nothing to search locally.
+        if not local_ids:
+            return "planetary_computer"
+
+        if requested and any(c in local_ids for c in requested):
             return "local_stac"
         return "planetary_computer"
 
