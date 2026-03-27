@@ -24,36 +24,6 @@ import MainApp from '../MainApp';
  * 13. Chat receives "complete" notification with results
  */
 
-// Mock Azure Maps SDK
-const mockAzureMaps = {
-  Map: vi.fn().mockImplementation(() => ({
-    events: {
-      add: vi.fn(),
-      remove: vi.fn()
-    },
-    markers: {
-      add: vi.fn(),
-      remove: vi.fn()
-    },
-    setCamera: vi.fn(),
-    sources: {
-      add: vi.fn(),
-      remove: vi.fn(),
-      getById: vi.fn()
-    },
-    layers: {
-      add: vi.fn(),
-      remove: vi.fn()
-    }
-  })),
-  HtmlMarker: vi.fn().mockImplementation((options) => ({
-    options,
-    setOptions: vi.fn()
-  })),
-  data: {
-    Position: vi.fn((lng, lat) => [lng, lat])
-  }
-};
 
 // Mock Leaflet
 const mockLeaflet = {
@@ -89,9 +59,8 @@ const mockApiService = {
 describe('GEOINT Modules End-to-End Flow', () => {
   beforeEach(() => {
     // Setup global mocks
-    (global as any).atlas = mockAzureMaps;
     (global as any).L = mockLeaflet;
-    
+
     // Clear all mocks
     vi.clearAllMocks();
   });
@@ -327,19 +296,18 @@ describe('GEOINT Modules End-to-End Flow', () => {
       const testLng = -74.0060;
 
       // Get map instance and trigger click event
-      const mapInstance = mockAzureMaps.Map.mock.results[0].value;
-      const clickHandler = mapInstance.events.add.mock.calls.find(
+      const mapInstance = mockLeaflet.map.mock.results[0].value;
+      const clickHandler = mapInstance.on.mock.calls.find(
         (call: any) => call[0] === 'click'
       )?.[1];
 
       if (clickHandler) {
-        clickHandler({ position: [testLng, testLat] });
+        clickHandler({ latlng: { lat: testLat, lng: testLng } });
       }
 
       // 4. Verify pin marker was created
       await waitFor(() => {
-        expect(mockAzureMaps.HtmlMarker).toHaveBeenCalled();
-        expect(mapInstance.markers.add).toHaveBeenCalled();
+        expect(mockLeaflet.marker).toHaveBeenCalled();
       });
 
       // 5. Verify onPinChange callback
@@ -378,13 +346,13 @@ describe('GEOINT Modules End-to-End Flow', () => {
       });
 
       // Simulate pin placement
-      const mapInstance = mockAzureMaps.Map.mock.results[0].value;
-      const clickHandler = mapInstance.events.add.mock.calls.find(
+      const mapInstance = mockLeaflet.map.mock.results[0].value;
+      const clickHandler = mapInstance.on.mock.calls.find(
         (call: any) => call[0] === 'click'
       )?.[1];
 
       if (clickHandler) {
-        clickHandler({ position: [-74.0060, 40.7128] });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
       }
 
       // Verify pin coordinate indicator appears
@@ -424,13 +392,13 @@ describe('GEOINT Modules End-to-End Flow', () => {
       });
 
       // Drop pin
-      const mapInstance = mockAzureMaps.Map.mock.results[0].value;
-      const clickHandler = mapInstance.events.add.mock.calls.find(
+      const mapInstance = mockLeaflet.map.mock.results[0].value;
+      const clickHandler = mapInstance.on.mock.calls.find(
         (call: any) => call[0] === 'click'
       )?.[1];
 
       if (clickHandler) {
-        clickHandler({ position: [-74.0060, 40.7128] });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
       }
 
       // Verify "pending" notification (thinking...)
@@ -495,13 +463,13 @@ describe('GEOINT Modules End-to-End Flow', () => {
       });
 
       // Drop pin
-      const mapInstance = mockAzureMaps.Map.mock.results[0].value;
-      const clickHandler = mapInstance.events.add.mock.calls.find(
+      const mapInstance = mockLeaflet.map.mock.results[0].value;
+      const clickHandler = mapInstance.on.mock.calls.find(
         (call: any) => call[0] === 'click'
       )?.[1];
 
       if (clickHandler) {
-        clickHandler({ position: [-74.0060, 40.7128] });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
       }
 
       // Verify API called with 'mobility_analysis'
@@ -544,13 +512,13 @@ describe('GEOINT Modules End-to-End Flow', () => {
       });
 
       // Drop pin
-      const mapInstance = mockAzureMaps.Map.mock.results[0].value;
-      const clickHandler = mapInstance.events.add.mock.calls.find(
+      const mapInstance = mockLeaflet.map.mock.results[0].value;
+      const clickHandler = mapInstance.on.mock.calls.find(
         (call: any) => call[0] === 'click'
       )?.[1];
 
       if (clickHandler) {
-        clickHandler({ position: [-74.0060, 40.7128] });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
       }
 
       // Verify API called with 'building_damage'
@@ -654,13 +622,13 @@ describe('GEOINT Modules End-to-End Flow', () => {
         fireEvent.click(enableButton);
       });
 
-      const mapInstance = mockAzureMaps.Map.mock.results[0].value;
-      const clickHandler = mapInstance.events.add.mock.calls.find(
+      const mapInstance = mockLeaflet.map.mock.results[0].value;
+      const clickHandler = mapInstance.on.mock.calls.find(
         (call: any) => call[0] === 'click'
       )?.[1];
 
       if (clickHandler) {
-        clickHandler({ position: [-74.0060, 40.7128] });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
       }
 
       // Verify error is handled and sent to chat
@@ -688,18 +656,18 @@ describe('GEOINT Modules End-to-End Flow', () => {
       );
 
       // Try to click map without enabling pin mode
-      const mapInstance = mockAzureMaps.Map.mock.results[0].value;
-      const clickHandler = mapInstance.events.add.mock.calls.find(
+      const mapInstance = mockLeaflet.map.mock.results[0].value;
+      const clickHandler = mapInstance.on.mock.calls.find(
         (call: any) => call[0] === 'click'
       )?.[1];
 
       if (clickHandler) {
-        clickHandler({ position: [-74.0060, 40.7128] });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
       }
 
       // Verify no pin was created
       await waitFor(() => {
-        expect(mockAzureMaps.HtmlMarker).not.toHaveBeenCalled();
+        expect(mockLeaflet.marker).not.toHaveBeenCalled();
         expect(onPinChange).not.toHaveBeenCalled();
       }, { timeout: 1000 });
     });
@@ -714,18 +682,18 @@ describe('GEOINT Modules End-to-End Flow', () => {
       );
 
       // Enable pin mode without selecting module (this should not be possible in UI, but test the guard)
-      const mapInstance = mockAzureMaps.Map.mock.results[0].value;
-      const clickHandler = mapInstance.events.add.mock.calls.find(
+      const mapInstance = mockLeaflet.map.mock.results[0].value;
+      const clickHandler = mapInstance.on.mock.calls.find(
         (call: any) => call[0] === 'click'
       )?.[1];
 
       if (clickHandler) {
-        clickHandler({ position: [-74.0060, 40.7128] });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
       }
 
       // Verify no pin was created
       await waitFor(() => {
-        expect(mockAzureMaps.HtmlMarker).not.toHaveBeenCalled();
+        expect(mockLeaflet.marker).not.toHaveBeenCalled();
         expect(onPinChange).not.toHaveBeenCalled();
       }, { timeout: 1000 });
     });
