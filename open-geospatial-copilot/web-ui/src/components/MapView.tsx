@@ -47,7 +47,7 @@ const mapProvider = 'leaflet';
 function extractGeographicRegion(queryText: string): { west: number; south: number; east: number; north: number } | null {
   if (!queryText) return null;
 
-  // The backend's dynamic location resolution (Azure Maps, Nominatim, etc.) handles all location queries
+  // The backend's dynamic location resolution handles all location queries
   // This frontend function is kept for legacy compatibility but should not be used
   console.log('?? MapView: Frontend region extraction bypassed - using backend location resolution');
   return null;
@@ -134,7 +134,6 @@ const MapView: React.FC<MapViewProps> = ({
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapsConfig, setMapsConfig] = useState<any>(null);
   const [satelliteData, setSatelliteData] = useState<SatelliteData | null>(null);
   const [currentLayer, setCurrentLayer] = useState<any>(null);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -221,9 +220,6 @@ const MapView: React.FC<MapViewProps> = ({
     showingBefore: true  // Default to showing "before" view
   });
   
-  // Map style dropdown state
-  const [showMapStyleDropdown, setShowMapStyleDropdown] = useState<boolean>(false);
-  const [currentMapStyle, setCurrentMapStyle] = useState<string>('satellite_road_labels');
 
   // Zoom level tracking state
   const [currentZoomLevel, setCurrentZoomLevel] = useState<number>(4);
@@ -395,26 +391,6 @@ const MapView: React.FC<MapViewProps> = ({
   // Thermal detection logic is handled in the satelliteData processing useEffect
   // No need for test logs on mount
 
-  // Close map style dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (showMapStyleDropdown) {
-        const target = event.target as HTMLElement;
-        // Check if click is outside the dropdown
-        if (!target.closest('[data-map-style-dropdown]')) {
-          setShowMapStyleDropdown(false);
-        }
-      }
-    };
-
-    if (showMapStyleDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showMapStyleDropdown]);
 
   // Parse satellite data from chat responses
   useEffect(() => {
@@ -1533,7 +1509,7 @@ const MapView: React.FC<MapViewProps> = ({
         }
         
         // CRITICAL: Clamp latitudes to WebMercator limits (±85.05°)
-        // Azure Maps uses WebMercator projection which is undefined at ±90° latitude.
+        // WebMercator projection which is undefined at ±90° latitude.
         // Passing bounds with lat outside ~±85.06° causes the SDK to produce null values
         // in internal style evaluation ("Expected value to be of type number, but found null").
         const WEB_MERCATOR_LAT_LIMIT = 85.05;
@@ -1557,49 +1533,20 @@ const MapView: React.FC<MapViewProps> = ({
           console.warn(`MapView: Dateline-crossing bounds detected: west=${clampedWest} >= east=${clampedEast} (this is valid for dateline crossing)`);
         }
 
-        if (mapProvider === 'azure') {
-          // Azure Maps API expects [west, south, east, north] format
-          console.log('??? MapView: Setting Azure Maps camera to bounds:', [clampedWest, clampedSouth, clampedEast, clampedNorth]);
-          
-          // For datasets requiring minimum zoom (like MODIS 1km), zoom to center instead of fitting full bounds
-          // This ensures data is visible at the required resolution
-          if (minZoom) {
-            // Calculate center of bounding box
-            const centerLon = (clampedWest + clampedEast) / 2;
-            const centerLat = (clampedSouth + clampedNorth) / 2;
-            
-            console.log(`MapView: Using minimum zoom ${minZoom} centered at [${centerLon.toFixed(4)}, ${centerLat.toFixed(4)}]`);
-            
-            map.setCamera({
-              center: [centerLon, centerLat],
-              zoom: minZoom,
-              padding: 50
-            });
-          } else {
-            // Normal behavior: fit bounds for best view
-            map.setCamera({
-              bounds: [clampedWest, clampedSouth, clampedEast, clampedNorth],
-              padding: 50
-            });
-          }
-        } else if (mapProvider === 'leaflet') {
-          // Leaflet API
-          
-          // For datasets requiring minimum zoom (like MODIS 1km), zoom to center at required level
-          if (minZoom) {
-            const centerLat = (clampedSouth + clampedNorth) / 2;
-            const centerLon = (clampedWest + clampedEast) / 2;
-            
-            console.log(`MapView: Using minimum zoom ${minZoom} centered at [${centerLat.toFixed(4)}, ${centerLon.toFixed(4)}]`);
-            map.setView([centerLat, centerLon], minZoom);
-          } else {
-            // Normal behavior: fit bounds for best view
-            const bounds = [
-              [south, west], // southwest [lat, lng]
-              [north, east]  // northeast [lat, lng]
-            ];
-            map.fitBounds(bounds, { padding: [20, 20] });
-          }
+        // For datasets requiring minimum zoom (like MODIS 1km), zoom to center at required level
+        if (minZoom) {
+          const centerLat = (clampedSouth + clampedNorth) / 2;
+          const centerLon = (clampedWest + clampedEast) / 2;
+
+          console.log(`MapView: Using minimum zoom ${minZoom} centered at [${centerLat.toFixed(4)}, ${centerLon.toFixed(4)}]`);
+          map.setView([centerLat, centerLon], minZoom);
+        } else {
+          // Normal behavior: fit bounds for best view
+          const bounds = [
+            [south, west], // southwest [lat, lng]
+            [north, east]  // northeast [lat, lng]
+          ];
+          map.fitBounds(bounds, { padding: [20, 20] });
         }
 
         console.log('? Updated map view to bbox:', bbox, 'using provider:', mapProvider, minZoom ? `(minZoom: ${minZoom})` : '');
@@ -1641,13 +1588,7 @@ const MapView: React.FC<MapViewProps> = ({
           fallbackLat = pinState.lat;
           fallbackLng = pinState.lng;
           console.log(`MapView: Using pin coords for comparison: (${fallbackLat.toFixed(4)}, ${fallbackLng.toFixed(4)})`);
-        } else if (map && mapProvider === 'azure') {
-          const center = map.getCamera().center;
-          if (center) {
-            fallbackLng = center[0];
-            fallbackLat = center[1];
-          }
-        } else if (map && mapProvider === 'leaflet') {
+        } else if (map) {
           const center = map.getCenter();
           if (center) {
             fallbackLat = center.lat;
@@ -1729,14 +1670,7 @@ const MapView: React.FC<MapViewProps> = ({
           // Fly to the location if bbox is provided
           if (result.bbox && map) {
             const [west, south, east, north] = result.bbox;
-            if (mapProvider === 'azure') {
-              map.setCamera({
-                bounds: [west, south, east, north],
-                padding: 50
-              });
-            } else if (mapProvider === 'leaflet') {
-              map.fitBounds([[south, west], [north, east]], { padding: [20, 20] });
-            }
+            map.fitBounds([[south, west], [north, east]], { padding: [20, 20] });
           }
 
           // Render BEFORE tiles on the map
@@ -1811,11 +1745,7 @@ const MapView: React.FC<MapViewProps> = ({
                   });
 
                   // Give the map time to render the new tile layer
-                  // Azure Maps WebGL needs extra time; Leaflet is faster
-                  if (mapProvider === 'azure' && map && typeof (map as any).render === 'function') {
-                    try { (map as any).render(); } catch { /* ok */ }
-                  }
-                  await new Promise(r => setTimeout(r, mapProvider === 'azure' ? 3000 : 2000));
+                  await new Promise(r => setTimeout(r, 2000));
 
                   const snap = await captureMapScreenshot();
                   if (snap && snap.length > 1000) {
@@ -1828,10 +1758,7 @@ const MapView: React.FC<MapViewProps> = ({
 
                 // 1) BEFORE tiles are already rendered — capture directly
                 // Wait for tiles to finish loading (they were set above via setSatelliteData)
-                if (mapProvider === 'azure' && map && typeof (map as any).render === 'function') {
-                  try { (map as any).render(); } catch { /* ok */ }
-                }
-                await new Promise(r => setTimeout(r, mapProvider === 'azure' ? 3000 : 2000));
+                await new Promise(r => setTimeout(r, 2000));
 
                 const beforeSnap = await captureMapScreenshot();
                 const beforeScreenshot = beforeSnap && beforeSnap.length > 1000 ? stripPrefix(beforeSnap) : null;
@@ -1946,494 +1873,6 @@ const MapView: React.FC<MapViewProps> = ({
     processComparisonQuery();
   }, [comparisonUserQuery]);
 
-  // Fetch Azure Maps configuration
-  useEffect(() => {
-    const fetchMapsConfig = async () => {
-      // Remove noisy initialization log
-
-      try {
-        // First try to get the subscription key from environment variables (for local development)
-        const azureMapsKey = import.meta.env.VITE_AZURE_MAPS_SUBSCRIPTION_KEY;
-
-        if (azureMapsKey && azureMapsKey.length > 20) {
-          console.log('??? MapView: ? Using Azure Maps key from environment');
-          setMapsConfig({
-            subscriptionKey: azureMapsKey,
-            style: 'satellite_road_labels',
-            zoom: 4,
-            center: [-98.5795, 39.8282] // Center on United States
-          });
-          return;
-        }
-
-        // If no environment variable, fetch from API endpoint (for containerized deployment)
-        console.log('??? MapView: No environment variable found, fetching config from API...');
-        console.log('??? MapView: Using API base URL:', API_BASE_URL);
-        
-        const response = await authenticatedFetch(`${API_BASE_URL}/api/config`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`);
-        }
-        
-        const config = await response.json();
-        const apiAzureMapsKey = config.azureMaps?.subscriptionKey;
-
-        console.log('??? MapView: API config debug:', {
-          configExists: !!config,
-          azureMapsConfig: !!config.azureMaps,
-          keyExists: !!apiAzureMapsKey,
-          keyLength: apiAzureMapsKey?.length || 0,
-          keyPreview: apiAzureMapsKey ? `${apiAzureMapsKey.substring(0, 12)}...${apiAzureMapsKey.slice(-8)}` : 'not found'
-        });
-
-        if (apiAzureMapsKey && apiAzureMapsKey.length > 20 && apiAzureMapsKey !== "DEVELOPMENT_MODE_NO_KEY") {
-          console.log('??? MapView: ? Using Azure Maps key from API config');
-          setMapsConfig({
-            subscriptionKey: apiAzureMapsKey,
-            style: 'satellite_road_labels',
-            zoom: 4,
-            center: [-98.5795, 39.8282] // Center on United States
-          });
-          return;
-        } else if (apiAzureMapsKey === "DEVELOPMENT_MODE_NO_KEY" || config.azureMaps?.developmentMode) {
-          console.log('??? MapView: ?? Development mode - Azure Maps key not configured');
-          console.log('??? MapView: Map functionality will be limited. Configure AZURE_MAPS_SUBSCRIPTION_KEY to enable full features.');
-          setMapsConfig({
-            subscriptionKey: null,
-            style: 'satellite_road_labels',
-            zoom: 4,
-            center: [-98.5795, 39.8282], // Center on United States
-            developmentMode: true
-          });
-          return;
-        } else {
-          throw new Error('Azure Maps subscription key not found in API config');
-        }
-
-      } catch (error) {
-        console.error('??? MapView: ? Error fetching Azure Maps configuration:', error);
-        setMapError('Azure Maps subscription key not properly configured - check server configuration');
-        return;
-      }
-    };
-
-    fetchMapsConfig();
-  }, []);  // Initialize Azure Maps
-  useEffect(() => {
-    // Only log during actual initialization, not every render
-    if (!mapRef.current || !mapsConfig) {
-      return; // Skip silently
-    }
-
-    // If we already have a map, check if it's Azure Maps
-    if (map && mapProvider === 'azure') {
-      console.log('??? MapView: Azure Maps already initialized, skipping');
-      return;
-    }
-
-    // If we have a Leaflet map, we'll try to replace it with Azure Maps
-    if (map && mapProvider === 'leaflet') {
-      console.log('??? MapView: Attempting to replace Leaflet with Azure Maps...');
-    }
-
-    // Enhanced debugging for Azure Maps SDK availability
-    console.log('??? MapView: Azure Maps initialization debug:', {
-      windowExists: typeof window !== 'undefined',
-      atlasExists: typeof window !== 'undefined' && !!window.atlas,
-      atlasType: typeof window !== 'undefined' ? typeof window.atlas : 'N/A',
-      atlasKeys: typeof window !== 'undefined' && window.atlas ? Object.keys(window.atlas) : [],
-      documentReadyState: document.readyState,
-      bodyExists: !!document.body,
-      scriptsLoaded: Array.from(document.scripts).map(s => s.src).filter(src => src.includes('atlas')),
-      mapsConfigLoaded: !!mapsConfig,
-      subscriptionKey: mapsConfig?.subscriptionKey ? 'present' : 'missing'
-    });
-
-    // Ensure Azure Maps SDK is loaded
-    if (typeof window !== 'undefined' && window.atlas && window.atlas.Map) {
-      try {
-        console.log('??? MapView: ? Azure Maps SDK fully available - initializing...');
-        console.log('??? MapView: Atlas object:', {
-          hasMap: !!window.atlas.Map,
-          hasAuthenticationType: !!window.atlas.AuthenticationType,
-          hasControl: !!window.atlas.control,
-          hasSource: !!window.atlas.source,
-          version: window.atlas.getVersion ? window.atlas.getVersion() : 'unknown'
-        });
-
-        // Clear existing map if replacing Leaflet
-        if (map && mapProvider === 'leaflet') {
-          console.log('??? MapView: Clearing existing Leaflet map to make room for Azure Maps');
-          try {
-            map.remove();
-          } catch (e) {
-            console.log('??? MapView: Error removing Leaflet map:', e);
-          }
-          mapRef.current.innerHTML = ''; // Clear the container
-          setMap(null);
-          setCurrentLayer(null);
-        }
-
-        // Initialize the map with default US view
-        const mapConfig: any = {
-          center: [-98.5795, 39.8282], // Center of United States
-          zoom: 4, // Standard initial zoom for US view
-          language: 'en-US',
-          // Use 'satellite_road_labels' basemap so label layers exist and can be moved on top
-          // We'll programmatically move the label layers above our satellite tiles after adding them
-          style: 'satellite_road_labels', // Satellite base WITH labels (we'll reorder layers later)
-          showBuildingModels: false, // Disable 3D for better performance
-          showLogo: false,
-          showFeedbackLink: false,
-          enableInertia: true, // Smooth zoom and pan
-          showTileBoundaries: false, // Hide tile boundaries for cleaner look
-          
-          // Disable accessibility announcements that appear as visible popups
-          // These screen reader messages were showing visually when activating modules
-          enableAccessibility: false,
-          
-          // CRITICAL FIX: Force WebGL to preserve drawing buffer for screenshots
-          // Without this, canvas.toDataURL() captures a blank/black image
-          // because WebGL clears the buffer immediately after rendering
-          preserveDrawingBuffer: true,  // Enable screenshot capture
-          renderWorldCopies: false       // Reduce memory overhead
-        };
-
-        // Add authentication if available (skip for development mode)
-        if (mapsConfig?.subscriptionKey && 
-            mapsConfig.subscriptionKey !== 'your-azure-maps-subscription-key-here' && 
-            !mapsConfig.developmentMode) {
-          // Validate subscription key format (Azure Maps keys are typically 64-88 characters)
-          if (mapsConfig.subscriptionKey.length >= 60 && mapsConfig.subscriptionKey.length <= 100) {
-            mapConfig.authOptions = {
-              authType: window.atlas.AuthenticationType.subscriptionKey,
-              subscriptionKey: mapsConfig.subscriptionKey
-            };
-            console.log('??? MapView: ? Using Azure Maps subscription key authentication');
-            console.log('??? MapView: Key length:', mapsConfig.subscriptionKey.length);
-            console.log('??? MapView: Key starts with:', mapsConfig.subscriptionKey.substring(0, 8) + '...');
-            console.log('??? MapView: Key ends with:', '...' + mapsConfig.subscriptionKey.substring(-8));
-            console.log('??? MapView: AuthType:', mapConfig.authOptions.authType);
-          } else {
-            console.error('??? MapView: ?? Unusual subscription key length - will try anyway:', mapsConfig.subscriptionKey.length);
-            mapConfig.authOptions = {
-              authType: window.atlas.AuthenticationType.subscriptionKey,
-              subscriptionKey: mapsConfig.subscriptionKey
-            };
-          }
-        } else if (mapsConfig?.developmentMode) {
-          console.log('??? MapView: ?? Development mode - attempting to initialize without authentication');
-          console.log('??? MapView: Note: Some Azure Maps features may not work without a subscription key');
-        } else {
-          console.warn('??? MapView: ?? Azure Maps subscription key not available or placeholder');
-          console.log('??? MapView: Available key:', mapsConfig?.subscriptionKey ? `present (${mapsConfig.subscriptionKey.substring(0, 8)}...)` : 'not present');
-          console.log('??? MapView: Will attempt anonymous access (limited functionality)');
-        }
-
-        console.log('??? MapView: Creating Azure Maps instance with config:', mapConfig);
-        const newMap = new window.atlas.Map(mapRef.current, mapConfig);
-        console.log('??? MapView: ? Azure Maps instance created successfully');
-
-        // Enhanced error handling for source loading issues - suppress benign internal errors
-        newMap.events.add('error', (error: any) => {
-          // Suppress common Azure Maps internal errors that don't affect functionality
-          const errorMsg = error?.message || error?.error?.message || String(error);
-          const suppressedPatterns = [
-            'Expected value to be of type number, but found null',
-            'Geometry exceeds allowed extent',
-            'reduce your vector tile buffer size',
-            'symbol layout',
-            'WebGL'
-          ];
-          if (suppressedPatterns.some(p => errorMsg.includes(p))) {
-            // Silently ignore - these are benign Azure Maps SDK internal issues
-            return;
-          }
-          console.warn('??? MapView: Azure Maps error event:', error);
-        });
-
-        // Set up a timeout to catch if the map never loads
-        let mapInitialized = false;
-
-        const initTimeout = setTimeout(() => {
-          if (!mapInitialized) {
-            console.error('??? MapView: ? Azure Maps failed to initialize within 15 seconds');
-            setMapError('Azure Maps initialization timeout - check subscription key and network connectivity');
-          }
-        }, 15000);
-
-        // Wait for the map to be ready
-        newMap.events.add('ready', () => {
-          mapInitialized = true;
-          clearTimeout(initTimeout);
-          console.log('??? MapView: ? Azure Maps is ready and centered on United States');
-
-          try {
-            // Custom controls will be rendered in JSX - no default Azure Maps controls
-            console.log('??? MapView: Skipping default Azure Maps controls - using custom UI');
-
-            // Set map state AFTER map is fully ready
-            setMapProvider('azure');
-            setMapError(null);
-            setMapLoaded(true);
-            console.log('??? MapView: ? Azure Maps fully configured and ready');
-
-          } catch (controlError) {
-            console.error('??? MapView: Error during map setup:', controlError);
-            // Even if there are errors, mark map as loaded
-            setMapProvider('azure');
-            setMapError(null);
-            setMapLoaded(true);
-          }
-        });
-
-        // Add error handling
-        newMap.events.add('error', (error: any) => {
-          console.error('??? MapView: ? Azure Maps error:', error);
-          console.error('??? MapView: Error details:', {
-            message: error.message,
-            type: error.type,
-            target: error.target,
-            error: error.error
-          });
-          setMapError(`Azure Maps failed: ${error.message || error.type || 'Unknown error'}`);
-        });
-
-        // Add authentication error handling
-        newMap.events.add('authenticationFailed', (error: any) => {
-          console.error('??? MapView: ? Azure Maps authentication failed:', error);
-          console.error('??? MapView: Auth error details:', {
-            message: error.message,
-            status: error.status,
-            statusText: error.statusText,
-            response: error.response
-          });
-          setMapError(`Azure Maps authentication failed: ${error.message || error.statusText || 'Invalid subscription key'}`);
-        });
-
-        // Add loading error handling with reduced verbosity
-        newMap.events.add('sourcedata', (e: any) => {
-          if (e.isSourceLoaded === false && e.sourceDataType === 'metadata') {
-            // Only log critical source failures, ignore common bing source issues and internal Azure Maps sources
-            const sourceId = e.source?.id || 'unknown';
-            const isNonCriticalSource = sourceId.includes('bing-') || 
-                                       sourceId.includes('traffic') || 
-                                       sourceId.includes('satellite-base') ||
-                                       sourceId.startsWith('jk') ||
-                                       sourceId === 'unknown' ||
-                                       sourceId.includes('basemap');
-            
-            if (!isNonCriticalSource) {
-              console.warn('??? MapView: ?? Critical map source failed to load:', {
-                sourceId: sourceId,
-                sourceType: e.source?.type || 'unknown',
-                type: e.type,
-                sourceDataType: e.sourceDataType,
-                isSourceLoaded: e.isSourceLoaded,
-                source: e.source?.id || 'unknown',
-                url: e.source?.url || 'unknown',
-                error: e.error || 'no error details'
-              });
-              // Check if this is a planetary computer source
-              if (e.source?.url && e.source.url.includes('planetarycomputer.microsoft.com')) {
-                console.error('??? MapView: ? Microsoft Planetary Computer tile source failed to load');
-                console.error('??? MapView: Failed URL:', e.source.url);
-                
-                // CRITICAL: Check if MODIS tiles are 404ing
-                if (e.source.url.includes('modis')) {
-                  console.error('[ALERT] MODIS TILE LOAD FAILURE:', {
-                    collection: 'MODIS',
-                    url: e.source.url,
-                    reason: 'Tile URL returned 404 or failed to load',
-                    possibleCauses: [
-                      '1. Date range: MODIS data unavailable for requested dates',
-                      '2. Zoom level: Current zoom too low (need zoom 10+ for MODIS 1km)',
-                      '3. Location: No MODIS data for this specific tile/location',
-                      '4. Collection: Wrong collection selected for query'
-                    ]
-                  });
-                }
-              }
-            }
-          }
-        });
-
-        // Enhanced WebGL error handling to prevent null value errors
-        newMap.events.add('error', (error: any) => {
-          // Suppress common Azure Maps internal errors that don't affect functionality
-          const errorMsg = error?.message || error?.error?.message || String(error);
-          const suppressedPatterns = [
-            'Expected value to be of type number, but found null',
-            'Geometry exceeds allowed extent',
-            'reduce your vector tile buffer size',
-            'symbol layout',
-            'WebGL'
-          ];
-          if (suppressedPatterns.some(p => errorMsg.includes(p))) {
-            // Silently ignore - these are benign Azure Maps SDK internal issues
-            return;
-          }
-          console.warn('??? MapView: Azure Maps error event:', error);
-        });
-
-        // Enhanced global error suppression for Azure Maps WebGL geometry issues
-        const originalConsoleError = console.error;
-        const suppressedErrors = [
-          'Expected value to be of type number, but found null',
-          'Expected value to be of type number, but found null instead',
-          'WebGL',
-          'geometry buffer',
-          'atlas layer',
-          'Geometry exceeds allowed extent',
-          'reduce your vector tile buffer size',
-          'symbol layout',
-          'performSymbolLayout',
-          'un.evaluate',
-          'hn.evaluate',
-          'Ni.evaluate',
-          'Ri.evaluate'
-        ];
-        
-        // Comprehensive error event suppression
-        window.addEventListener('error', (event) => {
-          const message = event.message || '';
-          if (suppressedErrors.some(pattern => message.toLowerCase().includes(pattern.toLowerCase()))) {
-            // console.log('??? MapView: ?? Suppressed rendering error:', message);
-            event.preventDefault();
-            event.stopPropagation();
-            return false;
-          }
-        });
-
-        // Enhanced console error suppression
-        console.error = function(...args) {
-          const message = args.join(' ');
-          if (suppressedErrors.some(pattern => message.toLowerCase().includes(pattern.toLowerCase()))) {
-            // Silently suppress these errors - they don't affect functionality
-            return;
-          }
-          originalConsoleError.apply(console, args);
-        };
-
-        // Add unhandled promise rejection handler for Azure Maps rendering errors
-        window.addEventListener('unhandledrejection', (event) => {
-          const reason = event.reason?.message || event.reason || '';
-          if (suppressedErrors.some(pattern => reason.toLowerCase().includes(pattern.toLowerCase()))) {
-            // console.log('??? MapView: ?? Suppressed promise rejection:', reason);
-            event.preventDefault();
-            return false;
-          }
-        });
-
-        // Add style data loading event to ensure map is fully ready
-        // FIX: Re-add active tile layers after style reloads (Azure Maps wipes user layers on style change)
-        newMap.events.add('styledata', (e: any) => {
-          if (e.dataType === 'style') {
-            console.log('MapView: Azure Maps style loaded successfully');
-            
-            // RE-ADD TILE LAYERS that were wiped by the style reload
-            const storedLayers = activeTileLayersRef.current;
-            if (storedLayers.length > 0) {
-              console.log(`MapView: [STYLE-FIX] Re-adding ${storedLayers.length} tile layers after style reload`);
-              try {
-                // Check which layers are still valid (not already on the map)
-                const existingLayerIds = new Set(
-                  newMap.layers.getLayers().map((l: any) => l.getId?.() || '')
-                );
-                const layersToReAdd = storedLayers.filter(
-                  (l: any) => !existingLayerIds.has(l.getId?.() || '')
-                );
-                if (layersToReAdd.length > 0) {
-                  newMap.layers.add(layersToReAdd, 'labels');
-                  console.log(`MapView: [STYLE-FIX] Successfully re-added ${layersToReAdd.length} tile layers`);
-                } else {
-                  console.log('MapView: [STYLE-FIX] All tile layers still present, no re-add needed');
-                }
-              } catch (reAddError) {
-                console.warn('MapView: [STYLE-FIX] Error re-adding layers, will retry individually:', reAddError);
-                // Fallback: add one by one
-                storedLayers.forEach((layer: any) => {
-                  try {
-                    newMap.layers.add(layer, 'labels');
-                  } catch (e) {
-                    try { newMap.layers.add(layer); } catch (_) { /* layer may be invalid */ }
-                  }
-                });
-              }
-            }
-
-            // CSS-BASED TEXT ENHANCEMENT (NON-INTRUSIVE)
-            // Use CSS only - no layer manipulation to avoid Azure Maps rendering errors
-            try {
-              console.log('[ART] MapView: Applying CSS-based text enhancement for satellite overlay visibility');
-              
-              const mapContainer = newMap.getCanvasContainer();
-              if (mapContainer) {
-                // Add CSS styling for enhanced text visibility
-                mapContainer.style.setProperty('--map-text-color', '#FFFFFF');
-                mapContainer.style.setProperty('--map-text-stroke', '#000000');
-                mapContainer.style.setProperty('--map-text-stroke-width', '2px');
-                mapContainer.style.filter = 'contrast(1.1) brightness(1.05)';
-                mapContainer.classList.add('enhanced-text-visibility');
-                console.log('MapView: Applied CSS-based text enhancement');
-              }
-            } catch (styleError) {
-              console.warn('MapView: Could not enhance text styling:', styleError);
-            }
-          }
-        });
-
-        // Map is fully ready - no additional text enhancement needed
-        newMap.events.add('ready', () => {
-          console.log('MapView: Azure Maps fully ready');
-        });
-
-
-        // Add token error handling
-        newMap.events.add('tokenacquired', () => {
-          console.log('??? MapView: ? Azure Maps token acquired successfully');
-        });
-
-        newMap.events.add('tokenrenewalfailed', (error: any) => {
-          console.error('??? MapView: ? Azure Maps token renewal failed:', error);
-          setMapError('Azure Maps token renewal failed - subscription may be expired');
-        });
-
-        setMap(newMap);
-      } catch (error) {
-        console.error('??? MapView: Error initializing Azure Maps:', error);
-        setMapError(`Failed to initialize Azure Maps: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        // Initialize fallback map
-        initializeFallbackMap();
-      }
-    } else {
-      console.error('??? MapView: Azure Maps SDK not loaded - attempting retry in 2 seconds');
-      console.log('??? MapView: Will retry Azure Maps initialization...');
-
-      // Try waiting for the SDK to load asynchronously
-      const retryTimeout = setTimeout(() => {
-        console.log('??? MapView: Retry attempt - checking Azure Maps SDK again:', {
-          windowExists: typeof window !== 'undefined',
-          atlasExists: typeof window !== 'undefined' && !!window.atlas,
-          atlasType: typeof window !== 'undefined' ? typeof window.atlas : 'N/A',
-          scriptsInDOM: Array.from(document.scripts).filter(s => s.src.includes('atlas')).length
-        });
-
-        if (typeof window !== 'undefined' && window.atlas) {
-          console.log('??? MapView: Azure Maps SDK now available - initializing...');
-          // Trigger re-render to try initialization again
-          setMapError(null);
-        } else {
-          console.error('??? MapView: Azure Maps SDK still not available after retry - using fallback');
-          setMapError('Azure Maps SDK failed to load - check network connectivity');
-          initializeFallbackMap();
-        }
-      }, 2000);
-
-      // Clean up timeout on unmount
-      return () => clearTimeout(retryTimeout);
-    }
-  }, [mapsConfig]); // Remove 'map' from dependencies to prevent infinite loops
 
   // Update map based on selected dataset
   useEffect(() => {
@@ -2711,24 +2150,11 @@ const MapView: React.FC<MapViewProps> = ({
     };
 
     // Add zoom change listener
-    if (mapProvider === 'azure' && map.events) {
-      map.events.add('zoomend', handleZoomChange);
-      map.events.add('moveend', handleZoomChange);
-      
-      return () => {
-        // Clean up timeout on unmount
-        if (expansionTimeoutId) {
-          clearTimeout(expansionTimeoutId);
-        }
-        map.events.remove('zoomend', handleZoomChange);
-        map.events.remove('moveend', handleZoomChange);
-      };
-    } else if (mapProvider === 'leaflet' && map.on) {
+    if (map.on) {
       map.on('zoomend', handleZoomChange);
       map.on('moveend', handleZoomChange);
-      
+
       return () => {
-        // Clean up timeout on unmount
         if (expansionTimeoutId) {
           clearTimeout(expansionTimeoutId);
         }
@@ -2743,23 +2169,12 @@ const MapView: React.FC<MapViewProps> = ({
     if (!map || !mapLoaded) return;
 
     const updateZoomLevel = () => {
-      let zoom = 4;
-      if (mapProvider === 'azure') {
-        zoom = Math.round(map.getCamera().zoom);
-      } else if (mapProvider === 'leaflet') {
-        zoom = Math.round(map.getZoom());
-      }
-      setCurrentZoomLevel(zoom);
+      setCurrentZoomLevel(Math.round(map.getZoom()));
     };
 
-    // Initial zoom level
     updateZoomLevel();
 
-    // Listen for zoom changes
-    if (mapProvider === 'azure' && map.events) {
-      map.events.add('zoomend', updateZoomLevel);
-      return () => map.events.remove('zoomend', updateZoomLevel);
-    } else if (mapProvider === 'leaflet' && map.on) {
+    if (map.on) {
       map.on('zoomend', updateZoomLevel);
       return () => map.off('zoomend', updateZoomLevel);
     }
@@ -2798,19 +2213,14 @@ const MapView: React.FC<MapViewProps> = ({
     }
 
     // Remove existing terrain pin if present
-    if (terrainAnalysisPin.marker) {
-      if (mapProvider === 'leaflet' && window.L) {
-        map.removeLayer(terrainAnalysisPin.marker);
-      } else if (mapProvider === 'azure' && window.atlas) {
-        map.markers.remove(terrainAnalysisPin.marker);
-      }
+    if (terrainAnalysisPin.marker && window.L) {
+      map.removeLayer(terrainAnalysisPin.marker);
     }
 
     // Create modern pin marker
     let newMarker: any = null;
     try {
-      if (mapProvider === 'leaflet' && window.L) {
-        // Modern SVG pin for Leaflet
+      if (window.L) {
         const pinIcon = window.L.divIcon({
           html: `
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
@@ -2822,27 +2232,11 @@ const MapView: React.FC<MapViewProps> = ({
           iconSize: [32, 32],
           iconAnchor: [16, 32]
         });
-        
+
         newMarker = window.L.marker([lat, lng], {
           icon: pinIcon,
           draggable: false
         }).addTo(map);
-        
-      } else if (mapProvider === 'azure' && window.atlas) {
-        // Modern pin for Azure Maps
-        newMarker = new window.atlas.HtmlMarker({
-          position: [lng, lat],
-          htmlContent: `
-            <div style="width: 32px; height: 32px;">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="#3B82F6"></path>
-                <circle cx="12" cy="10" r="3" fill="white"></circle>
-              </svg>
-            </div>
-          `,
-          anchor: 'bottom'
-        });
-        map.markers.add(newMarker);
       }
 
       // Update terrain analysis pin state
@@ -2860,26 +2254,14 @@ const MapView: React.FC<MapViewProps> = ({
       const MIN_ZOOM_FOR_TILES = 10; // Good zoom for terrain analysis
       let currentZoom = 0;
       
-      if (mapProvider === 'leaflet') {
-        currentZoom = map.getZoom();
-      } else if (mapProvider === 'azure') {
-        currentZoom = map.getCamera().zoom;
-      }
-      
+      currentZoom = map.getZoom();
+
       console.log(`[SNAP] MapView: Current zoom: ${currentZoom}, min for tiles: 6, recommended: ${MIN_ZOOM_FOR_TILES}`);
-      
+
       if (currentZoom < MIN_ZOOM_FOR_TILES) {
         console.log(`[SNAP] MapView: Zooming in from ${currentZoom} to ${MIN_ZOOM_FOR_TILES} for better satellite imagery`);
-        
-        if (mapProvider === 'leaflet') {
-          map.setView([lat, lng], MIN_ZOOM_FOR_TILES, { animate: false });
-        } else if (mapProvider === 'azure') {
-          map.setCamera({
-            center: [lng, lat],
-            zoom: MIN_ZOOM_FOR_TILES
-          });
-        }
-        
+        map.setView([lat, lng], MIN_ZOOM_FOR_TILES, { animate: false });
+
         // Wait for tiles to load at new zoom level
         console.log('[SNAP] MapView: Waiting for tiles to load at new zoom...');
         await new Promise(resolve => setTimeout(resolve, 2500));
@@ -2936,25 +2318,14 @@ const MapView: React.FC<MapViewProps> = ({
       let bounds: any = null;
       let zoomLevel: number = 0;
       
-      if (mapProvider === 'leaflet') {
-        const leafletBounds = map.getBounds();
-        bounds = {
-          north: leafletBounds.getNorth(),
-          south: leafletBounds.getSouth(),
-          east: leafletBounds.getEast(),
-          west: leafletBounds.getWest()
-        };
-        zoomLevel = map.getZoom();
-      } else if (mapProvider === 'azure') {
-        const azureBounds = map.getCamera().bounds;
-        bounds = {
-          north: azureBounds[3],
-          south: azureBounds[1],
-          east: azureBounds[2],
-          west: azureBounds[0]
-        };
-        zoomLevel = map.getCamera().zoom;
-      }
+      const leafletBounds = map.getBounds();
+      bounds = {
+        north: leafletBounds.getNorth(),
+        south: leafletBounds.getSouth(),
+        east: leafletBounds.getEast(),
+        west: leafletBounds.getWest()
+      };
+      zoomLevel = map.getZoom();
 
       console.log('MapView: Sending terrain analysis request to backend...');
       console.log(`[PIN] Pin location: (${lat}, ${lng})`);
@@ -2992,21 +2363,11 @@ const MapView: React.FC<MapViewProps> = ({
     if (!map || !mapLoaded) return;
 
     const handleMapClick = (e: any) => {
+      const lat: number = e.latlng.lat;
+      const lng: number = e.latlng.lng;
+
       // Check if we're in terrain analysis mode
       if (terrainAnalysisMode) {
-        let lat: number, lng: number;
-
-        if (mapProvider === 'azure') {
-          const position = e.position;
-          lat = position[1];
-          lng = position[0];
-        } else if (mapProvider === 'leaflet') {
-          lat = e.latlng.lat;
-          lng = e.latlng.lng;
-        } else {
-          return;
-        }
-
         handleTerrainAnalysisClick(lat, lng);
         return;
       }
@@ -3014,40 +2375,15 @@ const MapView: React.FC<MapViewProps> = ({
       // Allow pin mode if either pinMode is true OR a module is selected
       if (!pinMode && !selectedModule) return;
 
-      let lat: number, lng: number;
-
-      if (mapProvider === 'azure') {
-        // Azure Maps click event
-        const position = e.position;
-        lat = position[1];
-        lng = position[0];
-      } else if (mapProvider === 'leaflet') {
-        // Leaflet click event
-        lat = e.latlng.lat;
-        lng = e.latlng.lng;
-      } else {
-        return;
-      }
-
       handleMapClickForPin(lat, lng);
     };
 
     // Add click listener
-    if (mapProvider === 'azure' && map.events) {
-      map.events.add('click', handleMapClick);
-      console.log('?? MapView: Attached Azure Maps click listener for pin placement');
-
-      return () => {
-        map.events.remove('click', handleMapClick);
-        console.log('?? MapView: Removed Azure Maps click listener');
-      };
-    } else if (mapProvider === 'leaflet' && map.on) {
+    if (map.on) {
       map.on('click', handleMapClick);
-      console.log('?? MapView: Attached Leaflet click listener for pin placement');
 
       return () => {
         map.off('click', handleMapClick);
-        console.log('?? MapView: Removed Leaflet click listener');
       };
     }
   }, [map, mapLoaded, mapProvider, pinMode, selectedModule, pinState.marker, terrainAnalysisMode]);
@@ -3094,8 +2430,6 @@ const MapView: React.FC<MapViewProps> = ({
   // FIX: Track the last successfully rendered satellite data to prevent duplicate renders
   const lastRenderedDataRef = useRef<string | null>(null);
 
-  // FIX: Store active tile layers so they can be re-added after Azure Maps style reloads.
-  // Azure Maps clears all user-added layers when `styledata` fires (style reload).
   // This ref lets the styledata handler re-add the layers that were wiped.
   const activeTileLayersRef = useRef<any[]>([]);
   
@@ -3170,9 +2504,8 @@ const MapView: React.FC<MapViewProps> = ({
       return;
     }
 
-    // Allow rendering even if mapLoaded is false for Azure Maps, as it might be ready
-    if (mapProvider === 'leaflet' && !mapLoaded) {
-      console.log('??? MapView: Skipping satellite data rendering - Leaflet map not loaded yet');
+    if (!mapLoaded) {
+      console.log('??? MapView: Skipping satellite data rendering - map not loaded yet');
       return;
     }
 
@@ -3207,1189 +2540,6 @@ const MapView: React.FC<MapViewProps> = ({
     }
 
     try {
-      if (mapProvider === 'azure') {
-        // Azure Maps implementation
-        
-        // ??? MULTI-TILE RENDERING LOGIC (ALL COLLECTIONS)
-        // Check if we have multiple tile URLs - supports DEM, optical, SAR, etc.
-        if (satelliteData.all_tile_urls && satelliteData.all_tile_urls.length > 1 && window.atlas) {
-          const collection = getCollection(satelliteData);
-          const tileCount = satelliteData.all_tile_urls.length;
-          
-          logRenderingStart(collection, true, tileCount);
-          startPerformanceTracking('multi-tile-rendering');
-          
-          // ??? SET RENDERING FLAG to prevent useEffect from re-triggering mid-render
-          isRenderingRef.current = true;
-          
-          // Clear existing layers ONCE before starting multi-tile rendering
-          if (currentLayer) {
-            console.log('??? MapView: Removing existing Azure Maps layer');
-            map.layers.remove(currentLayer);
-            setCurrentLayer(null);
-          }
-
-          // Clear the style-recovery ref since we're about to add new layers
-          activeTileLayersRef.current = [];
-
-          const allLayers = map.layers.getLayers();
-          allLayers.forEach((layer: any) => {
-            if (layer.getId && (layer.getId().includes('satellite-tiles') || layer.getId().includes('planetary-computer'))) {
-              console.log('??? MapView: Removing conflicting layer:', layer.getId());
-              map.layers.remove(layer);
-            }
-          });
-          console.log('??? MapView: Cleared existing layers, starting multi-tile rendering');
-          
-          // Detect data type for specialized rendering
-          const isElevation = isElevationData(satelliteData);
-          
-          // ?? SUPPRESS SYMBOL LAYERS FOR DEM VISUALIZATION (elevation data only)
-          if (isElevation && map && window.atlas) {
-              console.log('?? MapView: Suppressing symbol layers for DEM visualization');
-              
-              try {
-                const allLayers = map.layers.getLayers();
-                let suppressedCount = 0;
-                
-                allLayers.forEach((layer: any) => {
-                  const layerType = layer.getType ? layer.getType() : null;
-                  const layerId = layer.getId ? layer.getId() : '';
-                  const isSymbolOrLabel = layerId.includes('label') || 
-                                         layerId.includes('symbol') || 
-                                         layerId.includes('text') ||
-                                         layerId.includes('icon') ||
-                                         layerId.includes('place') ||
-                                         layerId.includes('road') ||
-                                         layerType === 'SymbolLayer';
-                  
-                  if (isSymbolOrLabel) {
-                    try {
-                      // Skip built-in base map layers that don't support setOptions()
-                      if (typeof layer.setOptions !== 'function') {
-                        // Base map layers (roads, labels) can't be individually toggled
-                        return;
-                      }
-                      const layerOptions = layer.getOptions ? layer.getOptions() : {};
-                      layer.setOptions({ ...layerOptions, visible: false });
-                      suppressedCount++;
-                    } catch (err) {
-                      console.warn(`MapView: Could not suppress layer ${layerId}:`, err);
-                    }
-                  }
-                });
-                
-              logSymbolLayerSuppression(suppressedCount);
-            } catch (error) {
-              logWarning('Error suppressing symbol layers', { error });
-            }
-          }
-          
-          // Wrap in async IIFE for tile processing
-          (async () => {
-            const tileLayers: any[] = [];
-            let successCount = 0;
-            let errorCount = 0;
-
-            // Filter out tiles with bounds entirely outside WebMercator range (±85.05° lat)
-            // Tiles at extreme latitudes (e.g., S90) have no valid WebMercator representation
-            // and cause Azure Maps "Expected value to be of type number, but found null" errors
-            const WEB_MERCATOR_LAT_LIMIT = 85.05;
-            const validTileUrls = satelliteData.all_tile_urls!.filter((tileInfo: any) => {
-              if (tileInfo.bbox && Array.isArray(tileInfo.bbox) && tileInfo.bbox.length === 4) {
-                const [, tileSouth, , tileNorth] = tileInfo.bbox;
-                // Reject tiles entirely outside WebMercator range
-                if (tileSouth > WEB_MERCATOR_LAT_LIMIT || tileNorth < -WEB_MERCATOR_LAT_LIMIT) {
-                  console.warn(`MapView: Skipping tile ${tileInfo.item_id} - bounds outside WebMercator range: [${tileInfo.bbox}]`);
-                  return false;
-                }
-                // Reject tiles that become degenerate after clamping (south=north)
-                const clampedS = Math.max(-WEB_MERCATOR_LAT_LIMIT, tileSouth);
-                const clampedN = Math.min(WEB_MERCATOR_LAT_LIMIT, tileNorth);
-                if (clampedS >= clampedN) {
-                  console.warn(`MapView: Skipping tile ${tileInfo.item_id} - degenerate after WebMercator clamping: south=${clampedS}, north=${clampedN}`);
-                  return false;
-                }
-              }
-              return true;
-            });
-            
-            if (validTileUrls.length < satelliteData.all_tile_urls!.length) {
-              console.warn(`MapView: Filtered ${satelliteData.all_tile_urls!.length - validTileUrls.length} tiles outside WebMercator range`);
-            }
-            
-            if (validTileUrls.length === 0) {
-              console.error('MapView: All tiles filtered out - none within WebMercator range');
-              isRenderingRef.current = false;
-              return;
-            }
-
-            // ??? PARALLEL PROCESSING: Fetch all TileJSON configs simultaneously
-            console.log(`??? MapView: Fetching ${validTileUrls.length} TileJSON configs in parallel...`);
-            
-            const tilePromises = validTileUrls.map(async (tileInfo: any) => {
-              try {
-                // Fetch and validate TileJSON using utility
-                const result = await fetchAndSignTileJSON(tileInfo.tilejson_url, { collection });
-                
-                if (!result.success || !result.tileTemplate) {
-                  logTileJsonFetch(tileInfo.tilejson_url, false, undefined, result.error);
-                  return { success: false, tileInfo, error: result.error };
-                }
-
-                logTileJsonFetch(tileInfo.tilejson_url, true, result.tileTemplate);
-
-                // Create tile layer using factory
-                const tileLayer = createTileLayer(
-                  {
-                    tileUrl: result.tileTemplate,
-                    collection,
-                    bounds: tileInfo.bbox,
-                    tilejson: result.tilejson,
-                    isElevation
-                  },
-                  window.atlas
-                );
-
-                logTileLayerCreated(tileInfo.item_id, collection, {
-                  minZoom: result.tilejson?.minzoom || 6,
-                  maxZoom: result.tilejson?.maxzoom || 18,
-                  opacity: isElevation ? 0.5 : 0.85,
-                  bounds: tileInfo.bbox
-                });
-
-                return { success: true, tileLayer, tileInfo };
-              } catch (error) {
-                logError(`processing tile ${tileInfo.item_id}`, error);
-                return { success: false, tileInfo, error };
-              }
-            });
-
-            // Wait for all tiles to be processed
-            const results = await Promise.all(tilePromises);
-            
-            // COLLECT all successful layers first, then add in ONE batch
-            console.log('MapView: Collecting all tile layers for batch addition...');
-            const successfulLayers: any[] = [];
-            
-            results.forEach(result => {
-              if (result.success && result.tileLayer) {
-                successfulLayers.push(result.tileLayer);
-                tileLayers.push(result.tileLayer);
-                successCount++;
-              } else {
-                errorCount++;
-              }
-            });
-            
-            // ADD ALL LAYERS IN ONE BATCH - prevents flickering!
-            if (successfulLayers.length > 0) {
-              console.log(`MapView: Adding ${successfulLayers.length} tile layers in ONE batch below labels...`);
-              try {
-                // Azure Maps supports adding array of layers at once
-                map.layers.add(successfulLayers, 'labels');
-                console.log(`MapView: Successfully added ${successfulLayers.length} layers in single batch - no flickering!`);
-              } catch (batchError) {
-                console.warn('MapView: Batch add failed, falling back to individual adds:', batchError);
-                // Fallback: add one by one if batch fails
-                successfulLayers.forEach(layer => {
-                  try {
-                    map.layers.add(layer, 'labels');
-                  } catch (e) {
-                    map.layers.add(layer);
-                  }
-                });
-              }
-              // FIX: Store layers in ref so styledata handler can re-add them after style reload
-              activeTileLayersRef.current = [...successfulLayers];
-              console.log(`MapView: [STYLE-FIX] Stored ${successfulLayers.length} layers for style-reload recovery`);
-            }
-            
-            console.log(`MapView: Added ${successCount} tile layers in one batch - no iterative rendering!`);
-
-            // Complete rendering
-            logRenderingComplete(collection, true, successCount, errorCount);
-            endPerformanceTracking('multi-tile-rendering');
-            
-            // CLEAR RENDERING FLAG now that all tiles are added
-            isRenderingRef.current = false;
-            
-            // FIX: Mark this satellite data as successfully rendered to prevent duplicate renders
-            lastRenderedDataRef.current = getSatelliteDataSignature(satelliteData);
-            console.log('MapView: Marked data as rendered, signature:', lastRenderedDataRef.current);
-            
-            if (successCount > 0) {
-              setCurrentLayer(tileLayers[0]);
-              
-              // CRITICAL FIX: Force minimum zoom level for MODIS fire data
-              if (collection.toLowerCase().includes('modis') && satelliteData.bbox) {
-                const [mWest, mSouth, mEast, mNorth] = satelliteData.bbox;
-                
-                // Clamp to WebMercator limits before passing to Azure Maps
-                const WM_LAT = 85.05;
-                const safeMSouth = Math.max(-WM_LAT, Math.min(WM_LAT, mSouth));
-                const safeMNorth = Math.max(-WM_LAT, Math.min(WM_LAT, mNorth));
-                
-                if (safeMSouth < safeMNorth) {
-                  console.log(`MapView: [MODIS FIX] Fitting bounds with minimum zoom 8 for tile availability`);
-                  map.setCamera({
-                    bounds: [mWest, safeMSouth, mEast, safeMNorth],
-                    padding: 50,
-                    minZoom: 8,
-                    duration: 1000
-                  });
-                  console.log(`MapView: [MODIS FIX] Fitted bounds with minZoom=8 (item tiles 404 below zoom 8)`);
-                }
-              } else if (satelliteData.bbox) {
-                // Normal bbox update for non-MODIS
-                updateMapView(satelliteData.bbox);
-              }
-              
-              console.log(`? MapView: Multi-tile rendering successful - map should now show ${successCount} tiles with seamless coverage`);
-            } else {
-              logError('multi-tile rendering', 'All tile rendering attempts failed');
-            }
-          })();
-          
-          return; // Exit early - multi-tile rendering is being handled asynchronously
-        }
-        // Single-tile rendering path
-        // Clear existing layers before adding new single tile
-        if (currentLayer) {
-          console.log('??? MapView: Removing existing Azure Maps layer (single-tile path)');
-          map.layers.remove(currentLayer);
-          setCurrentLayer(null);
-        }
-
-        // Clear the style-recovery ref since we're about to add new layers
-        activeTileLayersRef.current = [];
-
-        const allLayers = map.layers.getLayers();
-        allLayers.forEach((layer: any) => {
-          if (layer.getId && (layer.getId().includes('satellite-tiles') || layer.getId().includes('planetary-computer'))) {
-            console.log('??? MapView: Removing conflicting layer (single-tile path):', layer.getId());
-            map.layers.remove(layer);
-          }
-        });
-
-        // If we have a tile URL, add it as a tile layer
-        if (satelliteData.tile_url && window.atlas) {
-          console.log('??? MapView: Adding Azure Maps tile layer:', satelliteData.tile_url);
-
-          // Ensure map is ready before adding layers
-          const addTileLayer = async () => {
-            try {
-              // Check if map is properly initialized
-              if (!map) {
-                console.log('??? MapView: No map instance, skipping tile layer...');
-                return;
-              }
-
-              console.log('??? MapView: Map available, adding tile layer...');
-              console.log('??? MapView: Satellite data bbox:', satelliteData.bbox);
-              console.log('??? MapView: Tile URL template:', satelliteData.tile_url);
-
-              // === MICROSOFT PLANETARY COMPUTER APPROACH ===
-              // Based on MPC's setupRasterTileLayer function, we should use TileJSON URLs directly
-              // instead of extracting tile templates. This lets Azure Maps handle coordinate calculations.
-              console.log('??? MapView: [MPC-APPROACH] Using Microsoft Planetary Computer approach with TileJSON URL');
-
-              const tileUrl = satelliteData.tile_url;
-              const bounds = satelliteData.bbox;
-
-              // Safety check for tileUrl
-              if (!tileUrl) {
-                console.log('??? MapView: [ERROR] No tile URL available');
-                return;
-              }
-
-              // Check if this is a TileJSON URL or tile template
-              const isTileTemplate = tileUrl.includes('{z}') && tileUrl.includes('{x}') && tileUrl.includes('{y}');
-
-              console.log('??? MapView: [MPC-APPROACH] URL analysis:', {
-                url: tileUrl.substring(0, 150) + '...',
-                isTileTemplate: isTileTemplate,
-                approach: isTileTemplate ? 'Authenticated tile template (MPC approach)' : 'TileJSON URL (needs processing)'
-              });
-
-              // Check if this is a Planetary Computer tilejson URL
-              const isNativeTiles = tileUrl.includes('/api/data/v1/item/tilejson.json');
-
-              // Add tile_scale=2 for high-resolution tiles (512x512 instead of 256x256)
-              // This applies to BOTH tilejson.json URLs AND direct tile URLs
-              // When tile_scale=2 is added to tilejson.json, the returned tile template will have @2x
-              let enhancedTileUrl = tileUrl;
-              if (!tileUrl.includes('tile_scale=')) {
-                const separator = tileUrl.includes('?') ? '&' : '?';
-                enhancedTileUrl = `${tileUrl}${separator}tile_scale=2`;
-                console.log('Added tile_scale=2 for high-resolution tiles (512x512)');
-              } else {
-                console.log('ℹ️ tile_scale parameter already present');
-              }
-
-              let tileLayerConfig: any;
-
-              // Detect elevation/DEM data for special opacity handling
-              const isElevationData = satelliteData.items && satelliteData.items.length > 0 && (
-                satelliteData.items[0].collection.includes('cop-dem') ||
-                satelliteData.items[0].collection.includes('nasadem') ||
-                satelliteData.items[0].collection.includes('alos-dem') ||
-                satelliteData.items[0].collection.includes('dem') ||
-                satelliteData.items[0].collection.toLowerCase().includes('elevation')
-              );
-
-              // Detect thermal infrared and fire data for special rendering
-              // ?? FIX: Exclude HLS collections from thermal detection (HLS is optical RGB, not thermal)
-              // ?? FIX: Exclude elevation/DEM from thermal detection (they use colormap but aren't thermal)
-              const collection = satelliteData.items[0]?.collection || '';
-              const isHLS = collection.includes('hls') || collection.includes('HLS');
-              const isThermalData = !isHLS && !isElevationData && (tileUrl.includes('assets=lwir') || 
-                                   tileUrl.includes('assets=lwir11') || 
-                                   tileUrl.includes('assets=tir'));
-              
-              // Detect MODIS fire data for enhanced visibility
-              const isFireData = (satelliteData.items[0]?.collection?.includes('modis-14A') || 
-                                satelliteData.items[0]?.collection?.includes('modis-14A1') ||
-                                satelliteData.items[0]?.collection?.includes('modis-14A2')) && 
-                               (tileUrl.includes('FireMask') || tileUrl.includes('MaxFRP') || 
-                                tileUrl.includes('rendered_preview') || tileUrl.includes('hot') ||
-                                tileUrl.includes('plasma') || isThermalMode);
-
-              // Set opacity based on data type for optimal visibility
-              // MAXIMUM OPACITY for vivid, clear satellite imagery
-              // With 'satellite' style (no labels), we can use 100% opacity without text interference
-              let baseOpacity = 1.0; // FULL opacity for crystal-clear satellite imagery
-              if (isElevationData) {
-                baseOpacity = 0.75; // Moderate opacity for elevation overlays to see terrain
-              } else if (isFireData) {
-                baseOpacity = 1.0; // FULL opacity for critical fire detection data
-              } else if (isThermalData) {
-                baseOpacity = 1.0; // FULL opacity for thermal infrared analysis
-              } else if (isHLS) {
-                baseOpacity = 1.0; // Full opacity for HLS optical RGB imagery
-              }
-              
-              console.log(`MapView: Using opacity ${baseOpacity} for ${isElevationData ? 'elevation' : isFireData ? 'fire' : isThermalData ? 'thermal' : isHLS ? 'HLS' : 'standard'} data (collection: ${satelliteData.items?.[0]?.collection})`);
-
-              if (isThermalData) {
-                console.log('?? MapView: [THERMAL] Detected thermal infrared data - applying thermal-specific layer configuration');
-              }
-              
-              if (isHLS) {
-                console.log('?? MapView: [HLS] Detected HLS optical RGB imagery - using full opacity');
-              }
-              
-              if (isFireData) {
-                console.log('?? MapView: Detected MODIS fire data - applying enhanced fire visualization');
-              }
-
-              if (isTileTemplate) {
-                // === MICROSOFT'S APPROACH: Use authenticated tile template directly ===
-                console.log('??? MapView: [MPC-APPROACH] Using authenticated tile template directly (Microsoft approach)');
-
-                // ?? USE RENDERING CONFIG: Get collection-specific settings
-                const currentCollection = satelliteData.items[0]?.collection || '';
-                const renderingConfig = getRenderingConfig(currentCollection);
-                
-                console.log(`??? MapView: [RENDERING-CONFIG] Using zoom range ${renderingConfig.minZoom}-${renderingConfig.maxZoom} for ${currentCollection}`);
-
-                // Enhanced bounds validation to prevent geometry extent errors
-                let tileBounds = undefined;
-                if (bounds && Array.isArray(bounds) && bounds.length === 4) {
-                  const [west, south, east, north] = bounds;
-                  
-                  // Validate each coordinate is a valid number
-                  const isValidBound = (coord: any) => {
-                    return coord !== null && coord !== undefined && 
-                           typeof coord === 'number' && 
-                           !isNaN(coord) && isFinite(coord) &&
-                           coord >= -180 && coord <= 180; // Basic longitude/latitude range check
-                  };
-                  
-                  if (isValidBound(west) && isValidBound(south) && 
-                      isValidBound(east) && isValidBound(north) &&
-                      west < east && south < north) {
-                    
-                    // Clamp bounds to prevent geometry extent issues
-                    const clampedWest = Math.max(-180, Math.min(180, west));
-                    const clampedSouth = Math.max(-85, Math.min(85, south));
-                    const clampedEast = Math.max(-180, Math.min(180, east));
-                    const clampedNorth = Math.max(-85, Math.min(85, north));
-                    
-                    tileBounds = [clampedWest, clampedSouth, clampedEast, clampedNorth];
-                    console.log('??? MapView: Using clamped bounds to prevent geometry errors:', tileBounds);
-                  } else {
-                    console.warn('??? MapView: ?? Invalid or malformed bounds detected, not setting tile bounds:', bounds);
-                  }
-                }
-
-                // Add tile_scale=2 for high-resolution tiles (512x512 instead of 256x256)
-                const highResUrl = tileUrl.includes('tile_scale=') ? tileUrl : 
-                  `${tileUrl}${tileUrl.includes('?') ? '&' : '?'}tile_scale=2`;
-
-                tileLayerConfig = {
-                  tileUrl: highResUrl, // Use high-resolution tile URL for crisp images
-                  opacity: renderingConfig.opacity, // Use config opacity
-                  tileSize: renderingConfig.tileSize, // Use config tile size
-                  bounds: tileBounds,
-                  minSourceZoom: renderingConfig.minZoom,  // Use config min zoom
-                  maxSourceZoom: renderingConfig.maxZoom,  // Use config max zoom
-                  tileLoadRadius: renderingConfig.renderingHints?.tileLoadRadius ?? 2,
-                  // Enhanced rendering for better text visibility and stability
-                  blend: 'normal', // Normal blending to allow text to show through
-                  // Improved fade settings for seamless tile transitions
-                  fadeDuration: renderingConfig.renderingHints?.fadeEnabled ? 500 : 0,
-                  rasterOpacity: renderingConfig.opacity, // Explicit raster opacity
-                  // Enhanced null value and geometry error handling
-                  buffer: renderingConfig.renderingHints?.buffer ?? 32,
-                  tolerance: 0.05, // Reduced tolerance for better quality
-                  // Improved interpolation for smoother appearance
-                  interpolate: renderingConfig.renderingHints?.interpolate ?? true,
-                  // Thermal-specific configuration
-                  ...(isThermalData && {
-                    noDataValue: -9999, // Use a specific nodata value instead of null
-                    interpolate: false, // Disable interpolation to prevent null value errors
-                    resample: 'bilinear', // Better resampling for thermal data
-                  }),
-                  // General error mitigation and quality improvements
-                  errorTolerance: 0.1, // Stricter error tolerance for better quality
-                  ignoreInvalidTiles: true, // Skip tiles with invalid data instead of failing
-                  maxRetries: 3, // More retries for better reliability
-                  // Additional quality enhancements
-                  antialiasing: true, // Enable antialiasing for smoother edges
-                  smoothTransitions: true // Enable smooth tile transitions
-                };
-              } else {
-                // === ENHANCED FALLBACK: Optimized configuration for radar imagery ===
-                console.log('??? MapView: [ENHANCED FALLBACK] Using optimized radar imagery configuration');
-
-                // ?? GET RENDERING CONFIG for fallback path (MODIS fire collections use this path)
-                const currentCollection = satelliteData.items[0]?.collection || '';
-                const renderingConfig = getRenderingConfig(currentCollection);
-                console.log(`??? MapView: [RENDERING-CONFIG FALLBACK] Using zoom range ${renderingConfig.minZoom}-${renderingConfig.maxZoom} for ${currentCollection}`);
-
-                // Apply same bounds validation as template approach
-                let fallbackBounds = undefined;
-                const bounds = satelliteData.bbox;
-                if (bounds && Array.isArray(bounds) && bounds.length === 4) {
-                  const [west, south, east, north] = bounds;
-                  
-                  // Validate and clamp bounds to prevent geometry errors
-                  const isValidBound = (coord: any) => {
-                    return coord !== null && coord !== undefined && 
-                           typeof coord === 'number' && 
-                           !isNaN(coord) && isFinite(coord) &&
-                           coord >= -180 && coord <= 180;
-                  };
-                  
-                  if (isValidBound(west) && isValidBound(south) && 
-                      isValidBound(east) && isValidBound(north) &&
-                      west < east && south < north) {
-                    
-                    const clampedWest = Math.max(-180, Math.min(180, west));
-                    const clampedSouth = Math.max(-85, Math.min(85, south));
-                    const clampedEast = Math.max(-180, Math.min(180, east));
-                    const clampedNorth = Math.max(-85, Math.min(85, north));
-                    
-                    fallbackBounds = [clampedWest, clampedSouth, clampedEast, clampedNorth];
-                  }
-                }
-
-                // Add tile_scale=2 to tilejson URL for high-resolution tiles
-                // This makes the returned tile template use @2x (512x512) instead of @1x (256x256)
-                const tilejsonUrl = tileUrl.includes('tile_scale=') ? tileUrl : 
-                  `${tileUrl}${tileUrl.includes('?') ? '&' : '?'}tile_scale=2`;
-
-                console.log('MapView: Fetching TileJSON to get tile template:', tilejsonUrl);
-
-                // Fetch TileJSON synchronously (we're in an async context)
-                const tilejsonResult = await fetchAndSignTileJSON(tilejsonUrl, { 
-                  collection: satelliteData.items[0]?.collection 
-                });
-
-                if (!tilejsonResult.success || !tilejsonResult.tileTemplate) {
-                  console.error('MapView: Failed to fetch TileJSON:', tilejsonResult.error);
-                  return; // Cannot render without tile template
-                }
-
-                console.log('MapView: Using tile template from TileJSON:', tilejsonResult.tileTemplate);
-                console.log('MapView: TileJSON zoom range:', tilejsonResult.tilejson?.minzoom, '-', tilejsonResult.tilejson?.maxzoom);
-
-                tileLayerConfig = {
-                  tileUrl: tilejsonResult.tileTemplate, // Use tile template (has {z}/{x}/{y}), not TileJSON URL
-                  opacity: baseOpacity, // Dynamic opacity based on data type for better text visibility
-                  tileSize: 512, // Larger tile size for better quality
-                  bounds: fallbackBounds,
-                  // ?? FIX: Prefer renderingConfig.minZoom for MODIS (config: 3, TileJSON: 10)
-                  // Take the MINIMUM of config and TileJSON to ensure tiles visible at lowest zoom
-                  minSourceZoom: Math.min(renderingConfig.minZoom, tilejsonResult.tilejson?.minzoom || 99),
-                  maxSourceZoom: tilejsonResult.tilejson?.maxzoom || renderingConfig.maxZoom || 22,
-                  // Improve rendering performance and text visibility
-                  fadeIn: true,
-                  fadeDuration: 500, // Longer fade for smoother transitions
-                  tileLoadRadius: 2, // Increased radius for smoother loading
-                  blend: 'normal', // Normal blending mode for better text preservation
-                  // Enhanced error handling and quality - REDUCED BUFFER
-                  buffer: 32, // Significantly reduced buffer to prevent geometry extent errors
-                  tolerance: 0.05, // Better geometry quality
-                  errorTolerance: 0.1, // Stricter error handling
-                  ignoreInvalidTiles: true, // Skip invalid tiles
-                  maxRetries: 3, // More retries for reliability
-                  // Quality enhancements
-                  interpolate: true, // Enable interpolation for smoother appearance
-                  antialiasing: true, // Enable antialiasing
-                  smoothTransitions: true // Enable smooth transitions
-                };
-              }
-
-              console.log('??? MapView: [DEBUG] Creating Azure Maps TileLayer with config:', tileLayerConfig);
-              console.log('??? MapView: [DEBUG] tileUrl type:', typeof tileUrl);
-              console.log('??? MapView: [DEBUG] tileUrl length:', tileUrl?.length);
-              console.log('??? MapView: [DEBUG] tileUrl starts with https:', tileUrl?.startsWith('https://'));
-              console.log('??? MapView: [DEBUG] atlas.layer.TileLayer available:', typeof window.atlas.layer.TileLayer);
-
-              // Enhanced validation function for tile layer coordinates
-              const validateTileCoordinates = (coords: any) => {
-                return coords !== null && coords !== undefined &&
-                       typeof coords === 'number' &&
-                       !isNaN(coords) &&
-                       isFinite(coords) &&
-                       coords >= -180 && coords <= 180;
-              };
-
-              // Comprehensive data sanitization function for map properties
-              const sanitizeMapData = (data: any): any => {
-                // Handle null, undefined, or invalid values
-                if (data === null || data === undefined) return 0; // Return 0 instead of null for numeric contexts
-                
-                // Sanitize numeric values with enhanced null checking
-                if (typeof data === 'number') {
-                  if (isNaN(data) || !isFinite(data) || data === null || data === undefined) {
-                    return 0; // Return 0 for any invalid numeric value
-                  }
-                  return data;
-                }
-                
-                // Handle string numbers that might be null or invalid
-                if (typeof data === 'string') {
-                  const numericValue = parseFloat(data);
-                  if (!isNaN(numericValue) && isFinite(numericValue)) {
-                    return numericValue;
-                  }
-                  return data; // Return string as-is if not numeric
-                }
-                
-                // Sanitize arrays with null filtering
-                if (Array.isArray(data)) {
-                  return data
-                    .map(item => sanitizeMapData(item))
-                    .filter(item => item !== null && item !== undefined);
-                }
-                
-                // Sanitize objects with comprehensive null checking
-                if (typeof data === 'object') {
-                  const sanitized: any = {};
-                  for (const key in data) {
-                    if (data.hasOwnProperty(key)) {
-                      const value = data[key];
-                      
-                      // Skip null/undefined values to prevent "Expected number but found null" errors
-                      if (value === null || value === undefined) {
-                        continue; // Skip this property entirely
-                      }
-                      
-                      const sanitizedValue = sanitizeMapData(value);
-                      if (sanitizedValue !== null && sanitizedValue !== undefined) {
-                        sanitized[key] = sanitizedValue;
-                      }
-                    }
-                  }
-                  return sanitized;
-                }
-                
-                return data;
-              };
-
-              // Create a clean config with only valid Azure Maps TileLayer properties
-              const cleanTileLayerConfig: any = {
-                tileUrl: tileLayerConfig.tileUrl, // Use the high-resolution URL from config
-                opacity: Math.max(0, Math.min(1, tileLayerConfig.opacity || 1.0)), // 100% opacity for crisp imagery (labels rendered on top separately)
-                tileSize: Math.max(256, Math.min(1024, tileLayerConfig.tileSize || 512)), // Reasonable tile size range
-                minSourceZoom: Math.max(0, Math.min(22, tileLayerConfig.minSourceZoom || 0)),
-                maxSourceZoom: Math.max(0, Math.min(22, tileLayerConfig.maxSourceZoom || 22)),
-                // Vector tile buffer configuration to fix extent errors - CRITICAL FIX
-                buffer: 16, // Significantly reduced buffer size to prevent geometry extent errors
-                tolerance: 0.1, // Reduced tolerance for better quality and fewer geometry errors
-                cluster: false, // Disable clustering to reduce geometry complexity
-                lineMetrics: false, // Disable line metrics to reduce processing overhead
-                generateId: false, // Disable auto ID generation to reduce memory usage
-                // Additional geometry optimization
-                simplifyGeometry: true, // Simplify complex geometries to prevent buffer overflow
-                validateGeometry: true, // Enable geometry validation to catch errors early
-                maxGeometryComplexity: 1000 // Limit geometry complexity to prevent buffer issues
-              };
-
-              // Enhanced bounds validation with comprehensive null checking
-              if (tileLayerConfig.bounds && Array.isArray(tileLayerConfig.bounds) && tileLayerConfig.bounds.length === 4) {
-                const [west, south, east, north] = tileLayerConfig.bounds;
-                
-                // Comprehensive validation for each coordinate
-                if (validateTileCoordinates(west) && validateTileCoordinates(south) && 
-                    validateTileCoordinates(east) && validateTileCoordinates(north) &&
-                    west < east && south < north) {
-                  
-                  // Double-clamp coordinates to prevent edge case issues
-                  const safeWest = Math.max(-180, Math.min(179.999, west));
-                  const safeSouth = Math.max(-85, Math.min(84.999, south));
-                  const safeEast = Math.max(-179.999, Math.min(180, east));
-                  const safeNorth = Math.max(-84.999, Math.min(85, north));
-                  
-                  cleanTileLayerConfig.bounds = [safeWest, safeSouth, safeEast, safeNorth];
-                  console.log('??? MapView: [DEBUG] Using validated safe bounds:', cleanTileLayerConfig.bounds);
-                } else {
-                  console.warn('??? MapView: [DEBUG] Rejecting invalid bounds to prevent null coordinate errors:', {
-                    original: tileLayerConfig.bounds,
-                    west: west, south: south, east: east, north: north,
-                    westValid: validateTileCoordinates(west),
-                    southValid: validateTileCoordinates(south),
-                    eastValid: validateTileCoordinates(east),
-                    northValid: validateTileCoordinates(north)
-                  });
-                }
-              }
-
-              console.log('??? MapView: [DEBUG] Clean TileLayer config:', cleanTileLayerConfig);
-
-              let tileLayer: any;
-              try {
-                // Additional safety check before creating tile layer
-                if (!cleanTileLayerConfig.tileUrl || typeof cleanTileLayerConfig.tileUrl !== 'string') {
-                  throw new Error('Invalid tile URL provided');
-                }
-
-                // Generate unique layer ID to prevent conflicts
-                const layerId = `earth-copilot-tiles-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                
-                console.log('??? MapView: [DEBUG] Creating TileLayer with config:', {
-                  tileUrl: cleanTileLayerConfig.tileUrl.substring(0, 100) + '...',
-                  opacity: cleanTileLayerConfig.opacity,
-                  bounds: cleanTileLayerConfig.bounds,
-                  layerId: layerId
-                });
-
-                // Apply data sanitization before creating tile layer
-                const sanitizedConfig = sanitizeMapData(cleanTileLayerConfig);
-                
-                // Additional geometry validation for vector tiles
-                if (sanitizedConfig.bounds) {
-                  const [west, south, east, north] = sanitizedConfig.bounds;
-                  
-                  // Ensure bounds don't exceed maximum extents to prevent buffer overflow
-                  const maxExtent = 20037508.34; // Web Mercator max extent
-                  const boundedWest = Math.max(-maxExtent, Math.min(maxExtent, west));
-                  const boundedSouth = Math.max(-maxExtent, Math.min(maxExtent, south));
-                  const boundedEast = Math.max(-maxExtent, Math.min(maxExtent, east));
-                  const boundedNorth = Math.max(-maxExtent, Math.min(maxExtent, north));
-                  
-                  sanitizedConfig.bounds = [boundedWest, boundedSouth, boundedEast, boundedNorth];
-                }
-
-                tileLayer = new window.atlas.layer.TileLayer(sanitizedConfig, layerId);
-                console.log('??? MapView: [DEBUG] TileLayer instance created successfully with ID:', layerId);
-              } catch (error) {
-                console.error('??? MapView: [ERROR] Failed to create TileLayer:', error);
-                console.error('??? MapView: [ERROR] Config that failed:', cleanTileLayerConfig);
-                return;
-              }
-
-              // DEBUGGING: Add event listeners before adding the layer
-              console.log('??? MapView: [DEBUG] TileLayer instance created with ID:', tileLayer.getId?.());
-
-              // Enhanced source event handler with better null safety
-              const sourceLoadHandler = (e: any) => {
-                try {
-                  // Only log essential information to reduce console noise
-                  if (e && e.type) {
-                    // Filter out excessive bing-aerial/bing-mvt source events that cause console spam
-                    const sourceId = e.source?.id || 'unknown';
-                    const isBingSource = sourceId.includes('bing-') || sourceId === 'bing-aerial' || sourceId === 'bing-mvt';
-                    
-                    if (!isBingSource || e.type === 'error') {
-                      console.log('??? MapView: [DEBUG] Source event:', e.type, 'Object');
-                      if (e.source && e.source.id) {
-                        console.log('??? MapView: [DEBUG] Source ID:', e.source.id);
-                        console.log('??? MapView: [DEBUG] Source type:', e.source.type);
-                      }
-                    }
-
-                    // Handle critical errors with better validation
-                    if (e.type === 'error') {
-                      console.error('??? MapView: [ERROR] Map source error:', {
-                        type: e.type,
-                        sourceId: sourceId,
-                        message: e.error?.message || 'Unknown error'
-                      });
-                    }
-
-                    // Check for failed source loading with enhanced filtering
-                    if (e.type === 'sourcedata' && e.isSourceLoaded === false && e.sourceDataType === 'metadata') {
-                      const isNonCriticalSource = sourceId.includes('bing-') || 
-                                                 sourceId.includes('traffic') || 
-                                                 sourceId.includes('satellite-base') ||
-                                                 sourceId.startsWith('jk') ||
-                                                 sourceId === 'unknown' ||
-                                                 sourceId.includes('basemap');
-                      
-                      if (!isNonCriticalSource) {
-                        console.log('??? MapView: ?? User data source failed to load:', {
-                          sourceId: sourceId,
-                          sourceType: e.source?.type || 'unknown',
-                          type: e.type,
-                          sourceDataType: e.sourceDataType,
-                          isSourceLoaded: e.isSourceLoaded
-                        });
-                      }
-                    }
-                  }
-                } catch (handlerError) {
-                  console.error('??? MapView: [ERROR] Source handler caught error:', handlerError);
-                }
-              };
-
-              // Add error handler for map errors - suppress benign internal errors
-              const errorHandler = (e: any) => {
-                const errorMsg = e?.message || e?.error?.message || String(e);
-                const suppressedPatterns = [
-                  'Expected value to be of type number, but found null',
-                  'Geometry exceeds allowed extent',
-                  'reduce your vector tile buffer size',
-                  'symbol layout',
-                  'WebGL'
-                ];
-                if (suppressedPatterns.some(p => errorMsg.includes(p))) {
-                  // Silently ignore - these are benign Azure Maps SDK internal issues
-                  return;
-                }
-                console.error('??? MapView: [ERROR] Map error event:', e);
-              };
-
-              map.events.add('sourcedata', sourceLoadHandler);
-              map.events.add('sourcedataloading', sourceLoadHandler);
-              map.events.add('error', errorHandler);
-
-              console.log('??? MapView: [DEBUG] Adding tile layer to map...');
-              
-              // CORRECT APPROACH: Insert tile layer BELOW the 'labels' layer
-              // Azure Maps documentation: "To insert a tile layer below the map labels, use: map.layers.add(myTileLayer, 'labels');"
-              // The second parameter specifies the layer ID to insert BELOW
-              // This ensures our satellite tiles appear under the labels, keeping text visible
-              try {
-                console.log('[TAG] MapView: Inserting tile layer below labels for visible text...');
-                map.layers.add(tileLayer, 'labels');
-                console.log('MapView: Tile layer inserted below labels - text should be visible');
-              } catch (insertError) {
-                // Fallback: If 'labels' layer doesn't exist, just add normally
-                console.warn('MapView: Could not insert below labels, adding normally:', insertError);
-                map.layers.add(tileLayer);
-              }
-              
-              // FIX: Store layer in ref so styledata handler can re-add after style reload
-              activeTileLayersRef.current = [tileLayer];
-              console.log('MapView: [STYLE-FIX] Stored single tile layer for style-reload recovery');
-              
-              setCurrentLayer(tileLayer);
-              console.log('MapView: Successfully added Azure Maps tile layer with zoom constraints and label visibility')
-
-              // Zoom to the satellite data area with appropriate zoom level
-              if (satelliteData.bbox && Array.isArray(satelliteData.bbox) && satelliteData.bbox.length === 4) {
-                let [west, south, east, north] = satelliteData.bbox;
-                console.log('??? MapView: Original satellite data bounds:', { west, south, east, north });
-
-                // Check if this is MODIS data for adjusted zoom levels and coordinates
-                const isMODISData = satelliteData.items[0]?.collection?.toLowerCase().includes('modis');
-                
-                // Check if this is HLS or high-resolution optical data
-                // HLS, Sentinel-2, Landsat mosaic tiles only exist at zoom 8+ 
-                // (30m resolution data cannot render meaningful tiles at low zoom levels)
-                const collectionName = satelliteData.items[0]?.collection?.toLowerCase() || '';
-                const isHLSData = collectionName.includes('hls');
-                const isHighResOpticalData = isHLSData || 
-                                             collectionName.includes('sentinel-2') || 
-                                             collectionName.includes('landsat') ||
-                                             collectionName.includes('naip');
-
-                // Extract original query from chat response for dynamic region detection
-                let originalQuery = '';
-                if (lastChatResponse?.translation_metadata?.original_query) {
-                  originalQuery = lastChatResponse.translation_metadata.original_query;
-                } else if (lastChatResponse?.debug?.original_query) {
-                  originalQuery = lastChatResponse.debug.original_query;
-                } else if (lastChatResponse?.response) {
-                  // Fallback: try to extract region info from the response text
-                  originalQuery = lastChatResponse.response;
-                }
-
-                console.log('??? MapView: Original query for region detection:', originalQuery);
-
-                // ENHANCED: Use backend-resolved location bounds instead of hardcoded coordinates
-                const bboxWidth = Math.abs(east - west);
-                const bboxHeight = Math.abs(north - south);
-                const isLargeBbox = bboxWidth > 2 || bboxHeight > 2; // Large area covering multiple cities/regions
-
-                console.log('??? MapView: Bbox analysis:', {
-                  width: bboxWidth.toFixed(2),
-                  height: bboxHeight.toFixed(2),
-                  isLarge: isLargeBbox,
-                  collection: satelliteData.items[0]?.collection
-                });
-
-                // Check if backend provided location-specific bounds in the response metadata
-                let backendResolvedBounds = null;
-                if (lastChatResponse?.data?.search_metadata?.spatial_extent) {
-                  const spatialExtent = lastChatResponse.data.search_metadata.spatial_extent;
-                  if (Array.isArray(spatialExtent) && spatialExtent.length === 4) {
-                    backendResolvedBounds = {
-                      west: spatialExtent[0],
-                      south: spatialExtent[1],
-                      east: spatialExtent[2],
-                      north: spatialExtent[3]
-                    };
-                    console.log('??? MapView: ? Using backend-resolved location bounds:', backendResolvedBounds);
-                  }
-                }
-                
-                // Enhanced California detection for wildfire queries
-                if (!backendResolvedBounds && originalQuery && 
-                    (originalQuery.toLowerCase().includes('california') || 
-                     originalQuery.toLowerCase().includes('ca ') ||
-                     originalQuery.toLowerCase().includes('wildfire') ||
-                     originalQuery.toLowerCase().includes('fire')) && 
-                    isLargeBbox) {
-                  // Use precise California bounds for wildfire queries
-                  backendResolvedBounds = {
-                    west: -124.41516,  // California western boundary
-                    south: 32.53434,   // California southern boundary  
-                    east: -114.13121,  // California eastern boundary
-                    north: 42.00952    // California northern boundary
-                  };
-                  console.log('?? MapView: ? Applied California bounds for wildfire query:', backendResolvedBounds);
-                }
-                
-                // Enhanced California detection for wildfire queries
-                if (!backendResolvedBounds && originalQuery && 
-                    (originalQuery.toLowerCase().includes('california') || 
-                     originalQuery.toLowerCase().includes('ca ') ||
-                     originalQuery.toLowerCase().includes('wildfire') ||
-                     originalQuery.toLowerCase().includes('fire')) && 
-                    isLargeBbox) {
-                  // Use precise California bounds for wildfire queries
-                  backendResolvedBounds = {
-                    west: -124.41516,  // California western boundary
-                    south: 32.53434,   // California southern boundary  
-                    east: -114.13121,  // California eastern boundary
-                    north: 42.00952    // California northern boundary
-                  };
-                  console.log('?? MapView: ? Applied California bounds for wildfire query:', backendResolvedBounds);
-                }
-
-                // CRITICAL FIX: ALWAYS use backend-resolved bounds when available
-                // The backend knows the exact location the user requested (e.g., "Washington DC")
-                // Satellite tile bboxes can be much larger than the query area (Landsat tiles ~185km x 185km)
-                // Previously this was conditional on isLargeBbox, which caused cities to use wrong bounds
-                if (backendResolvedBounds) {
-                  console.log('MapView: Using backend-resolved bounds for precise location focus');
-                  west = backendResolvedBounds.west;
-                  south = backendResolvedBounds.south;
-                  east = backendResolvedBounds.east;
-                  north = backendResolvedBounds.north;
-                  console.log('MapView: Applied backend location resolution:', { west, south, east, north });
-                } else {
-                  console.log('MapView: No backend bounds available, using satellite data bbox');
-                }
-
-                console.log('MapView: Final bounds for map view:', { west, south, east, north });
-
-                // Update satelliteData.bbox with the region-specific bounds for consistent use throughout
-                satelliteData.bbox = [west, south, east, north];
-                console.log('??? MapView: ? Updated satelliteData.bbox with region-specific bounds');
-
-                // Smart zoom calculation for optimal radar imagery visibility
-                const finalBboxWidth = Math.abs(east - west);
-                const finalBboxHeight = Math.abs(north - south);
-                const bboxArea = finalBboxWidth * finalBboxHeight;
-
-                // Enhanced zoom calculation for better satellite data visibility
-                // CRITICAL: HLS/Sentinel-2/Landsat mosaic tiles only exist at zoom 8+
-                // 30m resolution data cannot render meaningful tiles at lower zoom levels
-                let targetZoom = 6; // Safe default
-                if (bboxArea < 0.1) { // City-level detail
-                  targetZoom = isMODISData ? 12 : 12; // Allow detailed zoom for MODIS fire data viewing
-                } else if (bboxArea < 0.5) { // Metropolitan area
-                  targetZoom = isMODISData ? 10 : 10;
-                } else if (bboxArea < 2) { // Large metropolitan area
-                  targetZoom = isMODISData ? 8 : 8;
-                } else if (bboxArea < 10) { // Regional coverage 
-                  targetZoom = isMODISData ? 8 : 8; // MODIS item tiles 404 below zoom 8
-                } else if (bboxArea < 50) { // State-level coverage
-                  targetZoom = isMODISData ? 8 : 8; // MODIS item tiles 404 below zoom 8
-                } else { // Multi-state/continental coverage (e.g., Ukraine ~71 sq degrees)
-                  targetZoom = isMODISData ? 8 : 8; // MODIS item tiles 404 below zoom 8
-                }
-                
-                // CRITICAL FIX: HLS/Sentinel/Landsat mosaic tiles only exist at zoom 8+
-                // Mosaic tiles at lower zooms return HTTP 204 (No Content)
-                if (isHighResOpticalData && targetZoom < 8) {
-                  console.log(`MapView: Enforcing minimum zoom 8 for ${collectionName} (mosaic tiles unavailable at zoom ${targetZoom})`);
-                  targetZoom = 8;
-                }
-
-                console.log(`??? MapView: Calculated zoom level ${targetZoom} for ${isMODISData ? 'MODIS' : isHighResOpticalData ? 'HLS/optical' : 'standard'} data (bbox area ${bboxArea.toFixed(4)} sq degrees)`);
-                console.log('??? MapView: Enhanced zoom calculation for better satellite data visibility');
-
-                try {
-                  // Enhanced validation function for camera coordinates
-                  const isValidCameraCoord = (coord: any) => {
-                    return coord !== null && coord !== undefined &&
-                           typeof coord === 'number' &&
-                           !isNaN(coord) &&
-                           isFinite(coord) &&
-                           coord >= -180 && coord <= 180;
-                  };
-
-                  // Comprehensive validation before setCamera to prevent null coordinate errors
-                  if (!isValidCameraCoord(west) || !isValidCameraCoord(south) || 
-                      !isValidCameraCoord(east) || !isValidCameraCoord(north)) {
-                    throw new Error(`Invalid coordinate values detected before setCamera: west=${west}, south=${south}, east=${east}, north=${north}`);
-                  }
-
-                  // Ensure logical bounds relationship
-                  if (west >= east || south >= north) {
-                    throw new Error(`Invalid bounds relationship: west(${west}) >= east(${east}) or south(${south}) >= north(${north})`);
-                  }
-
-                  console.log('??? MapView: Validated coordinates before setCamera:', { west, south, east, north });
-
-                  // Clamp coordinates to safe ranges for Azure Maps
-                  const safeWest = Math.max(-179.999, Math.min(179.999, west));
-                  const safeSouth = Math.max(-84.999, Math.min(84.999, south));
-                  const safeEast = Math.max(-179.999, Math.min(179.999, east));
-                  const safeNorth = Math.max(-84.999, Math.min(84.999, north));
-
-                  map.setCamera({
-                    bounds: [safeWest, safeSouth, safeEast, safeNorth],
-                    zoom: Math.max(0, Math.min(22, targetZoom)), // Clamp zoom level
-                    maxZoom: Math.max(0, Math.min(22, isMODISData ? 16 : 22)),
-                    minZoom: Math.max(0, Math.min(22, isMODISData ? 0 : 2)),
-                    padding: Math.max(0, Math.min(200, 50)), // Clamp padding
-                    type: 'ease',
-                    duration: Math.max(0, Math.min(5000, 2000)) // Clamp duration
-                  });
-                  console.log('? MapView: Successfully zoomed to satellite data area with appropriate zoom level');
-
-                  // Enhanced text visibility management after satellite layer is added
-                  const ensureTextVisibility = () => {
-                    try {
-                      // Check current map style and suggest better alternatives for text visibility
-                      const currentStyle = map.getStyle();
-                      console.log('??? MapView: Current map style:', currentStyle);
-
-                      // Show style tip for better user experience
-                      setShowStyleTip(true);
-
-                      // Auto-hide tip after 8 seconds
-                      setTimeout(() => {
-                        setShowStyleTip(false);
-                      }, 8000);
-
-                      // If using satellite style with overlay, suggest switching to road view
-                      if (currentStyle && (currentStyle.includes('satellite') || currentStyle === 'satellite_road_labels')) {
-                        console.log('??? MapView: ?? TIP: Switch to "Road" or "Light Grayscale" style for better text visibility with satellite overlay');
-                      }
-
-                      // Add opacity control information
-                      console.log('??? MapView: ?? Satellite layer opacity set to preserve map labels');
-                      console.log('??? MapView: ?? Use style control (top-right) to switch between map styles for optimal viewing');
-
-                    } catch (e) {
-                      console.log('??? MapView: Text visibility check completed');
-                    }
-                  };
-
-                  // Run text visibility check after a short delay to ensure layer is loaded
-                  setTimeout(ensureTextVisibility, 1000);
-
-                } catch (cameraError) {
-                  console.error('MapView: Error setting camera bounds:', cameraError);
-                }
-              }
-
-              console.log('MapView: Successfully added Azure Maps satellite tile layer');
-              
-              // FIX: Mark this satellite data as successfully rendered to prevent duplicate renders
-              lastRenderedDataRef.current = getSatelliteDataSignature(satelliteData);
-
-            } catch (layerError) {
-              console.error('? MapView: Error adding Azure Maps tile layer:', layerError);
-              console.log('??? MapView: Tile layer addition failed, but continuing...');
-            }
-          };
-
-          // Try to add tile layer immediately if map is ready
-          addTileLayer();
-        }
-
-        // If we have map_data GeoJSON, add it as vector data
-        if (lastChatResponse?.map_data?.features && window.atlas) {
-          console.log('??? MapView: Adding GeoJSON features to Azure Maps');
-
-          const addGeoJsonLayers = () => {
-            try {
-              // Basic map check
-              if (!map) {
-                console.log('??? MapView: No map instance for GeoJSON, skipping...');
-                return;
-              }
-
-              console.log('??? MapView: Adding GeoJSON data source and layers...');
-
-              const dataSource = new window.atlas.source.DataSource();
-              map.sources.add(dataSource);
-
-              // Filter out features with null/invalid coordinates AND clean properties
-              const validFeatures = lastChatResponse.map_data.features.filter((feature: any) => {
-                if (!feature.geometry || !feature.geometry.coordinates) {
-                  console.warn('?? MapView: Skipping feature with missing geometry:', feature.id || 'unknown');
-                  return false;
-                }
-                
-                // Check for null coordinates in different geometry types
-                const coords = feature.geometry.coordinates;
-                if (feature.geometry.type === 'Polygon') {
-                  // For polygons, coordinates are arrays of linear rings
-                  return coords.every((ring: number[][]) => 
-                    ring.every((coord: number[]) => 
-                      coord.length >= 2 && coord[0] !== null && coord[1] !== null
-                    )
-                  );
-                } else if (feature.geometry.type === 'LineString') {
-                  // For linestrings, coordinates are array of positions
-                  return coords.every((coord: number[]) => 
-                    coord.length >= 2 && coord[0] !== null && coord[1] !== null
-                  );
-                } else if (feature.geometry.type === 'Point') {
-                  // For points, coordinates are a single position
-                  return coords.length >= 2 && coords[0] !== null && coords[1] !== null;
-                }
-                
-                return true; // Allow other geometry types through
-              }).map((feature: any) => {
-                // Clean up feature properties to prevent null values from causing Azure Maps errors
-                const cleanedFeature = {
-                  ...feature,
-                  properties: feature.properties ? cleanNullProperties(feature.properties) : {}
-                };
-                return cleanedFeature;
-              });
-
-              // Helper function to clean null properties that cause Azure Maps symbol layout errors
-              function cleanNullProperties(properties: any): any {
-                const cleaned: any = {};
-                for (const [key, value] of Object.entries(properties)) {
-                  // Replace null values with appropriate defaults based on expected data type
-                  if (value === null || value === undefined) {
-                    // For numeric properties that might be used in expressions, default to 0
-                    if (key.includes('count') || key.includes('size') || key.includes('area') || 
-                        key.includes('population') || key.includes('elevation') || key.includes('zoom')) {
-                      cleaned[key] = 0;
-                    }
-                    // For string properties, use empty string
-                    else if (key.includes('name') || key.includes('title') || key.includes('label') || 
-                             key.includes('type') || key.includes('category')) {
-                      cleaned[key] = '';
-                    }
-                    // For other properties, convert to empty string to avoid null issues
-                    else {
-                      cleaned[key] = '';
-                    }
-                  } else {
-                    cleaned[key] = value;
-                  }
-                }
-                return cleaned;
-              }
-
-              console.log(`??? MapView: Filtered ${lastChatResponse.map_data.features.length - validFeatures.length} features with invalid coordinates`);
-              
-              // Add the valid GeoJSON features
-              if (validFeatures.length > 0) {
-                dataSource.add(validFeatures);
-                console.log(`? MapView: Added ${validFeatures.length} valid features to data source`);
-              } else {
-                console.warn('?? MapView: No valid features to display after coordinate filtering');
-              }
-
-              // Add polygon layer for search area with safe styling options
-              const polygonLayer = new window.atlas.layer.PolygonLayer(dataSource, `polygon-layer-${Date.now()}`, {
-                fillColor: 'rgba(0, 0, 255, 0.2)',
-                fillOpacity: 0.3,
-                // Prevent symbol layout errors by avoiding data-driven expressions with null values
-                filter: ['!=', ['typeof', ['get', 'geometry']], 'null']
-              });
-
-              const lineLayer = new window.atlas.layer.LineLayer(dataSource, `line-layer-${Date.now()}`, {
-                strokeColor: 'blue',
-                strokeWidth: 2,
-                // Prevent symbol layout errors by avoiding data-driven expressions with null values
-                filter: ['!=', ['typeof', ['get', 'geometry']], 'null']
-              });
-
-              try {
-                map.layers.add([polygonLayer, lineLayer]);
-                console.log('? MapView: Successfully added GeoJSON features to Azure Maps');
-              } catch (layerError) {
-                console.error('? MapView: Error adding layers to Azure Maps:', layerError);
-                // Try adding layers individually if batch add fails
-                try {
-                  map.layers.add(polygonLayer);
-                  map.layers.add(lineLayer);
-                  console.log('? MapView: Successfully added layers individually after batch failure');
-                } catch (individualError) {
-                  console.error('? MapView: Failed to add layers individually:', individualError);
-                }
-              }
-            } catch (geoError) {
-              console.error('? MapView: Error adding GeoJSON to Azure Maps:', geoError);
-              // If timing issue, try again after delay
-              if (geoError instanceof Error && geoError.message && geoError.message.includes('not ready')) {
-                console.log('??? MapView: Retrying GeoJSON addition in 500ms...');
-                setTimeout(addGeoJsonLayers, 500);
-              }
-            }
-          };
-
-          // Use longer delay to ensure map is fully initialized
-          if (map && mapLoaded) {
-            setTimeout(addGeoJsonLayers, 750);
-          } else {
-            // If map not ready, wait for ready event and then add delay
-            map.events.add('ready', () => {
-              setTimeout(addGeoJsonLayers, 1250);
-            });
-          }
-        }
-      } else if (mapProvider === 'leaflet') {
-        // Leaflet implementation
-        console.log('??? MapView: Using Leaflet provider - verifying map instance');
-
-        // Safety check: ensure we're not trying to use Leaflet methods on Azure Maps
-        if (map && map.constructor && map.constructor.name && map.constructor.name.includes('Map') && !map.removeLayer) {
-          console.error('? MapView: CRITICAL ERROR - mapProvider is "leaflet" but map instance appears to be Azure Maps!');
-          console.log('??? MapView: Map constructor:', map.constructor.name);
-          console.log('??? MapView: Correcting mapProvider to "azure"');
-          setMapProvider('azure');
-          return; // Exit and let the effect re-run with correct provider
-        }
-
         // Remove existing satellite layer if any
         if (currentLayer) {
           console.log('??? MapView: Removing existing Leaflet layer');
@@ -4458,7 +2608,6 @@ const MapView: React.FC<MapViewProps> = ({
 
           console.log('? MapView: Successfully added GeoJSON featu to Leaflet');
         }
-      }
 
       // CRITICAL FIX: DO NOT call updateMapView here!
       // The map view update is ALREADY handled in the useEffect that processes lastChatResponse (line ~1186)
@@ -4587,12 +2736,10 @@ const MapView: React.FC<MapViewProps> = ({
       message = '**Mobility Assessment Selected**\n\nDrop **Pin A** (start point) on the map, then click again to drop **Pin B** (destination).';
       // Reset any previous mobility pins
       if (mobilityPinA?.marker) {
-        if (mapProvider === 'leaflet' && window.L) map?.removeLayer(mobilityPinA.marker);
-        else if (mapProvider === 'azure' && window.atlas) map?.markers.remove(mobilityPinA.marker);
+        if (window.L) map?.removeLayer(mobilityPinA.marker);
       }
       if (mobilityPinB?.marker) {
-        if (mapProvider === 'leaflet' && window.L) map?.removeLayer(mobilityPinB.marker);
-        else if (mapProvider === 'azure' && window.atlas) map?.markers.remove(mobilityPinB.marker);
+        if (window.L) map?.removeLayer(mobilityPinB.marker);
       }
       setMobilityPinA(null);
       setMobilityPinB(null);
@@ -4713,25 +2860,15 @@ const MapView: React.FC<MapViewProps> = ({
         });
         marker = window.L.marker([lat, lng], { icon: pinIcon, draggable: false }).addTo(map);
         marker.bindPopup(`Comparison Pin<br/>Lat: ${lat.toFixed(4)}°<br/>Lng: ${lng.toFixed(4)}°`).openPopup();
-      } else if (mapProvider === 'azure' && window.atlas) {
-        marker = new window.atlas.HtmlMarker({
-          position: [lng, lat],
-          htmlContent: `<div style="width:36px;height:36px;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="#f59e0b"/><circle cx="12" cy="10" r="3" fill="white" stroke="none"/></svg></div>`,
-          anchor: 'bottom'
-        });
-        map.markers.add(marker);
-      }
-      
+          }
+
       setPinState({ lat, lng, active: true, marker });
       if (onPinChange) {
         onPinChange({ lat, lng });
       }
-      
+
       // Wait for map to render with the pin, then capture screenshot
-      if (mapProvider === 'azure' && typeof (map as any).render === 'function') {
-        try { (map as any).render(); } catch { /* ok */ }
-      }
-      await new Promise(resolve => setTimeout(resolve, mapProvider === 'azure' ? 1500 : 500));
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       try {
         const captured = await captureMapScreenshot();
@@ -4780,7 +2917,7 @@ const MapView: React.FC<MapViewProps> = ({
       if (!mobilityPinARef.current) {
         // First click: Place Pin A (green - start point)
         let markerA: any = null;
-        if (mapProvider === 'leaflet' && window.L) {
+        if (window.L) {
           const pinIconA = window.L.divIcon({
             html: `
               <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
@@ -4794,13 +2931,6 @@ const MapView: React.FC<MapViewProps> = ({
           });
           markerA = window.L.marker([lat, lng], { icon: pinIconA, draggable: false }).addTo(map);
           markerA.bindPopup(`Pin A (Start)<br/>Lat: ${lat.toFixed(4)}°<br/>Lng: ${lng.toFixed(4)}°`).openPopup();
-        } else if (mapProvider === 'azure' && window.atlas) {
-          markerA = new window.atlas.HtmlMarker({
-            position: [lng, lat],
-            htmlContent: `<div style="width:36px;height:36px;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="#16a34a"/><text x="12" y="14" text-anchor="middle" fill="white" font-size="10" font-weight="bold" stroke="none">A</text></svg></div>`,
-            anchor: 'bottom'
-          });
-          map.markers.add(markerA);
         }
         
         mobilityPinARef.current = { lat, lng, marker: markerA };
@@ -4818,12 +2948,11 @@ const MapView: React.FC<MapViewProps> = ({
       // Second click: Place Pin B (red - destination) and trigger analysis
       // Remove existing Pin B if repositioning
       if (mobilityPinBRef.current?.marker) {
-        if (mapProvider === 'leaflet' && window.L) map.removeLayer(mobilityPinBRef.current.marker);
-        else if (mapProvider === 'azure' && window.atlas) map.markers.remove(mobilityPinBRef.current.marker);
+        if (window.L) map.removeLayer(mobilityPinBRef.current.marker);
       }
-      
+
       let markerB: any = null;
-      if (mapProvider === 'leaflet' && window.L) {
+      if (window.L) {
         const pinIconB = window.L.divIcon({
           html: `
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
@@ -4837,13 +2966,6 @@ const MapView: React.FC<MapViewProps> = ({
         });
         markerB = window.L.marker([lat, lng], { icon: pinIconB, draggable: false }).addTo(map);
         markerB.bindPopup(`Pin B (Destination)<br/>Lat: ${lat.toFixed(4)}°<br/>Lng: ${lng.toFixed(4)}°`).openPopup();
-      } else if (mapProvider === 'azure' && window.atlas) {
-        markerB = new window.atlas.HtmlMarker({
-          position: [lng, lat],
-          htmlContent: `<div style="width:36px;height:36px;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="#dc2626"/><text x="12" y="14" text-anchor="middle" fill="white" font-size="10" font-weight="bold" stroke="none">B</text></svg></div>`,
-          anchor: 'bottom'
-        });
-        map.markers.add(markerB);
       }
       
       mobilityPinBRef.current = { lat, lng, marker: markerB };
@@ -4886,18 +3008,15 @@ const MapView: React.FC<MapViewProps> = ({
 
     // Remove existing marker if present
     if (pinState.marker) {
-      if (mapProvider === 'leaflet' && window.L) {
+      if (window.L) {
         map.removeLayer(pinState.marker);
-      } else if (mapProvider === 'azure' && window.atlas) {
-        // Azure Maps marker removal
-        map.markers.remove(pinState.marker);
       }
     }
 
     // Create new marker
     let newMarker: any = null;
     try {
-      if (mapProvider === 'leaflet' && window.L) {
+      if (window.L) {
         // Modern SVG blue pin for Leaflet (matches terrain analysis style)
         const pinIcon = window.L.divIcon({
           html: `
@@ -4910,30 +3029,14 @@ const MapView: React.FC<MapViewProps> = ({
           iconSize: [32, 32],
           iconAnchor: [16, 32]
         });
-        
+
         newMarker = window.L.marker([lat, lng], {
           icon: pinIcon,
           draggable: false
         }).addTo(map);
-        
+
         // Add popup with coordinates
         newMarker.bindPopup(`Pin Location<br/>Lat: ${lat.toFixed(4)}°<br/>Lng: ${lng.toFixed(4)}°`).openPopup();
-        
-      } else if (mapProvider === 'azure' && window.atlas) {
-        // Azure Maps marker - blue pin to match terrain analysis style
-        newMarker = new window.atlas.HtmlMarker({
-          position: [lng, lat],
-          htmlContent: `
-            <div style="width: 32px; height: 32px;">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="#3B82F6"></path>
-                <circle cx="12" cy="10" r="3" fill="white"></circle>
-              </svg>
-            </div>
-          `,
-          anchor: 'bottom'
-        });
-        map.markers.add(newMarker);
       }
 
       setPinState({
@@ -5032,19 +3135,7 @@ const MapView: React.FC<MapViewProps> = ({
           console.log('MapView: Building Damage module - capturing screenshot for user question...');
           
           // Wait for map to render (give it time to show the pin)
-          if (mapProvider === 'azure') {
-            console.log('[SNAP] Azure Maps detected - forcing map render...');
-            if (map && typeof (map as any).render === 'function') {
-              try {
-                (map as any).render();
-              } catch (e) {
-                console.log('[SNAP] Note: render() not available, proceeding anyway');
-              }
-            }
-            await new Promise(resolve => setTimeout(resolve, 1500));
-          } else {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
+          await new Promise(resolve => setTimeout(resolve, 500));
           
           // Capture screenshot for context (will be sent via mapContext)
           const capturedScreenshot = await captureMapScreenshot();
@@ -5086,19 +3177,7 @@ const MapView: React.FC<MapViewProps> = ({
           console.log('MapView: Vision module - capturing context for user question...');
           
           // Wait for map to render (give it time to show the pin)
-          if (mapProvider === 'azure') {
-            console.log('[SNAP] Azure Maps detected - forcing map render...');
-            if (map && typeof (map as any).render === 'function') {
-              try {
-                (map as any).render();
-              } catch (e) {
-                console.log('[SNAP] Note: render() not available, proceeding anyway');
-              }
-            }
-            await new Promise(resolve => setTimeout(resolve, 1500));
-          } else {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
+          await new Promise(resolve => setTimeout(resolve, 500));
           
           // Capture screenshot for context (will be sent via mapContext)
           const capturedScreenshot = await captureMapScreenshot();
@@ -5142,19 +3221,7 @@ const MapView: React.FC<MapViewProps> = ({
           console.log('MapView: Extreme Weather module - capturing location and screenshot for user question...');
           
           // Wait for map to render (give it time to show the pin)
-          if (mapProvider === 'azure') {
-            console.log('[SNAP] Azure Maps detected - forcing map render...');
-            if (map && typeof (map as any).render === 'function') {
-              try {
-                (map as any).render();
-              } catch (e) {
-                console.log('[SNAP] Note: render() not available, proceeding anyway');
-              }
-            }
-            await new Promise(resolve => setTimeout(resolve, 1500));
-          } else {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
+          await new Promise(resolve => setTimeout(resolve, 500));
           
           // Capture screenshot for visual context
           const capturedScreenshot = await captureMapScreenshot();
@@ -5192,19 +3259,7 @@ const MapView: React.FC<MapViewProps> = ({
         } else {
           // OTHER MODULES (terrain, etc.) - Auto-analyze with screenshot
           // Capture screenshot for visual context before triggering analysis
-          if (mapProvider === 'azure') {
-            console.log('[SNAP] Azure Maps detected - forcing map render for screenshot...');
-            if (map && typeof (map as any).render === 'function') {
-              try {
-                (map as any).render();
-              } catch (e) {
-                console.log('[SNAP] Note: render() not available, proceeding anyway');
-              }
-            }
-            await new Promise(resolve => setTimeout(resolve, 1500));
-          } else {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
+          await new Promise(resolve => setTimeout(resolve, 500));
           
           if (!screenshot) {
             const capturedScreenshot = await captureMapScreenshot();
@@ -5293,10 +3348,8 @@ const MapView: React.FC<MapViewProps> = ({
     // Remove marker from map
     if (pinState.marker && map) {
       try {
-        if (mapProvider === 'leaflet' && window.L) {
+        if (window.L) {
           map.removeLayer(pinState.marker);
-        } else if (mapProvider === 'azure' && window.atlas) {
-          map.markers.remove(pinState.marker);
         }
       } catch (error) {
         console.error('? MapView: Error removing pin marker:', error);
@@ -5317,33 +3370,12 @@ const MapView: React.FC<MapViewProps> = ({
     console.log('[DEL] MapView: Pin cleared');
   };
 
-  // Map style change handler
-  const handleMapStyleChange = (style: string) => {
-    if (!map || mapProvider !== 'azure') return;
-    
-    console.log('MapView: Changing map style to:', style);
-    
-    try {
-      map.setStyle({ style: style });
-      setCurrentMapStyle(style);
-      setShowMapStyleDropdown(false);
-      console.log('MapView: Map style changed successfully');
-    } catch (error) {
-      console.error('MapView: Error changing map style:', error);
-    }
-  };
 
   // Zoom in handler
   const handleZoomIn = () => {
     if (!map) return;
-    
     try {
-      if (mapProvider === 'azure') {
-        const camera = map.getCamera();
-        map.setCamera({ zoom: (camera.zoom || 4) + 1 });
-      } else if (mapProvider === 'leaflet') {
-        map.zoomIn();
-      }
+      map.zoomIn();
       console.log('[+] MapView: Zoomed in');
     } catch (error) {
       console.error('MapView: Error zooming in:', error);
@@ -5353,31 +3385,16 @@ const MapView: React.FC<MapViewProps> = ({
   // Zoom out handler
   const handleZoomOut = () => {
     if (!map) return;
-    
     try {
-      if (mapProvider === 'azure') {
-        const camera = map.getCamera();
-        map.setCamera({ zoom: (camera.zoom || 4) - 1 });
-      } else if (mapProvider === 'leaflet') {
-        map.zoomOut();
-      }
+      map.zoomOut();
       console.log('[-] MapView: Zoomed out');
     } catch (error) {
       console.error('MapView: Error zooming out:', error);
     }
   };
 
-  // Reset bearing/rotation handler
-  const handleResetBearing = () => {
-    if (!map || mapProvider !== 'azure') return;
-    
-    try {
-      map.setCamera({ bearing: 0, pitch: 0 });
-      console.log('[COMPASS] MapView: Reset map bearing');
-    } catch (error) {
-      console.error('MapView: Error resetting bearing:', error);
-    }
-  };
+  // Reset bearing/rotation handler (no-op: Leaflet does not support bearing/pitch)
+  const handleResetBearing = () => {};
 
   // Enhanced dataset visualization using collection config
   const getDatasetVisualization = (dataset: Dataset | null) => {
@@ -5415,14 +3432,7 @@ const MapView: React.FC<MapViewProps> = ({
       setMapPositionVersion(v => v + 1);
     };
 
-    if (mapProvider === 'azure' && map.events) {
-      map.events.add('moveend', handlePositionChange);
-      map.events.add('zoomend', handlePositionChange);
-      return () => {
-        map.events.remove('moveend', handlePositionChange);
-        map.events.remove('zoomend', handlePositionChange);
-      };
-    } else if (mapProvider === 'leaflet' && map.on) {
+    if (map.on) {
       map.on('moveend', handlePositionChange);
       map.on('zoomend', handlePositionChange);
       return () => {
@@ -5447,7 +3457,7 @@ const MapView: React.FC<MapViewProps> = ({
     try {
       // Get current map bounds
       let bounds = null;
-      if (mapProvider === 'leaflet' && window.L) {
+      if (window.L) {
         const leafletBounds = map.getBounds();
         bounds = {
           north: leafletBounds.getNorth(),
@@ -5456,17 +3466,6 @@ const MapView: React.FC<MapViewProps> = ({
           west: leafletBounds.getWest(),
           center_lat: map.getCenter().lat,
           center_lng: map.getCenter().lng
-        };
-      } else if (mapProvider === 'azure' && window.atlas) {
-        const azureBounds = map.getCamera().bounds;
-        const center = map.getCamera().center;
-        bounds = {
-          north: azureBounds[3],
-          south: azureBounds[1],
-          east: azureBounds[2],
-          west: azureBounds[0],
-          center_lat: center[1],
-          center_lng: center[0]
         };
       }
 
@@ -5940,127 +3939,7 @@ const MapView: React.FC<MapViewProps> = ({
             </div>
           )}
 
-          {/* Map Style Dropdown Button - positioned under pin button on left */}
-          <div 
-            onClick={() => setShowMapStyleDropdown(!showMapStyleDropdown)}
-            title="Change Map Style"
-            data-map-style-dropdown
-            style={{
-              position: 'absolute',
-              top: '68px', // Under pin button
-              left: '10px',
-              background: showMapStyleDropdown ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.3)',
-              color: '#1a1a1a',
-              width: '48px',
-              height: '48px',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '24px',
-              boxShadow: '0 2px 12px rgba(0, 0, 0, 0.15)',
-              zIndex: 1000,
-              border: '1px solid rgba(0, 0, 0, 0.15)',
-              cursor: 'pointer',
-              userSelect: 'none',
-              transition: 'all 0.2s ease',
-              backdropFilter: 'blur(10px)'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'scale(1.08)';
-              e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.2)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.15)';
-            }}
-          >
-            {/* Map icon */}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
-              <line x1="9" y1="3" x2="9" y2="18"></line>
-              <line x1="15" y1="6" x2="15" y2="21"></line>
-            </svg>
-          </div>
-
-          {/* Map Style Dropdown Menu */}
-          {showMapStyleDropdown && (
-            <div 
-              style={{
-                position: 'absolute',
-                top: '68px', // Same top as button
-                left: '68px', // To the right of the button
-                background: 'rgba(255, 255, 255, 0.97)',
-                borderRadius: '12px',
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
-                zIndex: 1001,
-                minWidth: '240px',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(0, 0, 0, 0.08)',
-                overflow: 'hidden'
-              }}
-            >
-              <div style={{
-                padding: '12px 16px',
-                borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
-                fontSize: '14px',
-                fontWeight: '600',
-                color: '#333',
-                fontFamily: '"Segoe UI", "Segoe UI Variable Text", -apple-system, BlinkMacSystemFont, system-ui, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans"'
-              }}>
-                Map Styles
-              </div>
-              
-              {[
-                { id: 'satellite_road_labels', name: 'Satellite (Default)', icon: '' },
-                { id: 'road', name: 'Road', icon: '' },
-                { id: 'road_shaded_relief', name: 'Road + Terrain', icon: '' },
-                { id: 'satellite', name: 'Satellite Only', icon: '' },
-                { id: 'grayscale_light', name: 'Grayscale Light', icon: '[WHITE]' },
-                { id: 'night', name: 'Night Mode', icon: '[MOON]' }
-              ].map((style) => (
-                <div
-                  key={style.id}
-                  onClick={() => handleMapStyleChange(style.id)}
-                  style={{
-                    padding: '12px 16px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontFamily: '"Segoe UI", "Segoe UI Variable Text", -apple-system, BlinkMacSystemFont, system-ui, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans"',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    background: currentMapStyle === style.id ? 'rgba(0, 120, 212, 0.1)' : 'transparent',
-                    borderLeft: currentMapStyle === style.id ? '3px solid #0078d4' : '3px solid transparent',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (currentMapStyle !== style.id) {
-                      e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (currentMapStyle !== style.id) {
-                      e.currentTarget.style.background = 'transparent';
-                    }
-                  }}
-                >
-                  <span style={{ fontSize: '18px' }}>{style.icon}</span>
-                  <span style={{ 
-                    fontWeight: currentMapStyle === style.id ? '600' : '400',
-                    color: currentMapStyle === style.id ? '#0078d4' : '#333'
-                  }}>
-                    {style.name}
-                  </span>
-                  {currentMapStyle === style.id && (
-                    <span style={{ marginLeft: 'auto', color: '#0078d4' }}></span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Zoom In Button - positioned under map style button */}
+          {/* Zoom In Button */}
           <div 
             onClick={handleZoomIn}
             title="Zoom In"
