@@ -13,26 +13,20 @@ interface HealthCheckData {
   basic_checks?: {
     semantic_kernel?: boolean;
     geoint?: boolean;
-    azure_openai_endpoint?: boolean;
-    azure_openai_api_key?: boolean;
-    azure_openai_deployment?: boolean;
-    azure_maps_key?: boolean;
-    use_managed_identity?: boolean;
+    llm_base_url?: boolean;
+    llm_api_key?: boolean;
+    llm_model?: boolean;
   };
   // Backend may return either 'checks' or 'connectivity_tests'
   checks?: {
-    azure_openai?: { status: string; endpoint?: string; model?: string; available_models?: string[] };
     llm_client?: { status: string; provider?: string; model?: string };
     planetary_computer?: { status: string };
     private_stac_api?: { status: string; api_url?: string };
-    azure_maps?: { status: string };
   };
   connectivity_tests?: {
-    azure_openai?: { status: string; endpoint?: string; model?: string; available_models?: string[] };
     llm_client?: { status: string; provider?: string; model?: string };
     planetary_computer?: { status: string };
     private_stac_api?: { status: string; api_url?: string };
-    azure_maps?: { status: string };
   };
 }
 
@@ -151,7 +145,7 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
             {(() => {
               // Backend may return 'checks' or 'connectivity_tests'
               const svc = healthData.checks || healthData.connectivity_tests || {};
-              const aiStatus = svc.llm_client?.status || svc.azure_openai?.status;
+              const aiStatus = svc.llm_client?.status;
               const privateStac = svc.private_stac_api;
               return (
                 <>
@@ -179,14 +173,6 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
                     </span>
                   </div>
 
-                  {svc.azure_maps && (
-                    <div className="health-status-item">
-                      <span className="health-label">Azure Maps:</span>
-                      <span className={`health-value ${isServiceOk(svc.azure_maps?.status) ? 'success' : 'error'}`}>
-                        {isServiceOk(svc.azure_maps?.status) ? 'Connected' : 'Disconnected'}
-                      </span>
-                    </div>
-                  )}
                 </>
               );
             })()}
