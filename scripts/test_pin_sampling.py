@@ -9,7 +9,7 @@ Usage:
     python scripts/test_pin_sampling.py [--backend URL]
 
 Defaults to the deployed backend at:
-    https://ca-earthcopilot-api.thankfulplant-8534661d.eastus2.azurecontainerapps.io
+    http://localhost:8000
 
 Requires: httpx, rich (pip install httpx rich)
 """
@@ -76,7 +76,7 @@ TEST_LOCATIONS = {
     },
 }
 
-DEFAULT_BACKEND = "https://ca-earthcopilot-api.thankfulplant-8534661d.eastus2.azurecontainerapps.io"
+DEFAULT_BACKEND = "http://localhost:8000"
 
 
 @dataclass
