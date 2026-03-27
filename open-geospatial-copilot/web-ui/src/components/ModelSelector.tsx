@@ -41,18 +41,14 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, selectedMo
       try {
         const response = await authenticatedFetch(`${apiBaseUrl}/api/health`);
         const data = await response.json();
-        // Backend returns 'checks' (not 'connectivity_tests'), and doesn't include available_models list.
-        // If the OpenAI service is configured/connected, mark gpt-5 as available.
-        const openaiStatus = data.checks?.azure_openai?.status || data.connectivity_tests?.azure_openai?.status;
-        const isOpenAiOk = ['connected', 'configured', 'healthy', 'ok'].includes(openaiStatus?.toLowerCase() || '');
-        
-        if (isOpenAiOk) {
-          // Mark gpt-5 as available since OpenAI is configured
-          setModels(prevModels => 
-            prevModels.map(model => ({
-              ...model,
-              isAvailable: model.id === 'gpt-5' ? true : model.isAvailable ?? false
-            }))
+        // Backend returns 'checks' or 'connectivity_tests'; check llm_client status.
+        const llmStatus = data.checks?.llm_client?.status || data.connectivity_tests?.llm_client?.status;
+        const isLlmOk = ['connected', 'configured', 'healthy', 'ok'].includes(llmStatus?.toLowerCase() || '');
+
+        if (isLlmOk) {
+          // Mark all models as available since LLM is configured
+          setModels(prevModels =>
+            prevModels.map(model => ({ ...model, isAvailable: true }))
           );
         }
       } catch (err) {
