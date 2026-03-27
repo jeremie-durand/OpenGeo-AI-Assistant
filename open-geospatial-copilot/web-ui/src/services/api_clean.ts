@@ -51,7 +51,7 @@ class ApiService {
         {
           id: 'fires-poc-data',
           title: 'Fire Events POC Data',
-          description: 'Private fire event dataset indexed in Azure Search for analysis and detection'
+          description: 'Private fire event dataset indexed for analysis and detection'
         },
         {
           id: 'private-satellite-imagery',
@@ -71,7 +71,7 @@ class ApiService {
         {
           id: 'fires-poc-data',
           title: 'Fire Events POC Data',
-          description: 'Private fire event dataset indexed in Azure Search for analysis and detection'
+          description: 'Private fire event dataset indexed for analysis and detection'
         }
       ];
     }
