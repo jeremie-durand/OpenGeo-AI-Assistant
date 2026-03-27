@@ -362,13 +362,6 @@ if os.path.exists(static_dir):
         if metadata and metadata.get('categories'):
             return JSONResponse(content=metadata)
         
-        # Fallback: try to serve static file if it exists
-        from fastapi.responses import FileResponse
-        json_path = os.path.join(static_dir, "pc_collections_metadata.json")
-        if os.path.exists(json_path):
-            logger.warning("[WARN]  Serving legacy pc_collections_metadata.json - should migrate to unified config")
-            return FileResponse(json_path, media_type="application/json")
-        
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Collections metadata not found")
     
