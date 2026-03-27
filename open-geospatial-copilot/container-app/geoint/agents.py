@@ -24,22 +24,22 @@ logger = logging.getLogger(__name__)
 # ---------- Agent Singletons (lazy) ----------
 
 def _get_terrain_agent():
-    """Get or create singleton TerrainAgent instance (Azure AI Agent Service)."""
+    """Get or create singleton TerrainAgent instance."""
     from .terrain_agent import get_terrain_agent
     return get_terrain_agent()
 
 def _get_mobility_agent():
-    """Get or create singleton GeointMobilityAgent instance (Azure AI Agent Service)."""
+    """Get or create singleton GeointMobilityAgent instance."""
     from .mobility_agent import get_mobility_agent
     return get_mobility_agent()
 
 def _get_building_damage_agent():
-    """Get or create singleton BuildingDamageAgent instance (Azure AI Agent Service)."""
+    """Get or create singleton BuildingDamageAgent instance."""
     from .building_damage_agent import get_building_damage_agent
     return get_building_damage_agent()
 
 def _get_extreme_weather_agent():
-    """Get or create singleton ExtremeWeatherAgent instance (Azure AI Agent Service)."""
+    """Get or create singleton ExtremeWeatherAgent instance."""
     from .extreme_weather_agent import get_extreme_weather_agent
     return get_extreme_weather_agent()
 
@@ -718,17 +718,16 @@ How the {aspect_focus} has evolved over the {_calculate_time_span(before_date, a
 - Any limiting factors (clouds, resolution, data gaps, etc.)
 """
         
-        # Call Azure OpenAI GPT-5 with Vision
         import aiohttp
         import os
-        
-        azure_openai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "")
-        azure_openai_key = os.getenv("AZURE_OPENAI_API_KEY", "")
-        use_managed_identity = os.getenv("AZURE_OPENAI_USE_MANAGED_IDENTITY", "").lower() == "true"
-        
-        # Build headers based on authentication method
+
+        llm_base_url = os.getenv("LLM_BASE_URL", "")
+        llm_api_key = os.getenv("LLM_API_KEY", "")
+        llm_model = os.getenv("LLM_MODEL", "gpt-4o")
+
         headers = {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {llm_api_key}",
         }
         
         # Build image list dynamically
@@ -792,6 +791,7 @@ How the {aspect_focus} has evolved over the {_calculate_time_span(before_date, a
         logger.info("=" * 80)
         
         payload = {
+            "model": llm_model,
             "messages": [
                 {
                     "role": "system",
@@ -815,20 +815,20 @@ How the {aspect_focus} has evolved over the {_calculate_time_span(before_date, a
         logger.info("")
         
         async with aiohttp.ClientSession() as session:
-            logger.info(" Making HTTP request to Azure OpenAI...")
+            logger.info(" Making HTTP request to LLM...")
             async with session.post(
-                f"{azure_openai_endpoint}/openai/deployments/{os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME', 'gpt-5')}/chat/completions?api-version=2024-12-01-preview",
+                f"{llm_base_url.rstrip('/')}/chat/completions",
                 headers=headers,
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=60)
             ) as response:
                 logger.info(f" Response status: {response.status}")
-                
+
                 if response.status != 200:
                     error_text = await response.text()
-                    logger.error(f" Azure OpenAI API error {response.status}")
+                    logger.error(f" LLM API error {response.status}")
                     logger.error(f"   Error response: {error_text}")
-                    raise Exception(f"Azure OpenAI API error {response.status}: {error_text}")
+                    raise Exception(f"LLM API error {response.status}: {error_text}")
                 
                 result = await response.json()
                 analysis_text = result["choices"][0]["message"]["content"]
