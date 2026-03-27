@@ -1,10 +1,10 @@
 /**
- * COMPREHENSIVE AZURE MAPS + STAC DEBUGGING SYSTEM
+ * COMPREHENSIVE MAP DEBUGGING SYSTEM
  * 
  * This will inject deep debugging into MapView.tsx to trace:
  * 1. Exactly what coordinates are being calculated
  * 2. What tile URLs are being generated
- * 3. What the Azure Maps SDK is doing
+ * 3. What tile requests are being made and their outcomes
  * 4. Real-time tile load success/failure tracking
  */
 
@@ -18,7 +18,7 @@ window.MapDebugger = {
     tileRequests: new Map(),
     coordinateTransforms: [],
     stacResults: null,
-    azureMapsLayers: [],
+    mapLayers: [],
     
     log(level, category, message, data = null) {
         if (!this.enabled) return;
@@ -236,23 +236,28 @@ window.MapDebugger = {
         }
     },
     
-    // Monitor Azure Maps layer additions
-    monitorAzureMapsLayers(map) {
+    // Monitor tile requests
+    monitorTileRequests() {
+        // Implementation for monitoring tile requests
+    },
+    
+    // Monitor map layer additions
+    monitorMapLayers(map) {
         if (!map) return;
         
-        this.log('INFO', 'AZURE_MAPS', 'Starting Azure Maps layer monitoring', { map });
+        this.log('INFO', 'MAP_LAYERS', 'Starting map layer monitoring', { map });
         
         // Override map.layers.add
         const originalAdd = map.layers.add.bind(map.layers);
         map.layers.add = (layer, before) => {
-            this.log('INFO', 'LAYER_ADD', 'Azure Maps layer being added', {
+            this.log('INFO', 'LAYER_ADD', 'Map layer being added', {
                 layer,
                 before,
                 layerType: layer.constructor.name,
                 layerId: layer.getId ? layer.getId() : 'unknown'
             });
             
-            this.azureMapsLayers.push({
+            this.mapLayers.push({
                 layer,
                 addedAt: new Date(),
                 layerType: layer.constructor.name
@@ -264,7 +269,7 @@ window.MapDebugger = {
         // Override map.layers.remove  
         const originalRemove = map.layers.remove.bind(map.layers);
         map.layers.remove = (layer) => {
-            this.log('INFO', 'LAYER_REMOVE', 'Azure Maps layer being removed', {
+            this.log('INFO', 'LAYER_REMOVE', 'Map layer being removed', {
                 layer,
                 layerType: layer.constructor.name
             });
@@ -283,12 +288,12 @@ window.MapDebugger = {
                 failedTiles: Array.from(this.tileRequests.values()).filter(r => r.status === 'failed').length,
                 errorTiles: Array.from(this.tileRequests.values()).filter(r => r.status === 'error').length,
                 coordinateTransforms: this.coordinateTransforms.length,
-                azureMapsLayers: this.azureMapsLayers.length
+                mapLayers: this.mapLayers.length
             },
             tileRequests: Object.fromEntries(this.tileRequests.entries()),
             coordinateTransforms: this.coordinateTransforms,
             stacResults: this.stacResults,
-            azureMapsLayers: this.azureMapsLayers.map(l => ({
+            mapLayers: this.mapLayers.map(l => ({
                 layerType: l.layerType,
                 addedAt: l.addedAt
             })),
@@ -310,7 +315,7 @@ window.MapDebugger = {
         this.tileRequests.clear();
         this.coordinateTransforms = [];
         this.stacResults = null;
-        this.azureMapsLayers = [];
+        this.mapLayers = [];
         window.debugLogs = [];
         localStorage.removeItem('mapDebuggingReport');
         this.log('INFO', 'DEBUG', 'Debugging data cleared');
@@ -464,7 +469,7 @@ window.STACDebugger = {
 // Helper to inject debugging into existing map instance
 window.enableMapDebugging = function(map) {
     if (map) {
-        window.MapDebugger.monitorAzureMapsLayers(map);
+        window.MapDebugger.monitorMapLayers(map);
         window.MapDebugger.log('INFO', 'DEBUG_ENABLED', 'Map debugging enabled', { map });
     }
 };
