@@ -1274,37 +1274,7 @@ export const GlobalStyles = () => (
       line-height: 1.4;
     }
 
-    /* Azure Maps Control Styling - Match Segoe UI font */
-    .atlas-control-container button,
-    .atlas-control-container .atlas-control-button,
-    .atlas-control-container .atlas-layer-legend-label,
-    .atlas-control-container {
-      font-family: "Segoe UI", "Segoe UI Variable Text", -apple-system, BlinkMacSystemFont, system-ui !important;
-    }
 
     /* Style control dropdown styling */
-    .atlas-control-container .atlas-control-style-list {
-      font-family: "Segoe UI", "Segoe UI Variable Text", -apple-system, BlinkMacSystemFont, system-ui !important;
-    }
-
-    /* Hide map attribution completely (TomTom, EarthStar Geographics, etc.) */
-    .azure-maps-copyright,
-    .mapboxgl-ctrl-bottom-center,
-    .maplibregl-ctrl-bottom-center,
-    .mapboxgl-ctrl-attrib,
-    .maplibregl-ctrl-attrib,
-    div[class*="copyright"],
-    div[class*="attribution"],
-    .mapboxgl-ctrl-attrib-inner,
-    .maplibregl-ctrl-attrib-inner {
-      display: none !important;
-      visibility: hidden !important;
-      opacity: 0 !important;
-    }
-
-    /* Hide default Azure Maps logo if it interferes */
-    .azure-maps-logo-container {
-      display: none !important;
-    }
   `}</style>
 );
