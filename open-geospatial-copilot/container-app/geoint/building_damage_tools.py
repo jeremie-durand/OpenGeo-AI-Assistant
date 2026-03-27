@@ -87,7 +87,6 @@ def _analyze_screenshot_with_vision_sync(screenshot_base64: str, latitude: float
     )
 
     response = client.chat.completions.create(
-        model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5"),
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": [
