@@ -31,6 +31,15 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _normalize_json_text(text: str) -> str:
+    """Replace Python literals with their JSON equivalents."""
+    # Must replace whole-word occurrences only to avoid mangling strings
+    text = re.sub(r'\bNone\b', 'null', text)
+    text = re.sub(r'\bTrue\b', 'true', text)
+    text = re.sub(r'\bFalse\b', 'false', text)
+    return text
+
+
 def _parse_json(text: str) -> Any:
     """Extract and parse the first JSON object/array found in *text*."""
     text = text.strip()
@@ -38,16 +47,17 @@ def _parse_json(text: str) -> Any:
         text = text.split("```json")[1].split("```")[0].strip()
     elif "```" in text:
         text = text.split("```")[1].split("```")[0].strip()
+    text = _normalize_json_text(text)
     # Try the whole string first; fall back to a greedy object search.
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if match:
-            return json.loads(match.group())
+            return json.loads(_normalize_json_text(match.group()))
         match = re.search(r"\[.*\]", text, re.DOTALL)
         if match:
-            return json.loads(match.group())
+            return json.loads(_normalize_json_text(match.group()))
         raise
 
 
