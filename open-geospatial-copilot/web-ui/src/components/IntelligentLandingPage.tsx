@@ -82,7 +82,7 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
     {
       text: "Search our internal geospatial datasets",
       icon: "",
-      expectedSource: "azure_search"
+      expectedSource: "internal_search"
     }
   ];
 
