@@ -2571,22 +2571,40 @@ const MapView: React.FC<MapViewProps> = ({
             console.log('??? MapView: Tile layer constrained to bbox:', satelliteData.bbox);
           }
 
-          const tileLayer = window.L.tileLayer(satelliteData.tile_url, tileLayerOptions);
+          const addTileLayer = (tileUrl: string) => {
+            const tileLayer = window.L.tileLayer(tileUrl, tileLayerOptions);
 
-          // Suppress tile load errors in console (404s outside bounds are expected)
-          tileLayer.on('tileerror', (error: any) => {
-            // Silently handle tile errors - they're expected for tiles outside data coverage
-            // Only log if it's a repeated pattern that might indicate a real issue
-            const url = error.tile?.src || 'unknown';
-            if (Math.random() < 0.01) { // Log only 1% of errors to avoid console spam
-              console.debug('? MapView: Tile not available (expected for tiles outside data bounds):', url.substring(0, 120));
-            }
-          });
+            // Suppress tile load errors in console (404s outside bounds are expected)
+            tileLayer.on('tileerror', (error: any) => {
+              // Silently handle tile errors - they're expected for tiles outside data coverage
+              // Only log if it's a repeated pattern that might indicate a real issue
+              const url = error.tile?.src || 'unknown';
+              if (Math.random() < 0.01) { // Log only 1% of errors to avoid console spam
+                console.debug('? MapView: Tile not available (expected for tiles outside data bounds):', url.substring(0, 120));
+              }
+            });
 
-          tileLayer.addTo(map);
-          setCurrentLayer(tileLayer);
+            tileLayer.addTo(map);
+            setCurrentLayer(tileLayer);
+            console.log('? MapView: Successfully added Leaflet satellite tile layer');
+          };
 
-          console.log('? MapView: Successfully added Leaflet satellite tile layer');
+          if (satelliteData.is_mosaic) {
+            // tile_url is a TileJSON URL (JSON endpoint) — must fetch it to get the XYZ tile template
+            console.log('??? MapView: Mosaic detected — fetching TileJSON to resolve XYZ tile template...');
+            const collection = satelliteData.items?.[0]?.collection;
+            fetchAndSignTileJSON(satelliteData.tile_url, { collection }).then((result) => {
+              if (result.success && result.tileTemplate) {
+                console.log('??? MapView: Resolved mosaic tile template:', result.tileTemplate.substring(0, 120));
+                addTileLayer(result.tileTemplate);
+              } else {
+                console.error('??? MapView: Failed to resolve mosaic TileJSON, falling back to raw URL:', result.error);
+                addTileLayer(satelliteData.tile_url);
+              }
+            });
+          } else {
+            addTileLayer(satelliteData.tile_url);
+          }
         }
 
         // If we have map_data GeoJSON, add it as vector data

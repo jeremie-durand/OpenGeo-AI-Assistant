@@ -1774,7 +1774,8 @@ async def unified_query_processor(request: Request):
                         collections=[qs_collection_id],
                         bbox=qs_location['bbox'],
                         datetime_range=datetime_range,
-                        query_filters=None
+                        query_filters=None,
+                        query_context=natural_query
                     )
                 except Exception:
                     pass
@@ -3320,7 +3321,8 @@ async def unified_query_processor(request: Request):
                     collections=[collection_id],
                     bbox=stac_query.get("bbox"),
                     datetime_range=stac_query.get("datetime"),
-                    query_filters={"eo:cloud_cover": {"lt": 30}} if "cloud" not in natural_query.lower() else None
+                    query_filters={"eo:cloud_cover": {"lt": 30}} if "cloud" not in natural_query.lower() else None,
+                    query_context=natural_query
                 )
                 
                 if mosaic_result:

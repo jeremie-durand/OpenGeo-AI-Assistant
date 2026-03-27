@@ -1234,7 +1234,8 @@ async def register_mosaic_search(
 def build_mosaic_tilejson_url(
     search_id: str,
     collection_id: str,
-    tile_matrix_set: str = "WebMercatorQuad"
+    tile_matrix_set: str = "WebMercatorQuad",
+    query_context: Optional[str] = None
 ) -> str:
     """
     Build a mosaic tilejson URL for the registered search.
@@ -1265,27 +1266,67 @@ def build_mosaic_tilejson_url(
     # Mosaic needs raw band data (B04, B03, B02) with proper rescale and color formula.
     # We must use raw bands for any optical imagery collection.
     
+    # Detect spectral index requests from query context
+    query_lower = (query_context or "").lower()
+    is_ndvi = any(t in query_lower for t in ["ndvi", "vegetation index", "normalized difference vegetation"])
+    is_ndwi = any(t in query_lower for t in ["ndwi", "water index", "normalized difference water"])
+    is_false_color = any(t in query_lower for t in ["false color", "false-color", "infrared", "nir"])
+
     needs_raw_bands = False
     if config:
         # Check if config uses 'visual' asset - this won't work for mosaic
         if config.assets and 'visual' in config.assets:
             needs_raw_bands = True
             logger.info(f"[SYNC] Mosaic: Config uses 'visual' asset - switching to raw bands for {collection_id}")
-    
+
     if needs_raw_bands or not config:
         # Use raw band rendering for mosaic
         if 'sentinel-2' in collection_lower:
-            # Sentinel-2 RGB bands with proper rescale for surface reflectance (0-10000 scaled)
-            params.extend(["assets=B04", "assets=B03", "assets=B02"])
-            params.append("rescale=0,3000")
-            params.append("color_formula=gamma+RGB+2.7%2C+saturation+1.5%2C+sigmoidal+RGB+15+0.55")
-            logger.info(f"[ART] Using raw RGB bands (B04,B03,B02) for Sentinel-2 mosaic")
+            if is_ndvi:
+                params.extend(["assets=B08", "assets=B04"])
+                params.append("expression=%28B08-B04%29%2F%28B08%2BB04%29")
+                params.append("rescale=-1,1")
+                params.append("colormap_name=rdylgn")
+                logger.info(f"[ART] Using NDVI expression (B08,B04) for Sentinel-2 mosaic")
+            elif is_ndwi:
+                params.extend(["assets=B03", "assets=B08"])
+                params.append("expression=%28B03-B08%29%2F%28B03%2BB08%29")
+                params.append("rescale=-1,1")
+                params.append("colormap_name=blues")
+                logger.info(f"[ART] Using NDWI expression (B03,B08) for Sentinel-2 mosaic")
+            elif is_false_color:
+                params.extend(["assets=B08", "assets=B04", "assets=B03"])
+                params.append("rescale=0,3000")
+                logger.info(f"[ART] Using false-color NIR bands (B08,B04,B03) for Sentinel-2 mosaic")
+            else:
+                # Sentinel-2 RGB bands with proper rescale for surface reflectance (0-10000 scaled)
+                params.extend(["assets=B04", "assets=B03", "assets=B02"])
+                params.append("rescale=0,3000")
+                params.append("color_formula=gamma+RGB+2.7%2C+saturation+1.5%2C+sigmoidal+RGB+15+0.55")
+                logger.info(f"[ART] Using raw RGB bands (B04,B03,B02) for Sentinel-2 mosaic")
         elif 'landsat' in collection_lower:
-            # Landsat RGB composite  
-            params.extend(["assets=red", "assets=green", "assets=blue"])
-            params.append("rescale=0,30000")
-            params.append("color_formula=gamma+RGB+2.7%2C+saturation+1.5%2C+sigmoidal+RGB+15+0.55")
-            logger.info(f"[ART] Using raw RGB bands for Landsat mosaic")
+            if is_ndvi:
+                params.extend(["assets=nir08", "assets=red"])
+                params.append("expression=%28nir08-red%29%2F%28nir08%2Bred%29")
+                params.append("rescale=-1,1")
+                params.append("colormap_name=rdylgn")
+                logger.info(f"[ART] Using NDVI expression (nir08,red) for Landsat mosaic")
+            elif is_ndwi:
+                params.extend(["assets=green", "assets=nir08"])
+                params.append("expression=%28green-nir08%29%2F%28green%2Bnir08%29")
+                params.append("rescale=-1,1")
+                params.append("colormap_name=blues")
+                logger.info(f"[ART] Using NDWI expression (green,nir08) for Landsat mosaic")
+            elif is_false_color:
+                params.extend(["assets=nir08", "assets=red", "assets=green"])
+                params.append("rescale=0,30000")
+                logger.info(f"[ART] Using false-color NIR bands for Landsat mosaic")
+            else:
+                # Landsat RGB composite
+                params.extend(["assets=red", "assets=green", "assets=blue"])
+                params.append("rescale=0,30000")
+                params.append("color_formula=gamma+RGB+2.7%2C+saturation+1.5%2C+sigmoidal+RGB+15+0.55")
+                logger.info(f"[ART] Using raw RGB bands for Landsat mosaic")
         elif 'hls' in collection_lower:
             # HLS RGB composite (B04=Red, B03=Green, B02=Blue for HLS2)
             params.extend(["assets=B04", "assets=B03", "assets=B02"])
@@ -1319,7 +1360,8 @@ async def get_mosaic_tilejson_url(
     collections: List[str],
     bbox: List[float],
     datetime_range: Optional[str] = None,
-    query_filters: Optional[Dict[str, Any]] = None
+    query_filters: Optional[Dict[str, Any]] = None,
+    query_context: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
     """
     Complete flow to get a mosaic tilejson URL.
@@ -1349,7 +1391,7 @@ async def get_mosaic_tilejson_url(
     # Use first collection for rendering params (they should be similar for related collections)
     collection_id = collections[0] if collections else "sentinel-2-l2a"
     
-    tilejson_url = build_mosaic_tilejson_url(search_id, collection_id)
+    tilejson_url = build_mosaic_tilejson_url(search_id, collection_id, query_context=query_context)
     
     return {
         "tilejson_url": tilejson_url,
