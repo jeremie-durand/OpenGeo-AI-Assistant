@@ -14,6 +14,7 @@ interface SidebarProps {
   publicDatasets: Dataset[];
   planetaryComputerDatasets: Dataset[];
   stacApiCollections?: Dataset[];
+  onRefreshStacCollections?: () => void;
   isLoading: boolean;
   onDatasetSelect: (dataset: Dataset) => void;
   selectedDataset: Dataset | null;
@@ -30,6 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   publicDatasets,
   planetaryComputerDatasets,
   stacApiCollections = [],
+  onRefreshStacCollections,
   isLoading,
   onDatasetSelect,
   selectedDataset,
@@ -308,6 +310,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                 )}
 
                 {/* Private STAC API collections */}
+                {onRefreshStacCollections && stacApiCollections.length === 0 && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
+                      STAC API
+                      <button onClick={onRefreshStacCollections} style={{ fontSize: '11px', padding: '2px 8px', cursor: 'pointer' }}>Reload</button>
+                    </div>
+                    <div style={{ fontSize: '11px', opacity: 0.6 }}>No collections loaded</div>
+                  </div>
+                )}
                 {stacApiCollections.length > 0 && (
                   <div style={{ marginBottom: '8px' }}>
                     <div
@@ -322,7 +333,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                       }}
                     >
                       STAC API
-                      <span style={{ fontSize: '11px', opacity: 0.6, fontStyle: 'italic' }}>Private</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', opacity: 0.6, fontStyle: 'italic' }}>Private</span>
+                        {onRefreshStacCollections && (
+                          <button onClick={onRefreshStacCollections} style={{ fontSize: '10px', padding: '1px 6px', cursor: 'pointer', opacity: 0.7 }}>↻</button>
+                        )}
+                      </span>
                     </div>
                     <DatasetDropdown
                       datasets={stacApiCollections}

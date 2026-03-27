@@ -292,11 +292,13 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
     staleTime: 60000,
   });
 
-  const { data: stacApiCollections = [], isLoading: loadingStacApi } = useQuery({
+  const { data: stacApiCollections = [], isLoading: loadingStacApi, refetch: refetchStacCollections } = useQuery({
     queryKey: ['stacApiCollections'],
     queryFn: () => apiService.getStacApiCollections(),
     initialData: [],
-    staleTime: 60000,
+    staleTime: 0,
+    retry: 3,
+    retryDelay: 2000,
   });
 
   const isLoading = loadingMyData || loadingVeda || loadingPublic || loadingPC || loadingStacApi;
@@ -365,6 +367,7 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
         publicDatasets={publicDatasets}
         planetaryComputerDatasets={planetaryComputerDatasets}
         stacApiCollections={stacApiCollections}
+        onRefreshStacCollections={refetchStacCollections}
         isLoading={isLoading}
         onDatasetSelect={handleDatasetClick}
         selectedDataset={appState.selectedDataset}
