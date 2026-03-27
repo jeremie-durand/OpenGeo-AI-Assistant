@@ -636,11 +636,15 @@ class RouterAgent:
         logger.info(f" PATTERN CHECK: is_analytical={is_analytical}, wants_new_data={wants_new_data}")
         logger.info(f" PATTERN CHECK: query_lower='{query_lower}'")
         
-        # GUARANTEED VISION: If map has data AND query is analytical AND not asking for new data
-        if (has_rendered_map or has_screenshot) and is_analytical and not wants_new_data:
+        # GUARANTEED VISION: Only if user explicitly provided a screenshot AND query is analytical
+        # Note: has_rendered_map alone is NOT sufficient — vision analysis requires an actual
+        # screenshot to analyze. Relying on has_rendered_map caused second STAC queries (e.g.
+        # "NDVI near Paris") to be misrouted to vision because broad patterns like "near",
+        # "also", "identify" matched analytical_patterns even for new data requests.
+        if has_screenshot and is_analytical and not wants_new_data:
             matched_patterns = [p for p in analytical_patterns if p in query_lower]
-            logger.info(f" GUARANTEED VISION: Map has data + analytical query detected")
-            logger.info(f"   has_rendered_map={has_rendered_map}, has_screenshot={has_screenshot}")
+            logger.info(f" GUARANTEED VISION: Screenshot provided + analytical query detected")
+            logger.info(f"   has_screenshot={has_screenshot}")
             logger.info(f"   Matched patterns: {matched_patterns[:3]}")
             return {
                 "action_type": "vision_analysis",
