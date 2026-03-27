@@ -34,27 +34,18 @@ class VisionAnalyzer:
     """
     
     def __init__(self):
-        """Initialize the vision analyzer with Azure OpenAI."""
-        # Support both API key and Managed Identity authentication
-        api_key = os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_KEY")
-        api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        use_managed_identity = os.getenv("AZURE_OPENAI_USE_MANAGED_IDENTITY", "").lower() == "true"
-        
+        """Initialize the vision analyzer."""
         from semantic_translator import get_llm_client
-        logger.info(" VisionAnalyzer: Using provider-agnostic vision client")
-        self.client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
-        
-        # Use provider-agnostic LLM model environment variable for deployment name
-        self.deployment_name = os.getenv("COPILOT_LLM_MODEL", "gpt-5")
+        self.deployment_name = os.getenv("LLM_MODEL", "gpt-4o")
+        self.client = get_llm_client(model=self.deployment_name, vision=True)
         self.stac_endpoint = "http://localhost:8081"
-        
+
         # OPTIMIZATION: Simple imagery cache to avoid re-fetching same tiles
         # Key: (lat, lon, radius) rounded to 2 decimals, Value: (image_bytes, metadata, timestamp)
         self._imagery_cache = {}
         self._cache_ttl = 300  # 5 minutes TTL (same as query cache)
-        
-        logger.info(f" VisionAnalyzer initialized with deployment: {self.deployment_name} (timeout: 180s, cache enabled)")
+
+        logger.info(f" VisionAnalyzer initialized with model: {self.deployment_name} (timeout: 180s, cache enabled)")
     
     async def analyze_location_with_vision(
         self,
