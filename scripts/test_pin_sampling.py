@@ -17,6 +17,7 @@ Requires: httpx, rich (pip install httpx rich)
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 import uuid
@@ -76,7 +77,7 @@ TEST_LOCATIONS = {
     },
 }
 
-DEFAULT_BACKEND = "http://localhost:8000"
+DEFAULT_BACKEND = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 
 @dataclass

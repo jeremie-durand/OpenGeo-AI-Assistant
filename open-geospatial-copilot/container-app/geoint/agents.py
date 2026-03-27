@@ -13,6 +13,7 @@ Architecture:
 """
 
 import logging
+import os
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
@@ -379,7 +380,7 @@ async def _download_and_visualize_raster(
         date_end = (target_date + timedelta(days=1)).isoformat()
         
         # Search STAC catalog
-        catalog = pystac_client.Client.open("http://localhost:8081")
+        catalog = pystac_client.Client.open(os.getenv("STAC_API_URL", "http://localhost:8081"))
         
         search = catalog.search(
             collections=[collection_id],

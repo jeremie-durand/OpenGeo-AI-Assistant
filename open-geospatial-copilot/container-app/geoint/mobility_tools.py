@@ -29,7 +29,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 # Module-level constants
-STAC_ENDPOINT = "http://localhost:8081"
+STAC_ENDPOINT = os.getenv("STAC_API_URL", "http://localhost:8081")
 RADIUS_MILES = 5
 SLOPE_THRESHOLD_SLOW = 15   # degrees
 SLOPE_THRESHOLD_NO_GO = 30  # degrees

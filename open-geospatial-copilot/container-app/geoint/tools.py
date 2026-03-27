@@ -19,6 +19,7 @@ Tools:
 from typing import Dict, Any, Optional, List, Literal
 import logging
 import asyncio
+import os
 from datetime import datetime, timedelta
 import numpy as np
 import planetary_computer
@@ -39,7 +40,7 @@ class GeospatialTools:
     
     def __init__(self):
         """Initialize the tools with STAC endpoint."""
-        self.stac_endpoint = "http://localhost:8081"
+        self.stac_endpoint = os.getenv("STAC_API_URL", "http://localhost:8081")
         logger.info(" GeospatialTools initialized")
     
     async def calculate_terrain_slope(

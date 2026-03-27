@@ -4,7 +4,7 @@
 
 set -e
 
-API_URL="http://localhost:8000/api/query"
+API_URL="${BACKEND_URL:-http://localhost:8000}/api/query"
 PROMPT='{"query": "Show me satellite imagery of Paris"}'
 
 # Send a test prompt

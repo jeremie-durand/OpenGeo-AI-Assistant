@@ -57,7 +57,7 @@ class RasterDataFetcher:
     
     def __init__(self):
         """Initialize the raster data fetcher."""
-        self.stac_endpoint = "http://localhost:8081"
+        self.stac_endpoint = os.getenv("STAC_API_URL", "http://localhost:8081")
         self._catalog = None
         logger.info(" RasterDataFetcher initialized")
     

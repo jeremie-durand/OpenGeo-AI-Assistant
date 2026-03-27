@@ -38,7 +38,7 @@ class VisionAnalyzer:
         from semantic_translator import get_llm_client
         self.deployment_name = os.getenv("LLM_MODEL", "gpt-4o")
         self.client = get_llm_client(model=self.deployment_name, vision=True)
-        self.stac_endpoint = "http://localhost:8081"
+        self.stac_endpoint = os.getenv("STAC_API_URL", "http://localhost:8081")
 
         # OPTIMIZATION: Simple imagery cache to avoid re-fetching same tiles
         # Key: (lat, lon, radius) rounded to 2 decimals, Value: (image_bytes, metadata, timestamp)

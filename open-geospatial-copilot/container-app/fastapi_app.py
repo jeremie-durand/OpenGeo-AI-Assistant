@@ -448,7 +448,8 @@ geoint_executor = None
 
 # STAC endpoints configuration
 # STAC_API_URL env var sets the local/private STAC API — no hardcoded host/port
-_local_stac_url = os.getenv("STAC_API_URL", "").strip() or "http://localhost:8081/api/stac/v1/search"
+_stac_base = os.getenv("STAC_API_URL", "http://localhost:8081").strip().rstrip("/")
+_local_stac_url = f"{_stac_base}/search"
 STAC_ENDPOINTS = {
     "local_stac": _local_stac_url,
     "planetary_computer": "https://planetarycomputer.microsoft.com/api/stac/v1/search",

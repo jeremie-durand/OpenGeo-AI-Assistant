@@ -24,6 +24,7 @@ REVISION: v1.0.0 - Initial implementation
 """
 
 import logging
+import os
 import re
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
@@ -1075,7 +1076,7 @@ class TileSelector:
         try:
             import requests
             
-            stac_api = 'http://localhost:8081'
+            stac_api = os.getenv("STAC_API_URL", "http://localhost:8081")
             url = f"{stac_api}/collections/{collection_id}"
             
             response = requests.get(url, timeout=10)
