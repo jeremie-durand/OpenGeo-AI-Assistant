@@ -598,7 +598,7 @@ const MapView: React.FC<MapViewProps> = ({
 
               // MULTI-TILE DEM RENDERING: Check if backend provided all_tile_urls
               const allTileUrls = lastChatResponse.translation_metadata?.all_tile_urls;
-              
+
               // Fix incorrect assets in tile URLs from backend
               const fixTileUrlAssets = (url: string, collection: string): string => {
                 if (collection === 'sentinel-2-l2a' && url.includes('assets=red&assets=green&assets=blue')) {
@@ -608,8 +608,18 @@ const MapView: React.FC<MapViewProps> = ({
                 }
                 return url;
               };
-              
-              if (allTileUrls && Array.isArray(allTileUrls) && allTileUrls.length > 1) {
+
+              // Collections that need TileJSON resolution and should NOT go through the multi-tile path
+              // They are handled by the useMosaicApproach path below (lines 691+)
+              const mosaicApproachCollections = [
+                'cop-dem-glo-30', 'cop-dem-glo-90', 'nasadem', '3dep-seamless', 'alos-dem',
+                'modis-09A1-061', 'modis-09Q1-061', 'modis-13Q1-061', 'modis-13A1-061',
+                'modis-15A2H-061', 'modis-17A2H-061', 'modis-11A2-061', 'modis-64A1-061',
+                'modis-14A1-061', 'modis-14A2-061'
+              ];
+              const collectionNeedsMosaicApproach = mosaicApproachCollections.some(col => collection?.includes(col));
+
+              if (allTileUrls && Array.isArray(allTileUrls) && allTileUrls.length > 1 && !collectionNeedsMosaicApproach) {
                 console.log('MapView: MULTI-TILE DEM DETECTED!');
                 console.log(`MapView: Backend provided ${allTileUrls.length} tile URLs for seamless coverage`);
                 
