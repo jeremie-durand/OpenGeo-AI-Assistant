@@ -96,7 +96,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                onClick={handleLogoClick}
                onMouseEnter={(e) => (e.target as HTMLElement).style.opacity = '0.8'}
                onMouseLeave={(e) => (e.target as HTMLElement).style.opacity = '1'}>
-            <span>Open Geospatial Copilot</span>
+            <span>OpenGeo AI Assistant</span>
           </div>
         </div>
         <div className="landing-top-right">
@@ -219,7 +219,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
               ×
             </button>
             <div style={{ marginBottom: '10px', fontSize: '14px', fontWeight: 600, color: '#1e3a5f' }}>
-              Welcome to Open Geospatial Copilot!
+              Welcome to OpenGeo AI Assistant!
             </div>
             <div style={{ fontSize: '12px', lineHeight: 1.5, color: 'rgba(30, 58, 95, 0.8)' }}>
               To get started, try the example queries in the{' '}

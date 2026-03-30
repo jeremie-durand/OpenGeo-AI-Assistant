@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for Complete Open Geospatial Copilot Application
+# Multi-stage Dockerfile for Complete OpenGeo AI Assistant Application
 # Stage 1: Build React Frontend
 # Stage 2: Python Backend with Static Files
 

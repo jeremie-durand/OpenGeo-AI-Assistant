@@ -39,7 +39,7 @@ export default function App() {
       </div>
       <MapPanel geojson={geojson} selected={selected} />
       <div className="panel right">
-        <h2 className="h2">Open Geospatial Copilot</h2>
+        <h2 className="h2">OpenGeo AI Assistant</h2>
         <ChatPanel
           selected={selected}
           onGeojson={(g) => setGeojson(g)}

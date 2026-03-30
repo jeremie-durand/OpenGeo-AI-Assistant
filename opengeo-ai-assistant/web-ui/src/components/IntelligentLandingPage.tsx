@@ -119,7 +119,7 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
             WebkitTextFillColor: 'transparent',
             fontWeight: 'bold'
           }}>
-            Open Geospatial Copilot
+            OpenGeo AI Assistant
           </h1>
           <p style={{ 
             fontSize: '1.2rem', 

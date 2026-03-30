@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**open Geospatial Copilot** is an open-source, AI-powered geospatial analysis and satellite data visualization platform — a fork of Microsoft's Earth Copilot adapted to be Azure-independent with flexible LLM provider support.
+**OpenGeo AI Assistant** is an open-source, AI-powered geospatial analysis and satellite data visualization platform — a fork of Microsoft's Earth Copilot adapted to be Azure-independent with flexible LLM provider support.
 
 ## Commands
 

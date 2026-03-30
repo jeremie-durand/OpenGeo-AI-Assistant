@@ -4,7 +4,7 @@ An open-source, AI-powered geospatial assistant for exploring, analyzing, and vi
 
 ## Project Description
 
-Open Geospatial Copilot enables users to:
+OpenGeo AI Assistant enables users to:
 
 - Search and visualize satellite and geospatial data collections with natural language
 - Run locally via Docker, without any Azure dependencies

@@ -1,3 +1,3 @@
-# Open Geospatial Copilot Web UI
+# OpenGeo AI Assistant Web UI
 
-This directory contains the React frontend for Open Geospatial Copilot
+This directory contains the React frontend for OpenGeo AI Assistant

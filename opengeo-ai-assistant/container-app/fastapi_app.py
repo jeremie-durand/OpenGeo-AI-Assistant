@@ -1,5 +1,5 @@
 # FastAPI - Complete Implementation
-# Containerized version with full Open Geospatial Copilot functionality
+# Containerized version with full OpenGeo AI Assistant functionality
 
 import json
 import logging
@@ -300,7 +300,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
-app = FastAPI(title="Open Geospatial Copilot API", version="1.0.0")
+app = FastAPI(title="OpenGeo AI Assistant API", version="1.0.0")
 
 # Configure CORS origins from environment variable
 cors_origins_str = os.environ.get("CORS_ORIGINS", "*")
@@ -408,14 +408,14 @@ if os.path.exists(static_dir):
             from fastapi.responses import HTMLResponse
             return HTMLResponse(content=html_content)
         else:
-            return {"message": "Open Geospatial Copilot API is running", "frontend": "not_available"}
+            return {"message": "OpenGeo AI Assistant API is running", "frontend": "not_available"}
 else:
     logger.warning(f"[WARN] Static directory not found: {static_dir}")
     
     # Default root endpoint when no static files
     @app.get("/")
     async def root():
-        return {"message": "Open Geospatial Copilot API is running", "status": "ok", "version": "1.0.0"}
+        return {"message": "OpenGeo AI Assistant API is running", "status": "ok", "version": "1.0.0"}
 
 # Serve PC rendering config (ALWAYS AVAILABLE - not dependent on static dir)
 @app.get("/pc_rendering_config.json")
@@ -614,7 +614,7 @@ async def startup_event():
     global semantic_translator, global_translator, SEMANTIC_KERNEL_AVAILABLE, router_agent
     global terrain_analyzer, mobility_classifier, los_calculator, geoint_utils, GEOINT_AVAILABLE
 
-    logger.info("[LAUNCH] OPEN GEOSPATIAL COPILOT CONTAINER STARTING UP")
+    logger.info("[LAUNCH] OpenGeo AI Assistant CONTAINER STARTING UP")
 
     # ----------------------------------------------------------------
     # Initialise provider-agnostic GenericQueryTranslator
@@ -655,7 +655,7 @@ async def startup_event():
     qs_stats = get_quickstart_stats()
     logger.info(f"[LAUNCH] Quick Start Cache: {qs_stats['total_queries']} queries, {len(qs_stats['collections_covered'])} collections")
 
-    logger.info(f"[OK] OPEN GEOSPATIAL COPILOT CONTAINER READY (AI={'ENABLED' if SEMANTIC_KERNEL_AVAILABLE else 'DISABLED — keyword fallback'})")
+    logger.info(f"[OK] OpenGeo AI Assistant CONTAINER READY (AI={'ENABLED' if SEMANTIC_KERNEL_AVAILABLE else 'DISABLED — keyword fallback'})")
 
 # Helper functions ported from Router Function App
 def detect_collections(query: str) -> List[str]:
@@ -1586,7 +1586,7 @@ async def get_stac_collections():
 async def unified_query_processor(request: Request):
     """
     Unified query processor that combines Router Function logic with direct STAC search
-    This implements the complete Open Geospatial Copilot query processing pipeline
+    This implements the complete OpenGeo AI Assistant query processing pipeline
     """
     try:
         # Parse request with robust handling

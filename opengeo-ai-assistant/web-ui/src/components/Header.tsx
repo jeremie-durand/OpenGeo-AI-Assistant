@@ -24,7 +24,7 @@ const Header: React.FC<HeaderProps> = ({ onReturnToLanding, onRestartSession, on
         <div className="brand" onClick={onReturnToLanding} style={{cursor:'pointer', transition:'opacity 0.2s ease'}}
              onMouseEnter={(e) => (e.target as HTMLElement).style.opacity = '0.8'}
              onMouseLeave={(e) => (e.target as HTMLElement).style.opacity = '1'}>
-          <div className="brand-name">Open Geospatial Copilot</div>
+          <div className="brand-name">OpenGeo AI Assistant</div>
         </div>
       </div>
       <div style={{ 
