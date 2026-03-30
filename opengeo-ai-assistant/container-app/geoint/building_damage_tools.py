@@ -58,7 +58,7 @@ def _analyze_screenshot_with_vision_sync(screenshot_base64: str, latitude: float
     """
 
     from semantic_translator import get_llm_client
-    client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
+    client = get_llm_client(model=os.getenv("LLM_MODEL", "gpt-5"), vision=True)
 
     clean_base64 = screenshot_base64
     if screenshot_base64.startswith("data:image"):

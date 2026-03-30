@@ -4447,9 +4447,9 @@ async def geoint_terrain_chat(request: Request):
             synthesis_prompt = f"User question: {message}\n\nTerrain data for ({latitude:.4f}, {longitude:.4f}):\n{tool_summary}"
             try:
                 from semantic_translator import get_llm_client
-                _terrain_client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"))
+                _terrain_client = get_llm_client(model=os.getenv("LLM_MODEL", "gpt-5"))
                 synth_resp = await _terrain_client.chat.completions.create(
-                    model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"),
+                    model=os.getenv("LLM_MODEL", "gpt-5"),
                     messages=[
                         {"role": "system", "content": "You are a terrain analysis expert. Synthesize the provided DEM/terrain tool data into a clear, comprehensive answer to the user's question."},
                         {"role": "user", "content": synthesis_prompt}
@@ -4931,7 +4931,7 @@ async def geoint_building_damage_analysis(request: Request):
         
         # Create vision client for GPT-5 screenshot analysis (local-first, multi-provider)
         from semantic_translator import get_llm_client
-        _vision_client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
+        _vision_client = get_llm_client(model=os.getenv("LLM_MODEL", "gpt-5"), vision=True)
         
         # ── PATH 1: Screenshot provided — analyze the loaded map imagery ──
         # When the user has loaded data (NAIP, Sentinel-2, Landsat, etc.) and
@@ -4967,7 +4967,7 @@ async def geoint_building_damage_analysis(request: Request):
             
             try:
                 vision_response = await _vision_client.chat.completions.create(
-                    model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"),
+                    model=os.getenv("LLM_MODEL", "gpt-5"),
                     messages=[
                         {"role": "system", "content": "You are a GEOINT Building Damage Assessment expert. Analyze the provided imagery and give structured damage assessments."},
                         {"role": "user", "content": [
@@ -5051,7 +5051,7 @@ async def geoint_building_damage_analysis(request: Request):
                         clean_b64 = clean_b64.split(',', 1)[1]
                     
                     vision_response = await _vision_client.chat.completions.create(
-                        model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"),
+                        model=os.getenv("LLM_MODEL", "gpt-5"),
                         messages=[
                             {"role": "system", "content": "You are an expert in structural damage assessment from satellite imagery. Provide detailed, factual analysis."},
                             {"role": "user", "content": [

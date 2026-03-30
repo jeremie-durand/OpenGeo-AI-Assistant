@@ -24,16 +24,16 @@ SCAN_EXTENSIONS = {'.py', '.ts', '.tsx', '.js', '.jsx', '.sh', '.md', '.ps1', '.
 
 # Files where ALL emojis are UI-facing (skip entirely)
 UI_ONLY_FILES = {
-    'earth-copilot/web-ui/src/config/collectionConfig.ts',  # emoji: property values rendered in UI
-    'earth-copilot/web-ui/src/ui/CatalogPanel.tsx',         # JSX heading with emoji
+    'opengeo-ai-assistant/web-ui/src/config/collectionConfig.ts',  # emoji: property values rendered in UI
+    'opengeo-ai-assistant/web-ui/src/ui/CatalogPanel.tsx',         # JSX heading with emoji
 }
 
 # Files with MIXED UI + non-UI emojis (selective stripping from console/logger/comment lines only)
 MIXED_UI_FILES = {
-    'earth-copilot/web-ui/src/components/Chat.tsx',
-    'earth-copilot/web-ui/src/services/api.ts',
-    'earth-copilot/web-ui/src/App.tsx',
-    'earth-copilot/container-app/geoint/raster_data_fetcher.py',
+    'opengeo-ai-assistant/web-ui/src/components/Chat.tsx',
+    'opengeo-ai-assistant/web-ui/src/services/api.ts',
+    'opengeo-ai-assistant/web-ui/src/App.tsx',
+    'opengeo-ai-assistant/container-app/geoint/raster_data_fetcher.py',
 }
 
 # Skip these directories and files

@@ -3,7 +3,7 @@
 
 #!/usr/bin/env python3
 """
-Earth Copilot Installation Verification Script
+Installation Verification Script
 Run this script to verify that all critical dependencies are correctly installed.
 """
 
@@ -56,7 +56,7 @@ def test_semantic_kernel_imports():
     return True
 
 def main():
-    print(" Earth Copilot Installation Verification")
+    print(" OpenGeo AI Assistant Installation Verification")
     print("=" * 50)
     
     # Critical dependencies with exact versions

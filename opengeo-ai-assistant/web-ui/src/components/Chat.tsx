@@ -234,7 +234,7 @@ const Chat: React.FC<ChatProps> = ({
     if (messages.length === 0 && !selectedDataset) {
       const welcomeMessage: ChatMessage = {
         role: 'assistant',
-        content: "Welcome to Earth Copilot! I'm here to help you find datasets that include location and date details. Whether you're tracking time-sensitive trends or exploring geospatial insights, I've got you covered. Just tell me what you're working on, and we'll get started!",
+        content: "Welcome to OpenGeo AI Assistant! I'm here to help you find datasets that include location and date details. Whether you're tracking time-sensitive trends or exploring geospatial insights, I've got you covered. Just tell me what you're working on, and we'll get started!",
         timestamp: new Date()
       };
       setMessages([welcomeMessage]);

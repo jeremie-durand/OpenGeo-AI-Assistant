@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 """
-Smart Tile Selection System for Earth Copilot
+Smart Tile Selection System for OpenGeo AI Assistant
 
 This module implements intelligent tile ranking and selection to ensure users
 always see the most recent, clear, high-quality imagery for their queries.

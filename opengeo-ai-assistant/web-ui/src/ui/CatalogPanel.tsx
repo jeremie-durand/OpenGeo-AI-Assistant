@@ -42,7 +42,7 @@ export default function CatalogPanel({
         ) : (
           <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
             <h3>Satellite Data Access</h3>
-            <p>Earth-Copilot now provides direct access to:</p>
+            <p>OpenGeo AI Assistant provides direct access to:</p>
             <ul style={{ textAlign: 'left', margin: '10px 0' }}>
               <li><strong>Planetary Computer</strong> - 126+ operational collections</li>
               <li><strong>NASA VEDA</strong> - 10+ specialized research datasets</li>

@@ -1,5 +1,5 @@
 """
-Agents Package for Earth Copilot Container App
+Agents Package for OpenGeo AI Assistant
 
 This package contains agents for AI-powered analysis tasks:
 - EnhancedVisionAgent: Advanced geospatial analysis using GPT-5 vision and various tools.

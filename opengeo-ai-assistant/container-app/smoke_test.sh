@@ -1,5 +1,5 @@
 #!/bin/bash
-# Smoke test for Earth Copilot backend API. 
+# Smoke test for OpenGeo AI Assistant API. 
 # This script sends a test query to the API and checks for a valid response.
 
 set -e

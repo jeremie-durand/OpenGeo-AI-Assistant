@@ -1,5 +1,5 @@
 """
-Chat Vision Analyzer - GPT-5 Vision for Earth Copilot Chat Queries
+Chat Vision Analyzer - GPT-5 Vision for OpenGeo AI Assistant Chat Queries
 
 This module enables GPT-5 Vision analysis for regular chat queries when users ask
 about imagery visible on the map. It detects questions like:
@@ -41,7 +41,7 @@ class ChatVisionAnalyzer:
     def __init__(self):
         """Initialize chat vision analyzer with LLM client"""
         from semantic_translator import get_llm_client
-        self.client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
+        self.client = get_llm_client(model=os.getenv("LLM_MODEL", "gpt-5"), vision=True)
         self.deployment_name = self.client.model
         logger.info(f" ChatVisionAnalyzer initialized with model: {self.deployment_name}")
     
@@ -319,7 +319,7 @@ class ChatVisionAnalyzer:
             base64_image = base64.b64encode(image_data).decode('utf-8')
             
             # Build conversational prompt
-            system_prompt = """You are Earth Copilot, an AI assistant specialized in analyzing satellite and Earth imagery. You're having a conversation with a user who is viewing satellite imagery on a map.
+            system_prompt = """You are OpenGeo AI Assistant, an AI assistant specialized in analyzing satellite and Earth imagery. You're having a conversation with a user who is viewing satellite imagery on a map.
 
 You have access to the imagery they're currently viewing. Answer their questions conversationally, describing what you see in the image and relating it to their previous questions if applicable.
 

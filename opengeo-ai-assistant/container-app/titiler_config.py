@@ -1,5 +1,5 @@
 """
-TiTiler Quality Optimization Configuration for Earth-Copilot
+TiTiler Quality Optimization Configuration for OpenGeo AI Assistant
 
 This module provides optimal TiTiler rendering parameters for different data types
 to ensure the highest quality map tiles on the frontend.

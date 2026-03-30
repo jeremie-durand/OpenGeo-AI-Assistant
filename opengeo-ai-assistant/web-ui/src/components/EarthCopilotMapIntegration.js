@@ -1,7 +1,7 @@
 /**
- * Enhanced Earth Copilot Map Integration
+ * Enhanced OpenGeo AI Assistant Map Integration
  * 
- * This module bridges Earth Copilot's PC tools with map visualization,
+ * This module bridges OpenGeo AI Assistant's PC tools with map visualization,
  * following the same patterns as VEDA GeoCoPilot for seamless integration.
  */
 
@@ -15,7 +15,7 @@ export class EarthCopilotMapIntegration {
    * Process Earth Copilot response and extract visualization data
    */
   processResponse(response) {
-    console.log('Earth Copilot: Processing response for map visualization:', response);
+    console.log('OpenGeo AI Assistant: Processing response for map visualization:', response);
 
     // If response is already in VEDA format, return as-is
     if (response.dataset_ids && response.bbox && response.action) {

@@ -3,8 +3,8 @@
 .env.*
 !**/.env_template
 !**/.env.example
-earth-copilot/.env
-planetary_computer/.env
+!**/.env
+!**/planetary_computer/.env
 
 # Python
 __pycache__/

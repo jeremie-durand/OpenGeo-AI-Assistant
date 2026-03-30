@@ -12,7 +12,7 @@ What it extracts from planetary-computer-tasks repository:
 - Categories for organizing collections
 
 Output:
-    - earth-copilot/container-app/pc_rendering_config.json
+    - opengeo-ai-assistant/container-app/pc_rendering_config.json
     
 This JSON is the SINGLE SOURCE OF TRUTH:
     - Loaded by pc_tasks_config_loader.py at app startup

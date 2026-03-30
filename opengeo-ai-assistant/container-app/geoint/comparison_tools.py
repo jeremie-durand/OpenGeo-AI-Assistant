@@ -488,7 +488,7 @@ def analyze_comparison_imagery(location: str, before_tile_url: str, after_tile_u
             })
 
         from semantic_translator import get_llm_client
-        client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
+        client = get_llm_client(model=os.getenv("LLM_MODEL", "gpt-5"), vision=True)
 
         analysis_prompts = {
             "general": f"Compare these two satellite images of {location}. The first is the BEFORE image and the second is the AFTER image. Describe all visible changes: structural, vegetation, water, land use, etc.",

@@ -14,9 +14,6 @@ documentation/melisa/
 # MCP server - not yet refactored
 opengeo-ai-assistant/mcp-server/
 
-# Compiled ARM templates (auto-generated from Bicep)
-earth-copilot/infra/main.json
-
 # Build artifacts
 *.zip
 dist/

@@ -256,7 +256,7 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
               <p><strong>Reasoning:</strong> {routingResult.reasoning}</p>
             </div>
             <p style={{ color: '#666', marginBottom: '1rem' }}>
-              Redirecting you to the specialized Copilot interface...
+              Redirecting you to the specialized OpenGeo AI Assistant interface...
             </p>
             <div style={{ 
               display: 'inline-block',
@@ -266,7 +266,7 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
               borderRadius: '0.25rem',
               fontSize: '0.9rem'
             }}>
-              Loading Copilot...
+              Loading OpenGeo AI Assistant...
             </div>
           </div>
         )}

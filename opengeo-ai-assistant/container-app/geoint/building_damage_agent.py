@@ -159,12 +159,12 @@ class BuildingDamageAgent:
         """Directly analyze a screenshot using GPT-5 Vision for damage."""
         try:
             from semantic_translator import get_llm_client
-            client = get_llm_client(model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"), vision=True)
+            client = get_llm_client(model=os.getenv("LLM_MODEL", "gpt-5"), vision=True)
             clean_base64 = screenshot_base64
             if screenshot_base64.startswith('data:image'):
                 clean_base64 = screenshot_base64.split(',', 1)[1]
             response = await client.chat.completions.create(
-                model=os.getenv("COPILOT_LLM_MODEL", "gpt-5"),
+                model=os.getenv("LLM_MODEL", "gpt-5"),
                 messages=[
                     {"role": "system", "content": "You are an expert in structural damage assessment from satellite imagery."},
                     {"role": "user", "content": [
