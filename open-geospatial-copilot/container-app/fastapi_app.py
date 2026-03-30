@@ -2902,12 +2902,16 @@ async def unified_query_processor(request: Request):
                 stac_response = await execute_direct_stac_search(stac_query, stac_endpoint, original_query=natural_query)
 
                 # If local STAC returned nothing, fall back to Planetary Computer.
-                # Local STAC may have the collection but not have data for this bbox/time range.
+                # Always substitute PC-compatible collection IDs in case local STAC used
+                # non-standard names (e.g. "sentinel2_eo_products" instead of "sentinel-2-l2a").
                 if stac_endpoint != "planetary_computer":
                     local_features = stac_response.get("results", {}).get("features", [])
                     if not local_features:
                         logger.info(f"[SIGNAL] Local STAC returned 0 features — retrying against Planetary Computer")
-                        stac_response = await execute_direct_stac_search(stac_query, "planetary_computer", original_query=natural_query)
+                        pc_collections = detect_collections(natural_query)
+                        pc_stac_query = {**stac_query, "collections": pc_collections}
+                        stac_response = await execute_direct_stac_search(pc_stac_query, "planetary_computer", original_query=natural_query)
+                        stac_query = pc_stac_query
 
                 if stac_response.get("success"):
                     raw_features = stac_response.get("results", {}).get("features", [])
@@ -3465,6 +3469,68 @@ async def unified_query_processor(request: Request):
                         logger.info(f"[OK] Updated stac_params bbox to union: {union_bbox}")
 
         
+        # If local STAC returned features but none had tilejson assets (i.e. they are
+        # raw local STAC items without PC-style tile endpoints), retry against PC so
+        # the user still gets renderable imagery.
+        if not all_tile_urls and not mosaic_result and features and stac_endpoint != "planetary_computer":
+            logger.info("[SIGNAL] Local STAC features have no tilejson assets — retrying against Planetary Computer")
+            pc_collections = detect_collections(natural_query)
+            pc_stac_query = {**stac_query, "collections": pc_collections}
+            pc_stac_response = await execute_direct_stac_search(pc_stac_query, "planetary_computer", original_query=natural_query)
+            if pc_stac_response.get("success"):
+                pc_features = pc_stac_response.get("results", {}).get("features", [])
+                if pc_features:
+                    logger.info(f"[OK] PC fallback returned {len(pc_features)} renderable features")
+                    features = pc_features
+                    stac_response = pc_stac_response
+                    # Re-run tile URL generation for PC features
+                    all_tile_urls = []
+                    all_bboxes = []
+                    collection_id = pc_features[0].get("collection", collections[0] if collections else "")
+                    for feature in pc_features[:20]:
+                        tilejson_asset = feature.get("assets", {}).get("tilejson", {})
+                        if tilejson_asset and "href" in tilejson_asset:
+                            feature_bbox = feature.get("bbox")
+                            if not feature_bbox or len(feature_bbox) != 4:
+                                continue
+                            if any(v is None or not isinstance(v, (int, float)) for v in feature_bbox):
+                                continue
+                            feat_collection_id = feature.get("collection", collection_id)
+                            original_url = tilejson_asset["href"]
+                            quality_params = build_tile_url_params(feat_collection_id, natural_query)
+                            if quality_params and "?" in original_url:
+                                base_url, existing_params = original_url.split("?", 1)
+                                param_list = [p for p in existing_params.split("&")
+                                              if not any(p.startswith(k) for k in [
+                                                  "assets=", "asset_bidx=", "colormap_name=", "rescale=",
+                                                  "resampling=", "bidx=", "format=", "nodata=",
+                                                  "color_formula=", "expression=", "asset_as_band="])]
+                                optimized_url = f"{base_url}?{'&'.join(param_list)}&{quality_params}" if param_list else f"{base_url}?{quality_params}"
+                            elif quality_params:
+                                optimized_url = f"{original_url}?{quality_params}"
+                            else:
+                                optimized_url = original_url
+                            all_tile_urls.append({"item_id": feature.get("id"), "bbox": feature_bbox, "tilejson_url": optimized_url})
+                            all_bboxes.append(feature_bbox)
+                    # Re-register mosaic for PC features
+                    if not mosaic_result and stac_query and stac_query.get("bbox"):
+                        pc_collection_id = pc_features[0].get("collection", "") if pc_features else ""
+                        optical_collections_needing_mosaic = ["sentinel-2-l2a", "landsat-c2-l2", "landsat-8-c2-l2", "landsat-9-c2-l2", "hls", "hls2-l30", "hls2-s30"]
+                        if any(pc_collection_id.startswith(oc) or pc_collection_id == oc for oc in optical_collections_needing_mosaic):
+                            try:
+                                from hybrid_rendering_system import get_mosaic_tilejson_url
+                                mosaic_result = await get_mosaic_tilejson_url(
+                                    collections=[pc_collection_id],
+                                    bbox=stac_query.get("bbox"),
+                                    datetime_range=stac_query.get("datetime"),
+                                    query_filters={"eo:cloud_cover": {"lt": 30}} if "cloud" not in natural_query.lower() else None,
+                                    query_context=natural_query
+                                )
+                                if mosaic_result:
+                                    logger.info(f"[OK] MOSAIC: PC fallback mosaic registered for {pc_collection_id}")
+                            except Exception as e:
+                                logger.warning(f"[WARN] MOSAIC: PC fallback mosaic registration failed: {e}")
+
         # Clean up STAC results to remove problematic asset_bidx parameters
         cleaned_stac_results = clean_tilejson_urls(stac_response.get("results", {}))
         
