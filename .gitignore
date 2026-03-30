@@ -12,7 +12,7 @@ fire_preview.png
 documentation/melisa/
 
 # MCP server - not yet refactored
-open-geospatial-copilot/mcp-server/
+opengeo-ai-assistant/mcp-server/
 
 # Compiled ARM templates (auto-generated from Bicep)
 earth-copilot/infra/main.json

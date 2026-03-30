@@ -29,7 +29,7 @@ None for now
 ## Architecture
 
 ```
-open-geospatial-copilot/
+opengeo-ai-assistant/
 ├── web-ui/            # React 18 + TypeScript + Vite frontend
 ├── container-app/     # Python FastAPI backend (main app logic lives here)
 ├── mcp-server/        # Optional Model Context Protocol server

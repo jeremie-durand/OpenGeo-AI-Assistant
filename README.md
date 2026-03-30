@@ -1,4 +1,4 @@
-# Open Geospatial Copilot
+# OpenGeo AI Assistant
 
 An open-source, AI-powered geospatial assistant for exploring, analyzing, and visualizing Earth data using natural language queries. This project is based on the original Earth Copilot by Microsoft, but is Azure-free.
 
@@ -29,9 +29,9 @@ See [QUICK_DEPLOY.md](QUICK_DEPLOY.md)
 
 ## Future Features
 
-The `open-geospatial-copilot/ai-search` directory contains scripts and setup for semantic (vector-based) search. These files are currently not used in the deployed application, but are retained for future development when vector AI search is implemented (e.g., with PostGIS or Parquet). For now, only the STAC API is active.
+The `opengeo-ai-assistant/ai-search` directory contains scripts and setup for semantic (vector-based) search. These files are currently not used in the deployed application, but are retained for future development when vector AI search is implemented (e.g., with PostGIS or Parquet). For now, only the STAC API is active.
 
-The `open-geospatial-copilot/mcp-server` directory contains code and configuration for an optional Model Context Protocol (MCP) server. This server is designed for advanced AI/LLM context management, agent orchestration, and integration with external tools or workflows. It is not required for basic usage or local deployments, but can be used if you need multi-agent coordination, persistent conversation context, or a backend bridge for complex AI workflows.
+The `opengeo-ai-assistant/mcp-server` directory contains code and configuration for an optional Model Context Protocol (MCP) server. This server is designed for advanced AI/LLM context management, agent orchestration, and integration with external tools or workflows. It is not required for basic usage or local deployments, but can be used if you need multi-agent coordination, persistent conversation context, or a backend bridge for complex AI workflows.
 
 ## License
 

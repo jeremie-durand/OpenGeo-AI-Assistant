@@ -1,9 +1,9 @@
 services:
   backend:
     build:
-      context: ./open-geospatial-copilot/
+      context: ./opengeo-ai-assistant/
       dockerfile: Dockerfile
-    container_name: open-geospatial-copilot-complete
+    container_name: opengeo-ai-assistant-complete
     ports:
       - "8000:8000"
     env_file:
