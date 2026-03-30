@@ -905,6 +905,7 @@ class HybridRenderingSystem:
         # Handle expression (ONLY if specified in config)
         if "expression" in params and params["expression"]:
             query_parts.append(f"expression={params['expression']}")
+            query_parts.append("asset_as_band=True")
         
         # DO NOT add format, scale, resampling, or any other params not in PC config!
         
@@ -1088,83 +1089,31 @@ async def register_mosaic_search(
         
         mosaic_register_url = "https://planetarycomputer.microsoft.com/api/data/v1/mosaic/register"
         
-        # Build the search payload
-        search_body = {
-            "collections": collections,
-            "filter-lang": "cql2-json"
-        }
-        
-        # Build CQL2 filter
-        cql_filter = {
-            "op": "and",
-            "args": []
-        }
-        
-        # Add bbox filter
+        # Build the search payload using standard STAC search params.
+        # Use top-level bbox/datetime rather than CQL2 filter for maximum
+        # pgSTAC compatibility — CQL2 s_intersects/t_intersects predicates
+        # are not universally supported by pgSTAC mosaic endpoints.
+        search_body: Dict[str, Any] = {"collections": collections}
+
         if bbox and len(bbox) == 4:
-            cql_filter["args"].append({
-                "op": "s_intersects",
-                "args": [
-                    {"property": "geometry"},
-                    {
-                        "type": "Polygon",
-                        "coordinates": [[
-                            [bbox[0], bbox[1]],
-                            [bbox[2], bbox[1]],
-                            [bbox[2], bbox[3]],
-                            [bbox[0], bbox[3]],
-                            [bbox[0], bbox[1]]
-                        ]]
-                    }
-                ]
-            })
-        
-        # Add datetime filter
+            search_body["bbox"] = bbox
+
         if datetime_range:
-            # Parse datetime range
-            if "/" in datetime_range:
-                start_dt, end_dt = datetime_range.split("/")
-                cql_filter["args"].append({
-                    "op": "t_intersects",
-                    "args": [
-                        {"property": "datetime"},
-                        {"interval": [start_dt, end_dt]}
-                    ]
-                })
-            else:
-                cql_filter["args"].append({
-                    "op": "t_intersects",
-                    "args": [
-                        {"property": "datetime"},
-                        {"interval": [datetime_range, datetime_range]}
-                    ]
-                })
-        
-        # Add cloud cover filter if specified
+            search_body["datetime"] = datetime_range
+
+        # Cloud cover via legacy STAC "query" extension (widely supported)
         if query_filters and "eo:cloud_cover" in query_filters:
-            cloud_filter = query_filters["eo:cloud_cover"]
-            if "lt" in cloud_filter:
-                cql_filter["args"].append({
-                    "op": "<",
-                    "args": [
-                        {"property": "eo:cloud_cover"},
-                        cloud_filter["lt"]
-                    ]
-                })
-            elif "lte" in cloud_filter:
-                cql_filter["args"].append({
-                    "op": "<=",
-                    "args": [
-                        {"property": "eo:cloud_cover"},
-                        cloud_filter["lte"]
-                    ]
-                })
-        
-        # Only add filter if we have conditions
-        if cql_filter["args"]:
-            search_body["filter"] = cql_filter
-        
-        logger.info(f"[GLOBE] Registering mosaic search: collections={collections}, bbox={bbox}")
+            search_body["query"] = {"eo:cloud_cover": query_filters["eo:cloud_cover"]}
+
+        # Sort by least cloud cover first for best-pixel mosaic compositing
+        search_body["sortby"] = [
+            {"field": "eo:cloud_cover", "direction": "asc"}
+        ]
+
+        logger.info(
+            f"[GLOBE] Registering mosaic search: collections={collections}, "
+            f"bbox={bbox}, datetime={datetime_range}"
+        )
         
         # Try httpx first (async), fall back to urllib (sync)
         import asyncio
@@ -1212,6 +1161,7 @@ async def register_mosaic_search(
             response = await asyncio.to_thread(_make_request)
             logger.info(f"[SLOW] Mosaic registration via urllib fallback: {response['status_code']}")
         
+        logger.debug(f"[MOSAIC] Registration payload: {json_lib.dumps(search_body)}")
         if response["status_code"] == 200:
             result = json_lib.loads(response["text"])
             search_id = result.get("searchid") or result.get("search_id")
@@ -1223,7 +1173,10 @@ async def register_mosaic_search(
             
             return search_id
         else:
-            logger.error(f"[FAIL] Mosaic registration failed: {response['status_code']} - {response['text']}")
+            logger.error(
+                f"[FAIL] Mosaic registration failed: {response['status_code']} - "
+                f"{response['text'][:300]} | payload={json_lib.dumps(search_body)[:200]}"
+            )
             return None
                     
     except Exception as e:
@@ -1289,12 +1242,14 @@ def build_mosaic_tilejson_url(
             if is_ndvi:
                 params.extend(["assets=B08", "assets=B04"])
                 params.append("expression=%28B08-B04%29%2F%28B08%2BB04%29")
+                params.append("asset_as_band=True")
                 params.append("rescale=-1,1")
                 params.append("colormap_name=rdylgn")
                 logger.info(f"[ART] Using NDVI expression (B08,B04) for Sentinel-2 mosaic")
             elif is_ndwi:
                 params.extend(["assets=B03", "assets=B08"])
                 params.append("expression=%28B03-B08%29%2F%28B03%2BB08%29")
+                params.append("asset_as_band=True")
                 params.append("rescale=-1,1")
                 params.append("colormap_name=blues")
                 logger.info(f"[ART] Using NDWI expression (B03,B08) for Sentinel-2 mosaic")
@@ -1312,12 +1267,14 @@ def build_mosaic_tilejson_url(
             if is_ndvi:
                 params.extend(["assets=nir08", "assets=red"])
                 params.append("expression=%28nir08-red%29%2F%28nir08%2Bred%29")
+                params.append("asset_as_band=True")
                 params.append("rescale=-1,1")
                 params.append("colormap_name=rdylgn")
                 logger.info(f"[ART] Using NDVI expression (nir08,red) for Landsat mosaic")
             elif is_ndwi:
                 params.extend(["assets=green", "assets=nir08"])
                 params.append("expression=%28green-nir08%29%2F%28green%2Bnir08%29")
+                params.append("asset_as_band=True")
                 params.append("rescale=-1,1")
                 params.append("colormap_name=blues")
                 logger.info(f"[ART] Using NDWI expression (green,nir08) for Landsat mosaic")
@@ -1354,8 +1311,6 @@ def build_mosaic_tilejson_url(
         render_params = HybridRenderingSystem.build_titiler_url_params(collection_id)
         if render_params:
             params.append(render_params)
-    
-    return f"{base_url}?{'&'.join(params)}"
     
     return f"{base_url}?{'&'.join(params)}"
 
