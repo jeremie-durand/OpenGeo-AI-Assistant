@@ -1279,6 +1279,10 @@ def build_mosaic_tilejson_url(
             needs_raw_bands = True
             logger.info(f"[SYNC] Mosaic: Config uses 'visual' asset - switching to raw bands for {collection_id}")
 
+    # Always use raw-band path for spectral index requests, regardless of config
+    if is_ndvi or is_ndwi or is_false_color:
+        needs_raw_bands = True
+
     if needs_raw_bands or not config:
         # Use raw band rendering for mosaic
         if 'sentinel-2' in collection_lower:

@@ -696,12 +696,13 @@ def detect_collections(query: str) -> List[str]:
         # MODIS (500m) excluded from default as it's too coarse for most use cases (4 pixels per city block)
         detected_collections.extend(['sentinel-2-l2a', 'landsat-c2-l2'])
     
-    # Remove duplicates while preserving order (validate against PC metadata)
+    # Remove duplicates while preserving order.
+    # NOTE: PC metadata is incomplete (doesn't list all PC collections like sentinel-2-l2a),
+    # so we skip the metadata validation filter to avoid silently dropping valid collections.
     seen = set()
     unique_collections = []
-    valid_collection_ids = set(get_all_collection_ids())
     for collection in detected_collections:
-        if collection not in seen and collection in valid_collection_ids:
+        if collection not in seen:
             seen.add(collection)
             unique_collections.append(collection)
     
@@ -2896,10 +2897,18 @@ async def unified_query_processor(request: Request):
                 # Determine which STAC endpoint to use (intelligent routing from Router Function App)
                 stac_endpoint = translator.determine_stac_source(natural_query, stac_params)
                 logger.info(f"[SIGNAL] STAC source determined: {stac_endpoint}")
-                
+
                 # Pass original_query for smart deduplication (removes duplicate grid cells)
                 stac_response = await execute_direct_stac_search(stac_query, stac_endpoint, original_query=natural_query)
-                
+
+                # If local STAC returned nothing, fall back to Planetary Computer.
+                # Local STAC may have the collection but not have data for this bbox/time range.
+                if stac_endpoint != "planetary_computer":
+                    local_features = stac_response.get("results", {}).get("features", [])
+                    if not local_features:
+                        logger.info(f"[SIGNAL] Local STAC returned 0 features — retrying against Planetary Computer")
+                        stac_response = await execute_direct_stac_search(stac_query, "planetary_computer", original_query=natural_query)
+
                 if stac_response.get("success"):
                     raw_features = stac_response.get("results", {}).get("features", [])
                     search_diagnostics["raw_count"] = len(raw_features)
@@ -3564,6 +3573,33 @@ async def unified_query_processor(request: Request):
         logger.error(f"[FAIL] Unified query processor error: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Query processing failed: {str(e)}")
+
+@app.post("/api/sign-mosaic-url")
+async def sign_mosaic_url(request: Request):
+    """Sign a Planetary Computer URL with SAS token for authenticated tile access."""
+    try:
+        req_body = await request.json()
+        url = req_body.get("url")
+        if not url:
+            raise HTTPException(status_code=400, detail="url field required")
+
+        try:
+            import planetary_computer
+            signed_url = planetary_computer.sign_url(url)
+            authenticated = signed_url != url
+        except Exception as e:
+            logger.warning(f"[WARN] PC URL signing failed: {e}, returning original URL")
+            signed_url = url
+            authenticated = False
+
+        return JSONResponse(content={"signed_url": signed_url, "authenticated": authenticated})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[FAIL] sign-mosaic-url error: {e}")
+        raise HTTPException(status_code=500, detail=f"URL signing failed: {str(e)}")
+
 
 @app.post("/api/stac-search")
 async def stac_search(request: Request):

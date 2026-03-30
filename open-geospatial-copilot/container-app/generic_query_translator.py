@@ -89,7 +89,11 @@ def _parse_json(text: str) -> Any:
 
 async def _llm_text(client, messages: List[Dict], max_tokens: int = 512, temperature: float = 0.2) -> str:
     """Call *client* (LLMClient) and return the assistant text."""
-    response = await client.chat(messages, max_tokens=max_tokens, temperature=temperature)
+    try:
+        response = await client.chat(messages, max_tokens=max_tokens, temperature=temperature)
+    except Exception as exc:
+        logger.error(f"[GQT] _llm_text chat() raised: {type(exc).__name__}: {exc}")
+        return ""
     if isinstance(response, dict):
         content_blocks = response.get("content", [])
         if content_blocks and isinstance(content_blocks, list):
@@ -97,8 +101,78 @@ async def _llm_text(client, messages: List[Dict], max_tokens: int = 512, tempera
             return item.get("text", "") if isinstance(item, dict) else str(item)
         choices = response.get("choices", [])
         if choices:
-            return choices[0].get("message", {}).get("content", "")
-    return str(response)
+            msg = choices[0].get("message", {})
+            content = msg.get("content") if isinstance(msg, dict) else None
+            if not content:
+                logger.warning(f"[GQT] _llm_text got null/empty content, finish_reason={choices[0].get('finish_reason')!r}")
+            return content or ""
+    logger.warning(f"[GQT] _llm_text unexpected response shape: {str(response)[:200]}")
+    return ""
+
+# ---------------------------------------------------------------------------
+# Keyword-based STAC parameter extractor (fallback when LLM fails)
+# ---------------------------------------------------------------------------
+
+# Well-known location bboxes [west, south, east, north]
+_KNOWN_BBOXES: Dict[str, List[float]] = {
+    "france": [-5.14, 41.33, 9.56, 51.09],
+    "germany": [5.87, 47.27, 15.04, 55.06],
+    "spain": [-9.39, 35.95, 4.32, 43.75],
+    "italy": [6.63, 36.62, 18.52, 47.09],
+    "uk": [-8.62, 49.86, 1.77, 60.86],
+    "united kingdom": [-8.62, 49.86, 1.77, 60.86],
+    "usa": [-125.0, 24.5, -66.9, 49.4],
+    "united states": [-125.0, 24.5, -66.9, 49.4],
+    "brazil": [-73.99, -33.75, -28.85, 5.27],
+    "india": [68.18, 7.97, 97.40, 35.67],
+    "china": [73.50, 18.20, 134.77, 53.55],
+    "australia": [113.34, -43.64, 153.57, -10.67],
+    "africa": [-17.63, -34.83, 51.28, 37.35],
+    "europe": [-10.66, 34.58, 34.60, 71.19],
+    "california": [-124.41, 32.53, -114.13, 42.01],
+    "paris": [2.25, 48.81, 2.42, 48.91],
+    "london": [-0.51, 51.28, 0.33, 51.69],
+    "new york": [-74.26, 40.50, -73.70, 40.92],
+    "tokyo": [139.50, 35.50, 140.00, 35.90],
+    "amazon": [-73.99, -9.00, -44.00, 2.00],
+    "sahara": [-17.00, 15.00, 37.00, 35.00],
+}
+
+
+def _keyword_extract_stac_params(query: str) -> Dict[str, Any]:
+    """Extract bbox, datetime, and location_name from query text without LLM."""
+    q_lower = query.lower()
+
+    # Extract year(s) — pick the first 4-digit year in [1970, 2030]
+    years = [int(y) for y in re.findall(r"\b((?:19|20)\d{2})\b", query) if 1970 <= int(y) <= 2030]
+    datetime_range: Optional[str] = None
+    if len(years) >= 2:
+        years_sorted = sorted(years)
+        datetime_range = f"{years_sorted[0]}-01-01/{years_sorted[-1]}-12-31"
+    elif len(years) == 1:
+        datetime_range = f"{years[0]}-01-01/{years[0]}-12-31"
+
+    # Match against known locations (longest match wins)
+    bbox: Optional[List[float]] = None
+    location_name: Optional[str] = None
+    best_len = 0
+    for name, coords in _KNOWN_BBOXES.items():
+        if name in q_lower and len(name) > best_len:
+            bbox = coords
+            location_name = name.title()
+            best_len = len(name)
+
+    # Cloud cover
+    cc_match = re.search(r"(\d+)\s*%?\s*cloud", q_lower)
+    cloud_cover: Optional[int] = int(cc_match.group(1)) if cc_match else None
+
+    logger.info(f"[GQT] keyword fallback: location={location_name}, bbox={bbox}, datetime={datetime_range}")
+    return {
+        "location_name": location_name,
+        "bbox": bbox,
+        "datetime": datetime_range,
+        "cloud_cover": cloud_cover,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +256,15 @@ class GenericQueryTranslator:
         return None
 
     async def collection_mapping_agent(self, query: str) -> List[str]:
-        """Return a list of STAC collection IDs relevant to *query*."""
+        """Return a list of STAC collection IDs relevant to *query*.
+
+        Strategy:
+        1. If a local STAC API is configured, discover its collections.
+           - If the LLM can match local collections to the query, use them.
+           - Otherwise, fall through to PC keyword detection so the search
+             lands on Planetary Computer (not the empty local catalog).
+        2. Without a local STAC, use the PC collection list + LLM or keyword fallback.
+        """
         # Try to discover collections from the configured local STAC API first
         discovered = await self._discover_stac_collections()
         if discovered:
@@ -246,11 +328,27 @@ Example: ["sentinel-2-l2a", "landsat-c2-l2"]"""
             )
             result = _parse_json(raw)
             if isinstance(result, list):
-                return [str(c) for c in result]
-            logger.warning(f"[GQT] collection_mapping_agent unexpected shape: {result}")
+                ids = [str(c) for c in result]
+                # Only return local IDs if they actually exist in the local catalog.
+                # If the LLM picked PC-style IDs (e.g. "sentinel-2-l2a") when we only
+                # showed local collections, fall through to the PC keyword fallback so
+                # the search routes to Planetary Computer, not the local STAC.
+                if discovered and self._local_collection_ids:
+                    local_matches = [c for c in ids if c in self._local_collection_ids]
+                    if local_matches:
+                        logger.info(f"[GQT] collection_mapping_agent: local matches={local_matches}")
+                        return local_matches
+                    logger.info("[GQT] collection_mapping_agent: LLM returned no local matches, falling back to PC")
+                else:
+                    return ids
+            else:
+                logger.warning(f"[GQT] collection_mapping_agent unexpected shape: {result}")
         except Exception as exc:
             logger.error(f"[GQT] collection_mapping_agent failed: {exc}")
-        # Deterministic keyword fallback
+
+        # Deterministic keyword fallback — always uses PC collection IDs.
+        # This also clears _local_collection_ids so determine_stac_source routes to PC.
+        self._local_collection_ids = None
         from fastapi_app import detect_collections
         return detect_collections(query)
 
@@ -293,7 +391,10 @@ Examples:
                 return result
         except Exception as exc:
             logger.error(f"[GQT] build_stac_query_agent failed: {exc}")
-        return {"location_name": None, "bbox": None, "datetime": None, "cloud_cover": None}
+
+        # Keyword fallback — extract year and location name from query text
+        logger.info("[GQT] build_stac_query_agent using keyword fallback")
+        return _keyword_extract_stac_params(query)
 
     # ------------------------------------------------------------------
     # Agent 3 — datetime extraction
