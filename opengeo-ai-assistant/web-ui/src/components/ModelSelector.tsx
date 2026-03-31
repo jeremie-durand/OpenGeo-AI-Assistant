@@ -20,36 +20,43 @@ interface ModelSelectorProps {
 
 const DEFAULT_MODELS: ModelOption[] = [
   {
-    id: 'gpt-5',
-    name: 'GPT-5',
+    id: 'unknown',
+    name: 'Loading...',
     isDefault: true,
-    isAvailable: true
+    isAvailable: false
   }
 ];
 
-const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, selectedModel, apiBaseUrl = '' }) => {
+const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, apiBaseUrl = '' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [models, setModels] = useState<ModelOption[]>(DEFAULT_MODELS);
-  const [currentModel, setCurrentModel] = useState<string>(
-    selectedModel || DEFAULT_MODELS.find(m => m.isDefault)?.id || 'gpt-5'
-  );
+  const [currentModel, setCurrentModel] = useState<string>('unknown');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Fetch available models from health endpoint
+  // Fetch the configured model from health endpoint
   useEffect(() => {
     const fetchAvailableModels = async () => {
       try {
         const response = await authenticatedFetch(`${apiBaseUrl}/api/health`);
         const data = await response.json();
-        // Backend returns 'checks' or 'connectivity_tests'; check llm_client status.
-        const llmStatus = data.checks?.llm_client?.status || data.connectivity_tests?.llm_client?.status;
+        const llmInfo = data.checks?.llm_client || data.connectivity_tests?.llm_client;
+        const llmStatus = llmInfo?.status;
         const isLlmOk = ['connected', 'configured', 'healthy', 'ok'].includes(llmStatus?.toLowerCase() || '');
 
-        if (isLlmOk) {
-          // Mark all models as available since LLM is configured
-          setModels(prevModels =>
-            prevModels.map(model => ({ ...model, isAvailable: true }))
-          );
+        if (isLlmOk && llmInfo?.model) {
+          const modelId = llmInfo.model as string;
+          const provider = llmInfo.provider as string | undefined;
+          // Build a readable display name: show provider prefix if available
+          const displayName = provider
+            ? `${provider.charAt(0).toUpperCase() + provider.slice(1)} / ${modelId}`
+            : modelId;
+
+          const realModel: ModelOption = { id: modelId, name: displayName, isDefault: true, isAvailable: true };
+          setModels([realModel]);
+          setCurrentModel(modelId);
+          onModelChange?.(modelId);
+        } else {
+          setModels([{ id: 'unknown', name: 'Unavailable', isDefault: true, isAvailable: false }]);
         }
       } catch (err) {
         console.error('Failed to fetch model availability:', err);
@@ -74,19 +81,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, selectedMo
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Store model preference in localStorage
-  useEffect(() => {
-    localStorage.setItem('earthcopilot-model', currentModel);
-  }, [currentModel]);
-
-  // Load model preference from localStorage on mount
-  useEffect(() => {
-    const savedModel = localStorage.getItem('earthcopilot-model');
-    if (savedModel && models.find(m => m.id === savedModel)) {
-      setCurrentModel(savedModel);
-      onModelChange?.(savedModel);
-    }
-  }, []);
 
   const handleModelSelect = (modelId: string) => {
     const model = models.find(m => m.id === modelId);
