@@ -5,7 +5,7 @@
  * following the same patterns as VEDA GeoCoPilot for seamless integration.
  */
 
-export class EarthCopilotMapIntegration {
+export class OpenGeoMapIntegration {
   constructor(mapInstance, setMapData) {
     this.mapInstance = mapInstance;
     this.setMapData = setMapData;
@@ -105,7 +105,7 @@ export class EarthCopilotMapIntegration {
       return result;
 
     } catch (error) {
-      console.error('Earth Copilot: Error extracting data from response:', error);
+      console.error('OpenGeo AI: Error extracting data from response:', error);
       return null;
     }
   }
@@ -139,7 +139,7 @@ export class EarthCopilotMapIntegration {
         };
       }
     } catch (error) {
-      console.error('Earth Copilot: Error creating bbox geometry:', error);
+      console.error('OpenGeo AI: Error creating bbox geometry:', error);
     }
     
     return null;
@@ -149,7 +149,7 @@ export class EarthCopilotMapIntegration {
    * Visualize data on the map
    */
   visualizeOnMap(data) {
-    console.log('Earth Copilot: Visualizing data on map:', data);
+    console.log('OpenGeo AI: Visualizing data on map:', data);
 
     try {
       // Handle different visualization types
@@ -177,7 +177,7 @@ export class EarthCopilotMapIntegration {
       this.setMapData(data);
 
     } catch (error) {
-      console.error('Earth Copilot: Error visualizing data on map:', error);
+      console.error('OpenGeo AI: Error visualizing data on map:', error);
     }
   }
 
@@ -189,35 +189,35 @@ export class EarthCopilotMapIntegration {
 
     if (data.dataset_ids && data.dataset_ids.length > 0) {
       // Load datasets (this would integrate with the dataset loading system)
-      console.log('Earth Copilot: Loading datasets:', data.dataset_ids);
+      console.log('OpenGeo AI: Loading datasets:', data.dataset_ids);
     }
   }
 
   loadTilesOnMap(data) {
     if (data.visualization_data?.tile_urls && this.mapInstance) {
       data.visualization_data.tile_urls.forEach(url => {
-        console.log('Earth Copilot: Adding tile layer:', url);
+        console.log('OpenGeo AI: Adding tile layer:', url);
         // Add tile layer to map
       });
     }
 
     if (data.visualization_data?.mosaic_urls) {
-      console.log('Earth Copilot: Adding mosaic layers:', data.visualization_data.mosaic_urls);
+      console.log('OpenGeo AI: Adding mosaic layers:', data.visualization_data.mosaic_urls);
     }
   }
 
   setupCompareMode(data) {
-    console.log('Earth Copilot: Setting up compare mode with date range:', data.date_range);
+    console.log('OpenGeo AI: Setting up compare mode with date range:', data.date_range);
     this.loadDataOnMap(data);
   }
 
   setupAnalysisMode(data) {
-    console.log('Earth Copilot: Setting up analysis mode');
+    console.log('OpenGeo AI: Setting up analysis mode');
     this.loadDataOnMap(data);
   }
 
   showAnimation(data) {
-    console.log('Earth Copilot: Showing animation');
+    console.log('OpenGeo AI: Showing animation');
     // Handle animation display
   }
 
@@ -226,23 +226,23 @@ export class EarthCopilotMapIntegration {
 
     try {
       // Add bbox geometry to map as a layer
-      if (this.mapInstance.getLayer('earth-copilot-bbox')) {
-        this.mapInstance.removeLayer('earth-copilot-bbox');
+      if (this.mapInstance.getLayer('opengeo-bbox')) {
+        this.mapInstance.removeLayer('opengeo-bbox');
       }
       
-      if (this.mapInstance.getSource('earth-copilot-bbox')) {
-        this.mapInstance.removeSource('earth-copilot-bbox');
+      if (this.mapInstance.getSource('opengeo-bbox')) {
+        this.mapInstance.removeSource('opengeo-bbox');
       }
 
-      this.mapInstance.addSource('earth-copilot-bbox', {
+      this.mapInstance.addSource('opengeo-bbox', {
         type: 'geojson',
         data: bbox
       });
 
       this.mapInstance.addLayer({
-        id: 'earth-copilot-bbox',
+        id: 'opengeo-bbox',
         type: 'line',
-        source: 'earth-copilot-bbox',
+        source: 'opengeo-bbox',
         paint: {
           'line-color': '#ff6b6b',
           'line-width': 3,
@@ -267,7 +267,7 @@ export class EarthCopilotMapIntegration {
       }
 
     } catch (error) {
-      console.error('Earth Copilot: Error adding bbox to map:', error);
+      console.error('OpenGeo AI: Error adding bbox to map:', error);
     }
   }
 }
@@ -276,7 +276,7 @@ export class EarthCopilotMapIntegration {
  * Enhanced chat message processing for map integration
  */
 export function enhanceMessageForMapVisualization(message, response) {
-  const integration = new EarthCopilotMapIntegration(null, () => {});
+  const integration = new OpenGeoMapIntegration(null, () => {});
   return integration.processResponse(response);
 }
 
@@ -300,4 +300,4 @@ export function hasVisualizableData(response) {
   );
 }
 
-export default EarthCopilotMapIntegration;
+export default OpenGeoMapIntegration;

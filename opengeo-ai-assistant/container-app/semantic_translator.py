@@ -73,7 +73,7 @@ class GeocodingPlugin:
     """
 
     def __init__(self):
-        self.user_agent = "EarthCopilot/2.1 (geocoding-plugin)"
+        self.user_agent = "OpenGeoAI/2.1 (geocoding-plugin)"
 
     async def geocode(self, location_name: str) -> str:
         """Geocode a location name using OpenStreetMap Nominatim."""
@@ -1230,7 +1230,7 @@ Query: "{query}"
             prompt_config = PromptTemplateConfig(
                 template=classification_prompt,
                 name="classify_query",
-                description="Classify user query for Earth Copilot",
+                description="Classify user query for OpenGeo AI Assistant",
                 template_format="semantic-kernel",
                 input_variables=[
                     InputVariable(name="query", description="The user's query to classify")
@@ -4679,7 +4679,7 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
                     "limit": 1,
                     "addressdetails": 1
                 }
-                headers = {"User-Agent": "EarthCopilot/1.0"}
+                headers = {"User-Agent": "OpenGeoAI/1.0"}
                 
                 timeout = aiohttp.ClientTimeout(total=10)
                 async with session.get(url, params=params, headers=headers, timeout=timeout) as response:

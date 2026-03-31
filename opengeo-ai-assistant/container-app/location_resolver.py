@@ -1036,7 +1036,7 @@ class EnhancedLocationResolver:
             "namedetails": 1,
             "dedupe": 1
         }
-        headers = {"User-Agent": "EarthCopilot/2.0 (geographic-analysis)"}
+        headers = {"User-Agent": "OpenGeoAI/2.0 (geographic-analysis)"}
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -1453,7 +1453,7 @@ class EnhancedLocationResolver:
             "dedupe": 1,
             "accept-language": "en"  # Prefer English results
         }
-        headers = {"User-Agent": "EarthCopilot/2.1 (enhanced-international-geocoding)"}
+        headers = {"User-Agent": "OpenGeoAI/2.1 (enhanced-international-geocoding)"}
         
         try:
             async with aiohttp.ClientSession() as session:

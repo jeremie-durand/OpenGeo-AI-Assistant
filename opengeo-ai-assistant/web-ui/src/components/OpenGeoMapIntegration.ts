@@ -2,13 +2,13 @@
 // Licensed under the MIT license.
 
 /**
- * Enhanced Earth Copilot Map Integration
- * 
- * This module bridges Earth Copilot's PC tools with map visualization,
+ * Enhanced OpenGeo AI Assistant Map Integration
+ *
+ * This module bridges OpenGeo AI Assistant's PC tools with map visualization,
  * following the same patterns as VEDA GeoCoPilot for seamless integration.
  */
 
-export interface EarthCopilotMapResponse {
+export interface OpenGeoMapResponse {
   dataset_ids?: string[];
   summary: string;
   date_range?: {
@@ -27,7 +27,7 @@ export interface EarthCopilotMapResponse {
   };
 }
 
-export class EarthCopilotMapIntegration {
+export class OpenGeoMapIntegration {
   private mapInstance: any;
   private setMapData: (data: any) => void;
 
@@ -39,12 +39,12 @@ export class EarthCopilotMapIntegration {
   /**
    * Process Earth Copilot response and extract visualization data
    */
-  processResponse(response: any): EarthCopilotMapResponse {
-    console.log('Earth Copilot: Processing response for map visualization:', response);
+  processResponse(response: any): OpenGeoMapResponse {
+    console.log('OpenGeo AI: Processing response for map visualization:', response);
 
     // If response is already in VEDA format, return as-is
     if (response.dataset_ids && response.bbox && response.action) {
-      return response as EarthCopilotMapResponse;
+      return response as OpenGeoMapResponse;
     }
 
     // Try to extract structured data from text response
@@ -64,7 +64,7 @@ export class EarthCopilotMapIntegration {
   /**
    * Extract structured data from PC tool responses
    */
-  private extractDataFromResponse(response: any): EarthCopilotMapResponse | null {
+  private extractDataFromResponse(response: any): OpenGeoMapResponse | null {
     try {
       // Look for JSON data in response
       const responseText = typeof response === 'string' ? response : response.message || '';
@@ -98,7 +98,7 @@ export class EarthCopilotMapIntegration {
         action = 'compare';
       }
 
-      const result: EarthCopilotMapResponse = {
+      const result: OpenGeoMapResponse = {
         summary: responseText,
         action: action
       };
@@ -130,7 +130,7 @@ export class EarthCopilotMapIntegration {
       return result;
 
     } catch (error) {
-      console.error('Earth Copilot: Error extracting data from response:', error);
+      console.error('OpenGeo AI: Error extracting data from response:', error);
       return null;
     }
   }
@@ -164,7 +164,7 @@ export class EarthCopilotMapIntegration {
         };
       }
     } catch (error) {
-      console.error('Earth Copilot: Error creating bbox geometry:', error);
+      console.error('OpenGeo AI: Error creating bbox geometry:', error);
     }
     
     return null;
@@ -173,8 +173,8 @@ export class EarthCopilotMapIntegration {
   /**
    * Visualize data on the map
    */
-  visualizeOnMap(data: EarthCopilotMapResponse): void {
-    console.log('Earth Copilot: Visualizing data on map:', data);
+  visualizeOnMap(data: OpenGeoMapResponse): void {
+    console.log('OpenGeo AI: Visualizing data on map:', data);
 
     try {
       // Handle different visualization types
@@ -202,11 +202,11 @@ export class EarthCopilotMapIntegration {
       this.setMapData(data);
 
     } catch (error) {
-      console.error('Earth Copilot: Error visualizing data on map:', error);
+      console.error('OpenGeo AI: Error visualizing data on map:', error);
     }
   }
 
-  private loadDataOnMap(data: EarthCopilotMapResponse): void {
+  private loadDataOnMap(data: OpenGeoMapResponse): void {
     if (data.bbox && this.mapInstance) {
       // Add bbox to map
       this.addBboxToMap(data.bbox);
@@ -214,35 +214,35 @@ export class EarthCopilotMapIntegration {
 
     if (data.dataset_ids && data.dataset_ids.length > 0) {
       // Load datasets (this would integrate with the dataset loading system)
-      console.log('Earth Copilot: Loading datasets:', data.dataset_ids);
+      console.log('OpenGeo AI: Loading datasets:', data.dataset_ids);
     }
   }
 
-  private loadTilesOnMap(data: EarthCopilotMapResponse): void {
+  private loadTilesOnMap(data: OpenGeoMapResponse): void {
     if (data.visualization_data?.tile_urls && this.mapInstance) {
       data.visualization_data.tile_urls.forEach(url => {
-        console.log('Earth Copilot: Adding tile layer:', url);
+        console.log('OpenGeo AI: Adding tile layer:', url);
         // Add tile layer to map
       });
     }
 
     if (data.visualization_data?.mosaic_urls) {
-      console.log('Earth Copilot: Adding mosaic layers:', data.visualization_data.mosaic_urls);
+      console.log('OpenGeo AI: Adding mosaic layers:', data.visualization_data.mosaic_urls);
     }
   }
 
-  private setupCompareMode(data: EarthCopilotMapResponse): void {
-    console.log('Earth Copilot: Setting up compare mode with date range:', data.date_range);
+  private setupCompareMode(data: OpenGeoMapResponse): void {
+    console.log('OpenGeo AI: Setting up compare mode with date range:', data.date_range);
     this.loadDataOnMap(data);
   }
 
-  private setupAnalysisMode(data: EarthCopilotMapResponse): void {
-    console.log('Earth Copilot: Setting up analysis mode');
+  private setupAnalysisMode(data: OpenGeoMapResponse): void {
+    console.log('OpenGeo AI: Setting up analysis mode');
     this.loadDataOnMap(data);
   }
 
-  private showAnimation(data: EarthCopilotMapResponse): void {
-    console.log('Earth Copilot: Showing animation');
+  private showAnimation(data: OpenGeoMapResponse): void {
+    console.log('OpenGeo AI: Showing animation');
     // Handle animation display
   }
 
@@ -251,12 +251,12 @@ export class EarthCopilotMapIntegration {
 
     try {
       // Add bbox geometry to map as a layer
-      if (this.mapInstance.getLayer && this.mapInstance.getLayer('earth-copilot-bbox')) {
-        this.mapInstance.removeLayer('earth-copilot-bbox');
+      if (this.mapInstance.getLayer && this.mapInstance.getLayer('opengeo-bbox')) {
+        this.mapInstance.removeLayer('opengeo-bbox');
       }
       
-      if (this.mapInstance.getSource && this.mapInstance.getSource('earth-copilot-bbox')) {
-        this.mapInstance.removeSource('earth-copilot-bbox');
+      if (this.mapInstance.getSource && this.mapInstance.getSource('opengeo-bbox')) {
+        this.mapInstance.removeSource('opengeo-bbox');
       }
 
       if (this.mapInstance.sources && this.mapInstance.layers) {
@@ -294,7 +294,7 @@ export class EarthCopilotMapIntegration {
       }
 
     } catch (error) {
-      console.error('Earth Copilot: Error adding bbox to map:', error);
+      console.error('OpenGeo AI: Error adding bbox to map:', error);
     }
   }
 }
@@ -302,8 +302,8 @@ export class EarthCopilotMapIntegration {
 /**
  * Enhanced chat message processing for map integration
  */
-export function enhanceMessageForMapVisualization(message: string, response: any): EarthCopilotMapResponse {
-  const integration = new EarthCopilotMapIntegration(null, () => {});
+export function enhanceMessageForMapVisualization(message: string, response: any): OpenGeoMapResponse {
+  const integration = new OpenGeoMapIntegration(null, () => {});
   return integration.processResponse(response);
 }
 
@@ -327,4 +327,4 @@ export function hasVisualizableData(response: any): boolean {
   );
 }
 
-export default EarthCopilotMapIntegration;
+export default OpenGeoMapIntegration;

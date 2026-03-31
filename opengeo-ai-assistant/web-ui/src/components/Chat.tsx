@@ -4,7 +4,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiService, Dataset, ChatMessage, MapContext } from '../services/api';
-import { enhanceMessageForMapVisualization, hasVisualizableData } from './EarthCopilotMapIntegration';
+import { enhanceMessageForMapVisualization, hasVisualizableData } from './OpenGeoMapIntegration';
 import vedaSearchService from '../services/vedaSearchService';
 
 // Enhanced function to extract text from complex response objects
@@ -1167,7 +1167,7 @@ const Chat: React.FC<ChatProps> = ({
       // Clear previous chat and start fresh session
       const systemMessage: ChatMessage = {
         role: 'assistant',
-        content: `**Earth Copilot Search Mode**\n\nI'll search for Earth Science data using our semantic translator and STAC catalog integration.\n\n**Query Context:** ${collectionTitle}\n\nLet me process your request...`,
+        content: `**OpenGeo AI Search Mode**\n\nI'll search for Earth Science data using our semantic translator and STAC catalog integration.\n\n**Query Context:** ${collectionTitle}\n\nLet me process your request...`,
         timestamp: new Date(),
         source: 'system'
       };
@@ -1410,7 +1410,7 @@ const Chat: React.FC<ChatProps> = ({
     <div className="right">
       <div className="chat chat-container">
         <div className="header">
-          <span>Copilot</span>
+          <span>OpenGeo AI Assistant</span>
         </div>
 
         <div className="messages">

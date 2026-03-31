@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 # FEATURED DATASETS - Microsoft Planetary Computer Priority Collections
 # ============================================================================
 # These collections are prioritized for optimal rendering quality
-# Represents ~80% of typical Earth Copilot queries
+# Represents ~80% of typical OpenGeo AI Assistant queries
 
 FEATURED_COLLECTIONS = [
     # High-resolution optical imagery

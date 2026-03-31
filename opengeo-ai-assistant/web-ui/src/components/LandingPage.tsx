@@ -65,7 +65,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
     setIsPopupVisible(false);
   };
 
-  const handleCopilotIconClick = () => {
+  const handleAssistantIconClick = () => {
     // Navigate to map page (same as clicking "Map" button)
     onEnter('map');
   };
@@ -166,7 +166,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
         <div style={{height: 40}}></div>
       </div>
 
-      {/* Welcome Popup with Copilot Icon */}
+      {/* Welcome Popup with Assistant Icon */}
       {showWelcomePopup && (
         <div 
           className="welcome-popup-container"
@@ -259,9 +259,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
         </div>
       )}
 
-      {/* Copilot Map Icon Button - Bottom Right */}
+      {/* Assistant Map Icon Button - Bottom Right */}
       <div
-        onClick={handleCopilotIconClick}
+        onClick={handleAssistantIconClick}
         style={{
           position: 'fixed',
           bottom: '32px',

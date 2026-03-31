@@ -1,5 +1,5 @@
 /**
- * GEOINT Overlay Component for Earth-Copilot
+ * GEOINT Overlay Component for OpenGeo AI Assistant
  * 
  * This component provides visualization for geospatial intelligence analysis including:
  * - Terrain analysis (slope, aspect, hillshade)
