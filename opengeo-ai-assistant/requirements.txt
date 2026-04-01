@@ -11,6 +11,7 @@ anthropic==0.87.0
 semantic-kernel==1.36.2  # CRITICAL: Latest stable version with updated API
 planetary-computer==1.0.0
 pystac-client==0.9.0
+stac-pydantic==3.5.0
 rasterio==1.5.0
 xarray==2026.2.0
 fsspec==2026.3.0
