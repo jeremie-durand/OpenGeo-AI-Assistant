@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/opengeo-ai-assistant/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    allow:
+      - dependency-type: "all"
+    commit-message:
+      prefix: "feat"
+
+  - package-ecosystem: "npm"
+    directory: "/opengeo-ai-assistant/web-ui/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    allow:
+      - dependency-type: "all"
+    commit-message:
+      prefix: "feat"
