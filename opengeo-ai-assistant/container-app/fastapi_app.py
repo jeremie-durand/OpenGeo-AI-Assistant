@@ -330,92 +330,49 @@ if ENABLE_AUTH:
 else:
     logger.warning("[AUTH] ENABLE_AUTH is false — all routes are open (no authentication checks)")
 
-# Mount static files for React frontend (if static directory exists)
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(static_dir):
-    from fastapi.staticfiles import StaticFiles
+@app.get("/")
+async def root() -> dict:
+    """API root — frontend is served by Nginx."""
+    return {"message": "OpenGeo AI Assistant API is running", "status": "ok", "version": "1.0.0"}
 
-    # Mount static assets at root level to match React build paths
-    app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets")), name="assets")
-    logger.info(f"[OK] Mounted static assets from: {os.path.join(static_dir, 'assets')}")
-    
-    # Also mount full static directory for any other static files
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    logger.info(f"[OK] Mounted static files from: {static_dir}")
-    
-    # Handle favicon requests to prevent 404 errors
-    @app.get("/favicon.ico")
-    async def favicon():
-        """Return empty response for favicon to prevent 404 errors"""
-        from fastapi.responses import Response
-        return Response(status_code=204)  # 204 No Content
-    
-    # Serve JSON files from static root
-    @app.get("/pc_collections_metadata.json")
-    async def serve_pc_collections_metadata():
-        """Serve PC collections metadata JSON (from unified config)"""
-        from fastapi.responses import JSONResponse
 
-        # Get data from unified JSON
-        metadata = load_pc_metadata()
-        
-        if metadata and metadata.get('categories'):
-            return JSONResponse(content=metadata)
-        
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Collections metadata not found")
-    
-    @app.get("/stac_collections.json")
-    async def serve_stac_collections():
-        """
-        Serve STAC collections JSON for frontend dropdown
-        Now generated dynamically from unified pc_rendering_config.json
-        """
-        from fastapi.responses import JSONResponse
-        
-        if not PC_METADATA_AVAILABLE:
-            from fastapi import HTTPException
-            raise HTTPException(status_code=503, detail="Collections metadata not loaded")
-        
-        # Load metadata from unified source
-        pc_metadata = load_pc_metadata()
-        categories = pc_metadata.get('categories', [])
-        
-        # Transform categories structure to flat frontend format
-        frontend_collections = []
-        
-        for category in categories:
-            for collection in category.get('collections', []):
-                frontend_collections.append({
-                    "collection_id": collection.get('id'),
-                    "description": collection.get('description', 'No description available'),
-                    "category": category.get('name', 'Other')
-                })
-        
-        # Sort by category, then by collection_id
-        frontend_collections.sort(key=lambda x: (x["category"], x["collection_id"]))
-        
-        return JSONResponse(content=frontend_collections)
-    
-    # Serve React app at root path
-    @app.get("/")
-    async def serve_react_app():
-        """Serve the React application"""
-        index_path = os.path.join(static_dir, "index.html")
-        if os.path.exists(index_path):
-            with open(index_path, 'r', encoding='utf-8') as f:
-                html_content = f.read()
-            from fastapi.responses import HTMLResponse
-            return HTMLResponse(content=html_content)
-        else:
-            return {"message": "OpenGeo AI Assistant API is running", "frontend": "not_available"}
-else:
-    logger.warning(f"[WARN] Static directory not found: {static_dir}")
-    
-    # Default root endpoint when no static files
-    @app.get("/")
-    async def root():
-        return {"message": "OpenGeo AI Assistant API is running", "status": "ok", "version": "1.0.0"}
+@app.get("/pc_collections_metadata.json")
+async def serve_pc_collections_metadata():
+    """Serve PC collections metadata JSON (from unified config)"""
+    from fastapi.responses import JSONResponse
+    from fastapi import HTTPException
+
+    metadata = load_pc_metadata()
+
+    if metadata and metadata.get('categories'):
+        return JSONResponse(content=metadata)
+
+    raise HTTPException(status_code=404, detail="Collections metadata not found")
+
+
+@app.get("/stac_collections.json")
+async def serve_stac_collections():
+    """Serve STAC collections JSON for frontend dropdown, generated from pc_rendering_config.json"""
+    from fastapi.responses import JSONResponse
+    from fastapi import HTTPException
+
+    if not PC_METADATA_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Collections metadata not loaded")
+
+    pc_metadata = load_pc_metadata()
+    categories = pc_metadata.get('categories', [])
+
+    frontend_collections = []
+    for category in categories:
+        for collection in category.get('collections', []):
+            frontend_collections.append({
+                "collection_id": collection.get('id'),
+                "description": collection.get('description', 'No description available'),
+                "category": category.get('name', 'Other')
+            })
+
+    frontend_collections.sort(key=lambda x: (x["category"], x["collection_id"]))
+    return JSONResponse(content=frontend_collections)
 
 # Serve PC rendering config (ALWAYS AVAILABLE - not dependent on static dir)
 @app.get("/pc_rendering_config.json")
