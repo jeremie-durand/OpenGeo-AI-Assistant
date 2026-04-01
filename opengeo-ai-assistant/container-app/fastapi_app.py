@@ -15,6 +15,25 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from hybrid_rendering_system import HybridRenderingSystem  # [ART] Comprehensive rendering system
 from pydantic import BaseModel, Field
+from request_models import (
+    AnimationRequest,
+    BuildingDamageRequest,
+    ComparisonQueryRequest,
+    ComparisonRequest,
+    ExtremeWeatherRequest,
+    MobilityRequest,
+    OrchestrateRequest,
+    QueryRequest,
+    SessionResetRequest,
+    SignMosaicUrlRequest,
+    StacSearchRequest,
+    StructuredSearchRequest,
+    TerrainChatRequest,
+    TerrainRequest,
+    VedaSearchRequest,
+    VisionChatRequest,
+    VisionRequest,
+)
 from quickstart_cache import get_quickstart_classification, get_quickstart_location, get_quickstart_stats, is_quickstart_query  # [LAUNCH] Pre-computed cache for demo queries
 
 # ============================================================================
@@ -1540,30 +1559,16 @@ async def get_stac_collections():
 # ============================================================================
 
 @app.post("/api/query")
-async def unified_query_processor(request: Request):
+async def unified_query_processor(body: QueryRequest):
     """
     Unified query processor that combines Router Function logic with direct STAC search
     This implements the complete OpenGeo AI Assistant query processing pipeline
     """
     try:
-        # Parse request with robust handling
-        try:
-            req_body = await request.json()
-            if not req_body:
-                raise ValueError("Request body is empty")
-            
-        except Exception as json_error:
-            logger.error(f"JSON parsing error: {json_error}")
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid JSON data: {str(json_error)}"
-            )
-        
-        # Support both 'query' and 'user_query' keys (frontend uses 'user_query')
-        natural_query = req_body.get('query') or req_body.get('user_query') or 'No query provided'
-        session_id = req_body.get('session_id') or req_body.get('conversation_id')
-        pin = req_body.get('pin')  # Optional pin parameter {lat, lng}
-        selected_model = req_body.get('model', 'gpt-5')  # Model selection from frontend, default to gpt-5
+        natural_query = body.query or body.user_query or 'No query provided'
+        session_id = body.session_id
+        pin = body.pin
+        selected_model = body.model
         
         logger.info(f"[BOT] Selected Model: {selected_model}")
         
@@ -1599,7 +1604,7 @@ async def unified_query_processor(request: Request):
             pin_lng = pin.get('lng')
             logger.info(f"[PIN] Pin detected: ({pin_lat:.4f}, {pin_lng:.4f})")
         
-        has_satellite_data = req_body.get("has_satellite_data", False)
+        has_satellite_data = body.has_satellite_data
         query_lower = natural_query.lower().strip()
         
         # ================================================================
@@ -3598,13 +3603,10 @@ async def unified_query_processor(request: Request):
         raise HTTPException(status_code=500, detail=f"Query processing failed: {str(e)}")
 
 @app.post("/api/sign-mosaic-url")
-async def sign_mosaic_url(request: Request):
+async def sign_mosaic_url(body: SignMosaicUrlRequest):
     """Sign a Planetary Computer URL with SAS token for authenticated tile access."""
     try:
-        req_body = await request.json()
-        url = req_body.get("url")
-        if not url:
-            raise HTTPException(status_code=400, detail="url field required")
+        url = body.url
 
         try:
             import planetary_computer
@@ -3625,20 +3627,13 @@ async def sign_mosaic_url(request: Request):
 
 
 @app.post("/api/stac-search")
-async def stac_search(request: Request):
+async def stac_search(body: StacSearchRequest):
     """Direct STAC search endpoint for backwards compatibility (ported from Router Function App)"""
     try:
         logger.info("[SEARCH] Direct STAC search endpoint called")
-        
-        req_body = await request.json()
-        if not req_body:
-            raise HTTPException(
-                status_code=400,
-                detail="Request body required"
-            )
-        
+
         # Execute STAC search
-        stac_response = await execute_direct_stac_search(req_body)
+        stac_response = await execute_direct_stac_search(body.model_dump(exclude_none=True))
         
         # Clean tilejson URLs in the response
         if stac_response.get("success") and "results" in stac_response:
@@ -3659,20 +3654,13 @@ async def stac_search(request: Request):
         )
 
 @app.post("/api/veda-search")
-async def veda_search(request: Request):
+async def veda_search(body: VedaSearchRequest):
     """Direct VEDA STAC search endpoint for NASA Earth data (ported from Router Function App)"""
     try:
         logger.info("[SAT] VEDA STAC search endpoint called")
-        
-        req_body = await request.json()
-        if not req_body:
-            raise HTTPException(
-                status_code=400,
-                detail="Request body required"
-            )
-        
+
         # Execute VEDA STAC search
-        stac_response = await execute_direct_stac_search(req_body, stac_endpoint="veda")
+        stac_response = await execute_direct_stac_search(body.model_dump(exclude_none=True), stac_endpoint="veda")
         
         # Clean tilejson URLs in the response
         if stac_response.get("success") and "results" in stac_response:
@@ -3693,7 +3681,7 @@ async def veda_search(request: Request):
         )
 
 @app.post("/api/structured-search")
-async def structured_search(request: Request):
+async def structured_search(body: StructuredSearchRequest):
     """
     Structured STAC search using explicit parameters (collection, location, datetime)
     Leverages the same agents as natural language queries for consistency
@@ -3703,16 +3691,12 @@ async def structured_search(request: Request):
         logger.info("="*100)
         logger.info("[TOOL][TOOL][TOOL] POST /api/structured-search ENDPOINT HIT [TOOL][TOOL][TOOL]")
         logger.info("="*100)
-        
-        req_body = await request.json()
-        if not req_body:
-            raise HTTPException(status_code=400, detail="Request body required")
-        
-        collection = req_body.get('collection')
-        location = req_body.get('location')
-        datetime_single = req_body.get('datetime')
-        datetime_start = req_body.get('datetime_start')
-        datetime_end = req_body.get('datetime_end')
+
+        collection = body.collection
+        location = body.location
+        datetime_single = body.datetime
+        datetime_start = body.datetime_start
+        datetime_end = body.datetime_end
         
         logger.info(f"[PKG] Structured search params:")
         logger.info(f"   Collection: {collection}")
@@ -3720,7 +3704,7 @@ async def structured_search(request: Request):
         logger.info(f"   Datetime (single): {datetime_single}")
         logger.info(f"   Datetime range: {datetime_start} to {datetime_end}")
         
-        if not collection or not location:
+        if not collection or not location:  # belt-and-suspenders (Pydantic already enforces these)
             raise HTTPException(
                 status_code=400,
                 detail="Both 'collection' and 'location' parameters are required"
@@ -3850,17 +3834,16 @@ async def structured_search(request: Request):
         )
 
 @app.post("/api/session-reset")
-async def session_reset(request: Request):
+async def session_reset(body: SessionResetRequest, request: Request):
     """Reset/clear conversation context for session restart (ported from Router Function App)"""
     try:
-        # Parse request body
-        try:
-            request_data = await request.json()
-            conversation_id = request_data.get("session_id") or request_data.get("conversation_id")
-        except:
-            # Try query parameters if JSON parsing fails
-            conversation_id = request.query_params.get("session_id") or request.query_params.get("conversation_id")
-        
+        # Prefer validated body fields; fall back to query params for legacy callers
+        conversation_id = (
+            body.session_id
+            or request.query_params.get("session_id")
+            or request.query_params.get("conversation_id")
+        )
+
         if not conversation_id:
             raise HTTPException(
                 status_code=400,
@@ -3893,20 +3876,20 @@ async def session_reset(request: Request):
         )
 
 @app.post("/api/process-comparison-query")
-async def process_comparison_query(request: Request):
+async def process_comparison_query(body: ComparisonQueryRequest):
     """
     Process natural language comparison query to extract parameters.
-    
+
     REUSES EXISTING AGENTS:
     - Collection selection: collection_mapping_agent (same as regular queries)
     - Location resolution: build_stac_query_agent -> bbox extraction (same as regular queries)
     - Datetime extraction: datetime_translation_agent in "comparison" mode (NEW dual-date support)
-    
+
     Request body:
     {
         "query": "Show wildfire activity in Southern California January 2025 over 48 hours"
     }
-    
+
     Returns:
     {
         "location": {"lat": 34.05, "lng": -118.24},
@@ -3919,9 +3902,8 @@ async def process_comparison_query(request: Request):
     }
     """
     try:
-        data = await request.json()
-        user_query = data.get("query", "")
-        
+        user_query = body.query
+
         if not user_query:
             raise HTTPException(status_code=400, detail="Query is required")
         
@@ -4024,14 +4006,14 @@ async def process_comparison_query(request: Request):
         )
 
 @app.post("/api/geoint/mobility")
-async def geoint_mobility_analysis(request: Request):
+async def geoint_mobility_analysis(body: MobilityRequest):
     """
     GEOINT Mobility Analysis Endpoint
-    
+
     Thin wrapper around mobility_analysis_agent.
     Called when user drops pin with GEOINT toggle enabled.
     Supports two-point A->B traversability analysis.
-    
+
     Request body:
     {
         "latitude": float,       # Point A latitude (start)
@@ -4045,42 +4027,16 @@ async def geoint_mobility_analysis(request: Request):
     """
     try:
         logger.info("[MEDAL] GEOINT Mobility endpoint called")
-        
-        # Parse request body
-        request_data = await request.json()
-        latitude = request_data.get("latitude")
-        longitude = request_data.get("longitude")
-        latitude_b = request_data.get("latitude_b")
-        longitude_b = request_data.get("longitude_b")
-        screenshot_base64 = request_data.get("screenshot")
-        user_query = request_data.get("user_query") or request_data.get("user_context")
-        
-        # Validate required parameters
-        if latitude is None or longitude is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Missing required parameters: latitude and longitude"
-            )
-        
-        # Validate coordinate ranges
-        if not (-90 <= latitude <= 90):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid latitude: {latitude}. Must be between -90 and 90."
-            )
-        
-        if not (-180 <= longitude <= 180):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid longitude: {longitude}. Must be between -180 and 180."
-            )
-        
+
+        latitude = body.latitude
+        longitude = body.longitude
+        latitude_b = body.latitude_b
+        longitude_b = body.longitude_b
+        screenshot_base64 = body.screenshot
+        user_query = body.user_query
+
         logger.info(f"Validated coordinates: ({latitude}, {longitude})")
         if latitude_b is not None and longitude_b is not None:
-            if not (-90 <= latitude_b <= 90):
-                raise HTTPException(status_code=400, detail=f"Invalid latitude_b: {latitude_b}. Must be between -90 and 90.")
-            if not (-180 <= longitude_b <= 180):
-                raise HTTPException(status_code=400, detail=f"Invalid longitude_b: {longitude_b}. Must be between -180 and 180.")
             logger.info(f"Point B coordinates: ({latitude_b}, {longitude_b})")
         
         # Call mobility_analysis_agent (new agent-based architecture)
@@ -4121,14 +4077,14 @@ async def geoint_mobility_analysis(request: Request):
 
 # Pydantic models for GEOINT requests
 @app.post("/api/geoint/terrain")
-async def geoint_terrain_analysis(request: Request):
+async def geoint_terrain_analysis(body: TerrainRequest):
     """
     GEOINT Terrain Analysis - Unified endpoint for initial analysis AND follow-ups
-    
+
     This endpoint now supports:
     1. Initial terrain analysis (no session_id) - One-shot analysis using terrain_analysis_agent
     2. Follow-up questions (with session_id) - Uses TerrainAgent with conversation memory
-    
+
     Request body:
     {
         "latitude": float,
@@ -4139,7 +4095,7 @@ async def geoint_terrain_analysis(request: Request):
         "radius_miles": float (optional - defaults to 5.0),
         "session_id": str (optional - provide for follow-up questions to maintain context)
     }
-    
+
     Response includes session_id that can be used for follow-up questions.
     """
     import uuid
@@ -4148,22 +4104,13 @@ async def geoint_terrain_analysis(request: Request):
         logger.info(f"[MTN] [{request_id}] ============================================================")
         logger.info(f"[MTN] [{request_id}] TERRAIN ENDPOINT CALLED")
         logger.info(f"[MTN] [{request_id}] ============================================================")
-        logger.info(f"[MTN] [{request_id}] Request method: {request.method}")
-        logger.info(f"[MTN] [{request_id}] Request URL: {request.url}")
-        logger.info(f"[MTN] [{request_id}] Client: {request.client}")
-        
-        # Parse request body
-        logger.info(f"[MTN] [{request_id}] Parsing request body...")
-        request_data = await request.json()
-        logger.info(f"[MTN] [{request_id}] [OK] Request body parsed successfully")
-        logger.info(f"[MTN] [{request_id}] Request keys: {list(request_data.keys())}")
-        
-        latitude = request_data.get("latitude")
-        longitude = request_data.get("longitude")
-        screenshot = request_data.get("screenshot")
-        user_query = request_data.get("user_query") or request_data.get("user_context")
-        radius_miles = request_data.get("radius_miles", 5.0)
-        session_id = request_data.get("session_id")  # NEW: For follow-up questions
+
+        latitude = body.latitude
+        longitude = body.longitude
+        screenshot = body.screenshot
+        user_query = body.user_query
+        radius_miles = body.radius_miles
+        session_id = body.session_id
         
         screenshot_size = len(screenshot) if screenshot else 0
         logger.info(f"[MTN] [{request_id}] Screenshot size: {screenshot_size} chars ({screenshot_size / 1024:.1f} KB)")
@@ -4189,19 +4136,7 @@ async def geoint_terrain_analysis(request: Request):
             logger.warning(f"[MTN] [{request_id}] [WARN] NO SCREENSHOT PROVIDED - will use STAC fallback")
         # ===== END CRITICAL DEBUG =====
         
-        # Validate required parameters
         logger.info(f"[MTN] [{request_id}] Validating parameters...")
-        if latitude is None or longitude is None:
-            logger.error(f"[MTN] [{request_id}] [FAIL] Missing required parameters")
-            raise HTTPException(status_code=400, detail="latitude and longitude are required")
-        
-        # Validate coordinates
-        if not (-90 <= latitude <= 90):
-            logger.error(f"[MTN] [{request_id}] [FAIL] Invalid latitude: {latitude}")
-            raise HTTPException(status_code=400, detail=f"Invalid latitude: {latitude}")
-        if not (-180 <= longitude <= 180):
-            logger.error(f"[MTN] [{request_id}] [FAIL] Invalid longitude: {longitude}")
-            raise HTTPException(status_code=400, detail=f"Invalid longitude: {longitude}")
         
         logger.info(f"[MTN] [{request_id}] [OK] Parameters valid")
         logger.info(f"[MTN] [{request_id}] Coordinates: ({latitude}, {longitude})")
@@ -4297,15 +4232,15 @@ async def geoint_terrain_analysis(request: Request):
 
 
 @app.post("/api/geoint/terrain/chat")
-async def geoint_terrain_chat(request: Request):
+async def geoint_terrain_chat(body: TerrainChatRequest):
     """
     [BOT] GEOINT Terrain Agent Chat - Multi-turn conversation with memory
-    
+
     A real AI agent that:
     - Remembers context from previous messages in the session
     - Calls terrain analysis tools (DEM, NDVI, slope, etc.) as needed
     - Synthesizes tool results into coherent answers
-    
+
     Request body:
     {
         "session_id": str (optional - will create new session if not provided),
@@ -4315,7 +4250,7 @@ async def geoint_terrain_chat(request: Request):
         "screenshot": str (optional - base64 screenshot),
         "radius_km": float (optional - defaults to 5.0)
     }
-    
+
     Returns:
     {
         "response": str (agent's answer),
@@ -4326,31 +4261,18 @@ async def geoint_terrain_chat(request: Request):
     """
     import uuid
     request_id = f"terrain-chat-{datetime.utcnow().timestamp()}"
-    
+
     try:
         logger.info(f"[MSG] [{request_id}] ============================================================")
         logger.info(f"[MSG] [{request_id}] TERRAIN AGENT CHAT ENDPOINT")
         logger.info(f"[MSG] [{request_id}] ============================================================")
-        
-        request_data = await request.json()
-        
-        # Extract parameters
-        session_id = request_data.get("session_id") or str(uuid.uuid4())
-        message = request_data.get("message")
-        latitude = request_data.get("latitude")
-        longitude = request_data.get("longitude")
-        screenshot = request_data.get("screenshot")
-        radius_km = request_data.get("radius_km", 5.0)
-        
-        # Validate required parameters
-        if not message:
-            raise HTTPException(status_code=400, detail="message is required")
-        if latitude is None or longitude is None:
-            raise HTTPException(status_code=400, detail="latitude and longitude are required")
-        if not (-90 <= latitude <= 90):
-            raise HTTPException(status_code=400, detail=f"Invalid latitude: {latitude}. Must be between -90 and 90.")
-        if not (-180 <= longitude <= 180):
-            raise HTTPException(status_code=400, detail=f"Invalid longitude: {longitude}. Must be between -180 and 180.")
+
+        session_id = body.session_id or str(uuid.uuid4())
+        message = body.message
+        latitude = body.latitude
+        longitude = body.longitude
+        screenshot = body.screenshot
+        radius_km = body.radius_km
         
         logger.info(f"[MSG] [{request_id}] Session: {session_id}")
         logger.info(f"[MSG] [{request_id}] Message: {message[:100]}...")
@@ -4479,14 +4401,14 @@ async def clear_terrain_chat_session(session_id: str):
 # ============================================================================
 
 @app.post("/api/geoint/vision")
-async def geoint_vision_analysis(request: Request):
+async def geoint_vision_analysis(body: VisionRequest):
     """
     GEOINT Vision Analysis - Unified endpoint for initial analysis AND follow-ups
-    
+
     This endpoint supports:
     1. Initial vision analysis (no session_id) - Screenshot + raster analysis
     2. Follow-up questions (with session_id) - Uses VisionAgent with conversation memory
-    
+
     Request body:
     {
         "latitude": float,
@@ -4506,25 +4428,17 @@ async def geoint_vision_analysis(request: Request):
         logger.info(f"[EYE] [{request_id}] VISION ENDPOINT CALLED")
         logger.info(f"[EYE] [{request_id}] ============================================================")
         
-        # Parse request body
-        request_data = await request.json()
-        logger.info(f"[EYE] [{request_id}] Request keys: {list(request_data.keys())}")
-        
-        latitude = request_data.get("latitude")
-        longitude = request_data.get("longitude")
-        screenshot = request_data.get("screenshot")
-        user_query = request_data.get("user_query") or request_data.get("user_context")
-        radius_miles = request_data.get("radius_miles", 5.0)
-        session_id = request_data.get("session_id")
-        
-        # [EYE] NEW: Accept tile_urls and collection directly from frontend
-        tile_urls_from_request = request_data.get("tile_urls", [])
-        collection_from_request = request_data.get("collection")
-        map_bounds_from_request = request_data.get("map_bounds")
-        # [CHART] NEW: Accept STAC items with assets directly from frontend for NDVI/raster analysis
-        stac_items_from_request = request_data.get("stac_items", [])
-        # [TARGET] NEW: Accept analysis_type hint from frontend (raster vs screenshot)
-        analysis_type = request_data.get("analysis_type")
+        latitude = body.latitude
+        longitude = body.longitude
+        screenshot = body.screenshot
+        user_query = body.user_query
+        radius_miles = body.radius_miles
+        session_id = body.session_id
+        tile_urls_from_request = body.tile_urls
+        collection_from_request = body.collection
+        map_bounds_from_request = body.map_bounds
+        stac_items_from_request = body.stac_items
+        analysis_type = body.analysis_type
         
         screenshot_size = len(screenshot) if screenshot else 0
         logger.info(f"[EYE] [{request_id}] Screenshot: {screenshot_size / 1024:.1f} KB")
@@ -4676,10 +4590,10 @@ async def geoint_vision_analysis(request: Request):
 
 
 @app.post("/api/geoint/vision/chat")
-async def geoint_vision_chat(request: Request):
+async def geoint_vision_chat(body: VisionChatRequest):
     """
     [BOT] GEOINT Vision Agent Chat - Multi-turn conversation with memory
-    
+
     Request body:
     {
         "session_id": str (required for follow-ups),
@@ -4694,50 +4608,33 @@ async def geoint_vision_chat(request: Request):
     request_id = f"vision-chat-{datetime.utcnow().timestamp()}"
     try:
         logger.info(f"[MSG] [{request_id}] VISION CHAT endpoint called")
-        
-        request_data = await request.json()
-        session_id = request_data.get("session_id")
-        message = request_data.get("message")
-        latitude = request_data.get("latitude")
-        longitude = request_data.get("longitude")
-        screenshot = request_data.get("screenshot")
-        
-        # [EYE] NEW: Accept tile_urls and collection from frontend
-        tile_urls_from_request = request_data.get("tile_urls", [])
-        collection_from_request = request_data.get("collection")
-        # [CHART] NEW: Accept STAC items with assets from frontend for NDVI/raster analysis
-        stac_items_from_request = request_data.get("stac_items", [])
-        
-        if not session_id:
-            raise HTTPException(status_code=400, detail="session_id is required for chat")
-        
-        if not message:
-            raise HTTPException(status_code=400, detail="message is required")
-        
+
+        session_id = body.session_id
+        message = body.message
+        latitude = body.latitude
+        longitude = body.longitude
+        screenshot = body.screenshot
+        tile_urls_from_request = body.tile_urls
+        collection_from_request = body.collection
+        stac_items_from_request = body.stac_items
+        analysis_type = body.analysis_type
+
         logger.info(f"[MSG] [{request_id}] Session: {session_id}")
         logger.info(f"[MSG] [{request_id}] Message: {message[:100]}")
         logger.info(f"[MSG] [{request_id}] Tile URLs from request: {len(tile_urls_from_request)}")
         logger.info(f"[MSG] [{request_id}] STAC items from request: {len(stac_items_from_request)}")
-        
-        # [TARGET] NEW: Accept analysis_type hint from frontend
-        analysis_type = request_data.get("analysis_type")
+
         if analysis_type:
             logger.info(f"[TARGET] [{request_id}] Analysis type hint from frontend: {analysis_type}")
-        
+
         # [SEARCH] DETAILED STAC ITEM LOGGING
         if stac_items_from_request:
             for i, item in enumerate(stac_items_from_request[:2]):
                 logger.info(f"[MSG] [{request_id}] STAC item {i}: id={item.get('id', 'unknown')}, collection={item.get('collection', 'unknown')}, assets={list(item.get('assets', {}).keys())[:5]}")
         logger.info(f"[MSG] [{request_id}] Collection from request: {collection_from_request}")
-        
+
         from agents import get_vision_agent
         vision_agent = get_vision_agent()
-        
-        # Validate coordinate ranges if provided
-        if latitude is not None and not (-90 <= latitude <= 90):
-            raise HTTPException(status_code=400, detail=f"Invalid latitude: {latitude}. Must be between -90 and 90.")
-        if longitude is not None and not (-180 <= longitude <= 180):
-            raise HTTPException(status_code=400, detail=f"Invalid longitude: {longitude}. Must be between -180 and 180.")
         
         # Prepare context - ensure pin coordinates are set for point-based analysis
         map_bounds = None
@@ -4838,17 +4735,17 @@ async def clear_vision_chat_session(session_id: str):
 # The correct mobility endpoint is at line ~2266
 
 @app.post("/api/geoint/building-damage")
-async def geoint_building_damage_analysis(request: Request):
+async def geoint_building_damage_analysis(body: BuildingDamageRequest):
     """
     [BUILD] GEOINT Building Damage Assessment
-    
+
     Structure damage assessment using GPT-5 Vision and satellite imagery.
-    
+
     When a screenshot is provided (user has loaded data on the map), analysis is
     performed on the VISIBLE imagery—the loaded tiles—not independently-fetched
     Sentinel-2.  When no screenshot is available the agent falls back to its own
     satellite imagery retrieval via the Agent Service tools.
-    
+
     Request body:
     {
         "latitude": float,
@@ -4860,25 +4757,11 @@ async def geoint_building_damage_analysis(request: Request):
     }
     """
     try:
-        body = await request.json()
-        latitude = body.get("latitude")
-        longitude = body.get("longitude")
-        user_query = body.get("user_query") or body.get("user_context") or ""
-        screenshot = body.get("screenshot")
-        radius_miles = body.get("radius_miles", 5.0)
-        
-        # Validation
-        if latitude is None or longitude is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Missing required fields: latitude and longitude"
-            )
-        
-        if not (-90 <= latitude <= 90):
-            raise HTTPException(status_code=400, detail=f"Invalid latitude: {latitude}")
-        
-        if not (-180 <= longitude <= 180):
-            raise HTTPException(status_code=400, detail=f"Invalid longitude: {longitude}")
+        latitude = body.latitude
+        longitude = body.longitude
+        user_query = body.user_query or ""
+        screenshot = body.screenshot
+        radius_miles = body.radius_miles
         
         logger.info(f"Building Damage endpoint: ({latitude}, {longitude})")
         logger.info(f"Building Damage: screenshot={'yes' if screenshot else 'no'}, query='{user_query[:100]}'" if user_query else "Building Damage: no query")
@@ -5072,14 +4955,14 @@ async def geoint_building_damage_analysis(request: Request):
         )
 
 @app.post("/api/geoint/extreme-weather")
-async def geoint_extreme_weather_analysis(request: Request):
+async def geoint_extreme_weather_analysis(body: ExtremeWeatherRequest):
     """
     [STORM] GEOINT Extreme Weather & Climate Projection Analysis
-    
+
     Climate projections from NASA NEX-GDDP-CMIP6 (NetCDF data, point-sampled).
     Returns temperature, precipitation, wind, humidity, and radiation projections.
     No map tiles — data is chat-based point values only.
-    
+
     Request body:
     {
         "latitude": float,
@@ -5088,30 +4971,19 @@ async def geoint_extreme_weather_analysis(request: Request):
         "user_context": str (optional - legacy field name),
         "session_id": str (optional - for follow-up questions)
     }
-    
+
     Response includes session_id for follow-up questions.
     """
     import uuid
     request_id = f"climate-{datetime.utcnow().timestamp()}"
     try:
         logger.info(f"[STORM] [{request_id}] EXTREME WEATHER ENDPOINT CALLED")
-        
-        request_data = await request.json()
-        
-        latitude = request_data.get("latitude")
-        longitude = request_data.get("longitude")
-        user_query = request_data.get("user_query") or request_data.get("user_context")
-        session_id = request_data.get("session_id")
-        screenshot = request_data.get("screenshot")
-        
-        # Validate required parameters
-        if latitude is None or longitude is None:
-            raise HTTPException(status_code=400, detail="latitude and longitude are required")
-        
-        if not (-90 <= latitude <= 90):
-            raise HTTPException(status_code=400, detail=f"Invalid latitude: {latitude}")
-        if not (-180 <= longitude <= 180):
-            raise HTTPException(status_code=400, detail=f"Invalid longitude: {longitude}")
+
+        latitude = body.latitude
+        longitude = body.longitude
+        user_query = body.user_query
+        session_id = body.session_id
+        screenshot = body.screenshot
         
         logger.info(f"[STORM] [{request_id}] Coordinates: ({latitude}, {longitude}), query: {user_query}")
         
@@ -5145,7 +5017,7 @@ async def geoint_extreme_weather_analysis(request: Request):
             or message == "Provide a comprehensive climate projection overview for this location."
         )
         
-        if is_overview_query and not request_data.get("session_id"):
+        if is_overview_query and not session_id:
             try:
                 logger.info(f"[STORM] [{request_id}] FAST PATH: Direct get_climate_overview call")
                 from geoint.extreme_weather_agent import _reverse_geocode_cache
@@ -5637,12 +5509,12 @@ async def cmip6_diagnostic_test(
 
 
 @app.post("/api/geoint/comparison")
-async def geoint_comparison_analysis(request: Request):
+async def geoint_comparison_analysis(body: ComparisonRequest):
     """
     GEOINT Comparison Analysis - Temporal change detection endpoint
-    
+
     Supports TWO modes:
-    
+
     1. QUERY MODE (new): Just provide user_query, we parse location + dates
        {
            "user_query": "How did Miami Beach surface reflectance change between 01/2020 and 01/2025?",
@@ -5650,27 +5522,23 @@ async def geoint_comparison_analysis(request: Request):
            "longitude": float (optional fallback)
        }
        Returns: before/after tiles for map toggle + analysis summary
-    
+
     2. SCREENSHOT MODE (legacy): Provide pre-captured screenshots + dates
        {
            "latitude": float,
            "longitude": float,
            "before_date": str,
            "after_date": str,
-           "before_screenshot": str (base64),
-           "after_screenshot": str (base64),
            ...
        }
     """
     try:
-        body = await request.json()
-        
-        user_query = body.get("user_query")
-        latitude = body.get("latitude")
-        longitude = body.get("longitude")
-        before_date = body.get("before_date")
-        after_date = body.get("after_date")
-        screenshot = body.get("screenshot")
+        user_query = body.user_query
+        latitude = body.latitude
+        longitude = body.longitude
+        before_date = body.before_date
+        after_date = body.after_date
+        screenshot = body.screenshot
         
         mode = "query" if user_query and not (before_date and after_date) else "direct"
         logger.info(f"[CHART] [COMPARISON-ANALYSIS] mode={mode} query='{user_query}' before={before_date} after={after_date}")
@@ -5691,7 +5559,7 @@ async def geoint_comparison_analysis(request: Request):
                     user_query=user_query,
                     latitude=latitude,
                     longitude=longitude,
-                    session_id=body.get("session_id"),
+                    session_id=body.session_id,
                     screenshot_base64=screenshot,
                 )
                 
@@ -5945,26 +5813,17 @@ async def geoint_comparison_analysis(request: Request):
         raise HTTPException(status_code=500, detail=f"Comparison failed: {str(e)}")
 
 @app.post("/api/geoint/animation")
-async def geoint_animation_analysis(request: Request):
+async def geoint_animation_analysis(body: AnimationRequest):
     """
     GEOINT Animation Generation - Thin wrapper around animation_generation_agent
     """
     try:
-        body = await request.json()
-        latitude = body.get("latitude")
-        longitude = body.get("longitude")
-        start_date = body.get("start_date")
-        end_date = body.get("end_date")
-        collection_id = body.get("collection_id", "sentinel-2-l2a")
-        user_query = body.get("user_query")
-        
-        # Validation
-        if latitude is None or longitude is None or not start_date or not end_date:
-            raise HTTPException(status_code=400, detail="Missing required parameters")
-        if not (-90 <= latitude <= 90):
-            raise HTTPException(status_code=400, detail=f"Invalid latitude")
-        if not (-180 <= longitude <= 180):
-            raise HTTPException(status_code=400, detail=f"Invalid longitude")
+        latitude = body.latitude
+        longitude = body.longitude
+        start_date = body.start_date
+        end_date = body.end_date
+        collection_id = body.collection_id
+        user_query = body.user_query
         
         logger.info(f"Animation endpoint: ({latitude}, {longitude})")
         
@@ -5996,10 +5855,10 @@ async def geoint_animation_analysis(request: Request):
 
 # Orchestrator endpoint for calling multiple GEOINT agents at once
 @app.post("/api/geoint/orchestrate")
-async def geoint_orchestrator_endpoint(request: Request):
+async def geoint_orchestrator_endpoint(body: OrchestrateRequest):
     """
     GEOINT Orchestrator - Calls multiple agents in parallel
-    
+
     Request body:
     {
         "latitude": float,
@@ -6011,21 +5870,13 @@ async def geoint_orchestrator_endpoint(request: Request):
     }
     """
     try:
-        body = await request.json()
-        latitude = body.get("latitude")
-        longitude = body.get("longitude")
-        modules = body.get("modules", ["terrain", "mobility"])
-        screenshot = body.get("screenshot")
-        user_query = body.get("user_query")
-        radius_miles = body.get("radius_miles", 5.0)
-        
-        # Validation
-        if latitude is None or longitude is None:
-            raise HTTPException(status_code=400, detail="Missing latitude or longitude")
-        if not (-90 <= latitude <= 90):
-            raise HTTPException(status_code=400, detail=f"Invalid latitude")
-        if not (-180 <= longitude <= 180):
-            raise HTTPException(status_code=400, detail=f"Invalid longitude")
+        latitude = body.latitude
+        longitude = body.longitude
+        modules = body.modules
+        screenshot = body.screenshot
+        user_query = body.user_query
+        radius_miles = body.radius_miles
+
         if not modules:
             raise HTTPException(status_code=400, detail="No modules specified")
         
@@ -6041,7 +5892,7 @@ async def geoint_orchestrator_endpoint(request: Request):
             screenshot_base64=screenshot,
             user_query=user_query,
             radius_miles=radius_miles,
-            **body  # Pass any additional kwargs
+            **body.model_dump(exclude={"latitude", "longitude", "modules", "screenshot", "user_query", "radius_miles"}, exclude_none=True)
         )
         
         logger.info("Orchestrator completed")
