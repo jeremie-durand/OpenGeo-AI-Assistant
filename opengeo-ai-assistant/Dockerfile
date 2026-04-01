@@ -32,6 +32,10 @@ COPY container-app/geoint/ ./geoint/
 
 RUN mkdir -p /app/uploads
 
+RUN groupadd --system appuser && useradd --system --no-create-home --gid appuser appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
