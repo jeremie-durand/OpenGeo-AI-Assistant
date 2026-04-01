@@ -1,14 +1,24 @@
 services:
+  frontend:
+    build:
+      context: ./opengeo-ai-assistant/web-ui
+      dockerfile: Dockerfile
+    container_name: opengeo-ai-assistant--frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
   backend:
     build:
       context: ./opengeo-ai-assistant/
       dockerfile: Dockerfile
-    container_name: opengeo-ai-assistant-complete
+    container_name: opengeo-ai-assistant-backend
     ports:
       - "8000:8000"
     env_file:
       - .env
     environment:
-      # CORS for local dev (adjust as needed)
-      - CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+      - CORS_ORIGINS=http://localhost:3000
     restart: unless-stopped
