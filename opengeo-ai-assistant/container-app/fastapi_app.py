@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from rate_limit_middleware import RateLimitMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from hybrid_rendering_system import HybridRenderingSystem  # [ART] Comprehensive rendering system
@@ -320,6 +321,9 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(title="OpenGeo AI Assistant API", version="1.0.0")
+
+# Rate limiting (registered first so it runs innermost — after CORS on the way in)
+app.add_middleware(RateLimitMiddleware)
 
 # Configure CORS origins from environment variable
 cors_origins_str = os.environ.get("CORS_ORIGINS", "*")
