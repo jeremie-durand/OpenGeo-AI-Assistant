@@ -17,7 +17,7 @@ class GeointRequest(BaseModel):
 
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
-    screenshot: Optional[str] = None
+    screenshot: Optional[str] = Field(None, max_length=5_000_000)
     session_id: Optional[str] = None
     user_query: Optional[str] = None
     radius_miles: float = Field(default=5.0)
@@ -49,11 +49,11 @@ class QueryRequest(BaseModel):
     # Map/vision context sent by the frontend
     map_bounds: Optional[Dict[str, Any]] = None
     imagery_url: Optional[str] = None
-    imagery_base64: Optional[str] = None
+    imagery_base64: Optional[str] = Field(None, max_length=5_000_000)
     current_collection: Optional[str] = None
-    tile_urls: List[str] = Field(default_factory=list)
-    conversation_history: List[Any] = Field(default_factory=list)
-    messages: List[Any] = Field(default_factory=list)
+    tile_urls: List[str] = Field(default_factory=list, max_length=100)
+    conversation_history: List[Any] = Field(default_factory=list, max_length=100)
+    messages: List[Any] = Field(default_factory=list, max_length=100)
 
     @model_validator(mode="before")
     @classmethod
@@ -145,17 +145,17 @@ class TerrainChatRequest(BaseModel):
     longitude: float = Field(..., ge=-180, le=180)
     message: str
     session_id: Optional[str] = None
-    screenshot: Optional[str] = None
+    screenshot: Optional[str] = Field(None, max_length=5_000_000)
     radius_km: float = Field(default=5.0)
 
 
 class VisionRequest(GeointRequest):
     """POST /api/geoint/vision — satellite vision analysis."""
 
-    tile_urls: List[str] = Field(default_factory=list)
+    tile_urls: List[str] = Field(default_factory=list, max_length=100)
     collection: Optional[str] = None
     map_bounds: Optional[Dict[str, Any]] = None
-    stac_items: List[Dict[str, Any]] = Field(default_factory=list)
+    stac_items: List[Dict[str, Any]] = Field(default_factory=list, max_length=100)
     analysis_type: Optional[str] = None
 
 
@@ -166,10 +166,10 @@ class VisionChatRequest(BaseModel):
     message: str
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
-    screenshot: Optional[str] = None
-    tile_urls: List[str] = Field(default_factory=list)
+    screenshot: Optional[str] = Field(None, max_length=5_000_000)
+    tile_urls: List[str] = Field(default_factory=list, max_length=100)
     collection: Optional[str] = None
-    stac_items: List[Dict[str, Any]] = Field(default_factory=list)
+    stac_items: List[Dict[str, Any]] = Field(default_factory=list, max_length=100)
     analysis_type: Optional[str] = None
 
 
@@ -191,7 +191,7 @@ class ComparisonRequest(BaseModel):
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
     before_date: Optional[str] = None
     after_date: Optional[str] = None
-    screenshot: Optional[str] = None
+    screenshot: Optional[str] = Field(None, max_length=5_000_000)
     session_id: Optional[str] = None
 
     @model_validator(mode="before")
@@ -220,7 +220,7 @@ class OrchestrateRequest(BaseModel):
 
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
-    modules: List[str] = Field(default=["terrain", "mobility"])
-    screenshot: Optional[str] = None
+    modules: List[str] = Field(default=["terrain", "mobility"], max_length=10)
+    screenshot: Optional[str] = Field(None, max_length=5_000_000)
     user_query: Optional[str] = None
     radius_miles: float = Field(default=5.0)
