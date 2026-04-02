@@ -55,6 +55,8 @@ class _CompletionsProxy:
             # Delegate straight to the raw AsyncOpenAI client so callers get a
             # real OpenAI response object (with .choices[0].message.content).
             params: Dict[str, Any] = {"model": model or self._llm.model, "messages": messages}
+            if self._llm.max_tokens is not None:
+                params["max_tokens"] = self._llm.max_tokens
             params.update(kwargs)
             return await self._llm._client.chat.completions.create(**params)
         else:
@@ -112,10 +114,12 @@ class LLMClient:
         base_url: Optional[str] = None,
         api_version: Optional[str] = None,
         org_id: Optional[str] = None,
+        max_tokens: Optional[int] = None,
     ) -> None:
         self.provider = provider.lower().strip()
         self.model = model
         self.api_version = api_version
+        self.max_tokens = max_tokens
 
         if self.provider == "openai":
             client_kwargs: Dict[str, Any] = {"api_key": api_key}
@@ -139,6 +143,8 @@ class LLMClient:
         base_url = os.getenv("LLM_BASE_URL", "").strip() or None
         api_version = os.getenv("LLM_API_VERSION", "").strip() or None
         org_id = os.getenv("LLM_ORG_ID", "").strip() or None
+        raw_max_tokens = os.getenv("LLM_MAX_TOKENS", "2048").strip()
+        max_tokens: Optional[int] = int(raw_max_tokens) if raw_max_tokens.isdigit() else None
 
         missing: List[str] = []
         if not api_key:
@@ -161,6 +167,7 @@ class LLMClient:
             base_url=base_url,
             api_version=api_version,
             org_id=org_id,
+            max_tokens=max_tokens,
         )
 
     async def chat(
@@ -180,6 +187,8 @@ class LLMClient:
                 "model": self.model,
                 "messages": messages,
             }
+            if self.max_tokens is not None:
+                params["max_tokens"] = self.max_tokens
             if tools:
                 params["tools"] = tools
                 params["tool_choice"] = "auto"
@@ -187,7 +196,8 @@ class LLMClient:
             response = await self._client.chat.completions.create(**params)
             return response.model_dump()
         elif self.provider == "anthropic":
-            # AnthropicClient expects OpenAI-style messages, returns Claude response
+            if self.max_tokens is not None and "max_tokens" not in kwargs:
+                kwargs = {"max_tokens": self.max_tokens, **kwargs}
             response = await self._client.chat(messages, **kwargs)
             return response
         raise LLMConfigurationError(f"Unsupported provider '{self.provider}'")
