@@ -77,13 +77,32 @@ docker-compose.yml     # Single service on port 8000
 - Environment variables are defined in `.env`
 
 ```bash
-LLM_PROVIDER=openai|anthropic
-LLM_API_KEY=<key>
-LLM_MODEL=<model-name>          # e.g. gpt-4-1106-preview, claude-3-opus-20240229
-LLM_BASE_URL=<optional>         # Custom endpoint
-WEATHER_DATA_SOURCE=planetary_computer|open_meteo
-ENABLE_AUTH=true|false
-CORS_ORIGINS=<comma-separated>
+# LLM provider
+LLM_PROVIDER=openai             # or "anthropic"
+LLM_API_KEY=sk-...              # or "ollama" for local Ollama endpoint
+LLM_MODEL=your_model_name       # e.g. gpt-4-1106-preview, claude-3-opus-20240229
+LLM_BASE_URL=<optional>         # Custom endpoint (Ollama, Anthropic, etc.)
+LLM_MAX_TOKENS=1000             # Max tokens in LLM responses
+
+# Authentication
+ENABLE_AUTH=false               # Set to true in production
+API_KEY=<hex-key>               # Generate: openssl rand -hex 32
+
+# Weather / climate data
+WEATHER_DATA_SOURCE=planetary_computer  # or "open_meteo"
+OPEN_METEO_API_KEY=             # Optional — leave blank for free public tier
+
+# Service URLs
+BACKEND_URL=http://localhost:8000
+FRONTEND_URL=http://localhost:3000
+STAC_API_URL=http://host.docker.internal:8081
+
+# CORS (set via FRONTEND_URL in docker-compose; override only if needed)
+# CORS_ORIGINS=https://myapp.example.com
+
+# Rate limiting (per-IP, in-memory)
+RATE_LIMIT_LLM=10/minute
+RATE_LIMIT_SEARCH=30/minute
 ```
 
 ## Claude guidelines
