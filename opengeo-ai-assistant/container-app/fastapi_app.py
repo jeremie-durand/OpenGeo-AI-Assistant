@@ -749,9 +749,9 @@ def generate_contextual_empty_response(
                 
                 if days < 90:
                     suggestions.append(f"**Expand the date range**: Currently searching {days} days ({start_date} to {end_date}). Try expanding to 6 months or 1 year for more results.")
-            except:
-                pass
-        
+            except Exception as e:
+                logger.warning("Failed to parse date range for suggestion: %s", e)
+
         # Check cloud cover constraints
         cloud_filter = stac_query.get("filter", {})
         if "eo:cloud_cover" in str(cloud_filter):
@@ -765,9 +765,9 @@ def generate_contextual_empty_response(
                         cloud_threshold = 10
                     elif "lt" in filter_str and "20" in filter_str:
                         cloud_threshold = 20
-                except:
-                    pass
-            
+                except Exception as e:
+                    logger.warning("Failed to extract cloud cover threshold from filter: %s", e)
+
             if cloud_threshold:
                 suggestions.append(f"**Relax cloud cover filter**: Currently requiring <{cloud_threshold}% clouds. Try allowing up to {cloud_threshold + 20}% for more options.")
         
