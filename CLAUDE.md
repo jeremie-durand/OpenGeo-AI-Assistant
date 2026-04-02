@@ -124,6 +124,8 @@ CORS_ORIGINS=<comma-separated>
 
 - Use f-strings for formatting
 
+- Never reed content of `.env` file. Always read `.env.example` instead
+
 ### Typescript: Key Patterns to Follow
 
 None for now
