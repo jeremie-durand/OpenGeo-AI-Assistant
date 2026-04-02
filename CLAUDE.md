@@ -31,10 +31,11 @@ None for now
 ```
 opengeo-ai-assistant/
 ├── web-ui/            # React 18 + TypeScript + Vite frontend
+│   └── Dockerfile     # Frontend image (nginx serving React build)
 ├── container-app/     # Python FastAPI backend (main app logic lives here)
 ├── mcp-server/        # Optional Model Context Protocol server
-└── Dockerfile         # Multi-stage: builds React dist, then embeds in Python image
-docker-compose.yml     # Single service on port 8000
+└── Dockerfile         # Backend image (Python FastAPI)
+docker-compose.yml     # Two services: backend (port 8000) + frontend (port 3000)
 .env / .env.example    # LLM provider, API keys, feature flags
 ```
 
