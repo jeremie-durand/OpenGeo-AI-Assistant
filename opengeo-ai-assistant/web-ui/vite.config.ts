@@ -119,6 +119,9 @@ export default defineConfig(({ command, mode }) => {
         }
       }
     },
+    esbuild: isProd ? {
+      drop: ['console', 'debugger'],
+    } : undefined,
     define: {
       // Environment-specific configurations
       __DEV__: JSON.stringify(isDev),
