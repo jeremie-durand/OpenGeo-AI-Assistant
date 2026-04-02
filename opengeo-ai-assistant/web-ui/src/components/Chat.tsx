@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 import React, { useState, useRef, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiService, Dataset, ChatMessage, MapContext } from '../services/api';
 import { enhanceMessageForMapVisualization, hasVisualizableData } from './OpenGeoMapIntegration';
@@ -1428,7 +1429,7 @@ const Chat: React.FC<ChatProps> = ({
                   </div>
                 ) : (
                   <div className="msg" dangerouslySetInnerHTML={{
-                    __html: renderMessageHTML(message.content)
+                    __html: DOMPurify.sanitize(renderMessageHTML(message.content))
                   }}></div>
                 )}
                 {message.role === 'assistant' && !message.isThinking && (
