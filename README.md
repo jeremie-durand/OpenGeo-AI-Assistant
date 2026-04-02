@@ -27,6 +27,10 @@ This project extends and adapts the original Earth Copilot codebase with the fol
 
 See [QUICK_DEPLOY.md](QUICK_DEPLOY.md)
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md)
+
 ## Future Features
 
 The `opengeo-ai-assistant/ai-search` directory contains scripts and setup for semantic (vector-based) search. These files are currently not used in the deployed application, but are retained for future development when vector AI search is implemented (e.g., with PostGIS or Parquet). For now, only the STAC API is active.
