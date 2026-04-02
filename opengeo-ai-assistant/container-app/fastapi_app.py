@@ -588,7 +588,7 @@ async def execute_direct_stac_search(stac_query: Dict[str, Any], stac_endpoint: 
         logger.error(f"[FAIL] STAC search error: {e}")
         return {
             "success": False,
-            "error": f"STAC search failed: {str(e)}",
+            "error": "STAC search failed",
             "results": {"type": "FeatureCollection", "features": []}
         }
 
@@ -2483,8 +2483,8 @@ async def unified_query_processor(body: QueryRequest):
                             # Return error, DON'T fall through to STAC for vision queries
                             return {
                                 "success": False,
-                                "response": f"I encountered an error analyzing the imagery: {str(e)}",
-                                "error": str(e),
+                                "response": "I encountered an error analyzing the imagery.",
+                                "error": "internal error",
                                 "processing_type": "vision_agent_error",
                                 "timestamp": datetime.utcnow().isoformat()
                             }
@@ -2563,7 +2563,7 @@ async def unified_query_processor(body: QueryRequest):
                             return {
                                 "success": True,
                                 "response": "I can see satellite imagery on the map but couldn't analyze it in detail. Please try asking a specific question about the location or features you see.",
-                                "error": str(e),
+                                "error": "internal error",
                                 "processing_type": "vision_agent_error",
                                 "timestamp": datetime.utcnow().isoformat()
                             }
@@ -3615,7 +3615,7 @@ async def unified_query_processor(body: QueryRequest):
     except Exception as e:
         logger.error(f"[FAIL] Unified query processor error: {str(e)}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Query processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Query processing failed")
 
 @app.post("/api/sign-mosaic-url")
 async def sign_mosaic_url(body: SignMosaicUrlRequest):
@@ -3638,7 +3638,7 @@ async def sign_mosaic_url(body: SignMosaicUrlRequest):
         raise
     except Exception as e:
         logger.error(f"[FAIL] sign-mosaic-url error: {e}")
-        raise HTTPException(status_code=500, detail=f"URL signing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="URL signing failed")
 
 
 @app.post("/api/stac-search")
@@ -3665,7 +3665,7 @@ async def stac_search(body: StacSearchRequest):
         logger.error(f"STAC search endpoint error: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"STAC search failed: {str(e)}"
+            detail="STAC search failed"
         )
 
 @app.post("/api/veda-search")
@@ -3692,7 +3692,7 @@ async def veda_search(body: VedaSearchRequest):
         logger.error(f"VEDA search endpoint error: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"VEDA search failed: {str(e)}"
+            detail="VEDA search failed"
         )
 
 @app.post("/api/structured-search")
@@ -3845,7 +3845,7 @@ async def structured_search(body: StructuredSearchRequest):
         logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=500,
-            detail=f"Structured search failed: {str(e)}"
+            detail="Structured search failed"
         )
 
 @app.post("/api/session-reset")
@@ -3887,7 +3887,7 @@ async def session_reset(body: SessionResetRequest, request: Request):
         logger.error(f"[FAIL] Session reset failed: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Session reset failed: {str(e)}"
+            detail="Session reset failed"
         )
 
 @app.post("/api/process-comparison-query")
@@ -4014,10 +4014,9 @@ async def process_comparison_query(body: ComparisonQueryRequest):
         raise
     except Exception as e:
         logger.error(f"[CHART] [COMPARISON] [FAIL] {type(e).__name__}: {e}")
-        error_detail = str(e) if str(e) else f"{type(e).__name__} exception occurred"
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to process comparison query: {error_detail}"
+            detail="Failed to process comparison query"
         )
 
 @app.post("/api/geoint/mobility")
@@ -4082,7 +4081,7 @@ async def geoint_mobility_analysis(body: MobilityRequest):
         logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=500,
-            detail=f"GEOINT mobility analysis failed: {str(e)}"
+            detail="GEOINT mobility analysis failed"
         )
 
 # ============================================================================
@@ -4391,7 +4390,8 @@ async def get_terrain_chat_history(session_id: str):
             "message_count": len(history)
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Terrain chat history error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.delete("/api/geoint/terrain/chat/{session_id}")
@@ -4408,7 +4408,8 @@ async def clear_terrain_chat_session(session_id: str):
             "cleared": cleared
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Terrain chat clear error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -4724,7 +4725,7 @@ async def geoint_vision_chat(body: VisionChatRequest):
         logger.error(f"[MSG] [{request_id}] [FAIL] Vision chat failed: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Vision chat failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Vision chat failed")
 
 
 @app.delete("/api/geoint/vision/chat/{session_id}")
@@ -4743,7 +4744,8 @@ async def clear_vision_chat_session(session_id: str):
             "cleared": cleared
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Vision chat clear error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # NOTE: Duplicate /api/geoint/mobility endpoint removed (was preventing terrain endpoint from registering)
@@ -5825,7 +5827,7 @@ async def geoint_comparison_analysis(body: ComparisonRequest):
     except Exception as e:
         logger.error(f"[CHART] [COMPARISON-ANALYSIS] [FAIL] {type(e).__name__}: {e}")
         logger.exception("Full traceback:")
-        raise HTTPException(status_code=500, detail=f"Comparison failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Comparison failed")
 
 @app.post("/api/geoint/animation")
 async def geoint_animation_analysis(body: AnimationRequest):
@@ -5866,7 +5868,7 @@ async def geoint_animation_analysis(body: AnimationRequest):
         raise
     except Exception as e:
         logger.error(f"Animation endpoint failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Animation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Animation failed")
 
 # Orchestrator endpoint for calling multiple GEOINT agents at once
 @app.post("/api/geoint/orchestrate")
@@ -5922,7 +5924,7 @@ async def geoint_orchestrator_endpoint(body: OrchestrateRequest):
         raise
     except Exception as e:
         logger.error(f"Orchestrator failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Orchestration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Orchestration failed")
 
 @app.get("/api/debug/location/{location}")
 async def debug_location_resolver(location: str):
@@ -5946,7 +5948,7 @@ async def debug_location_resolver(location: str):
     except Exception as e:
         logger.error(f"Location resolver debug failed: {str(e)}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/debug/location/{location}")
 async def debug_location_resolver(location: str):
