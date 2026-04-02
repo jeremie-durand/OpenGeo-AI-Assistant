@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#
+# Python hooks (ruff, isort, black) — skip gracefully if pre-commit is not installed
+if command -v pre-commit >/dev/null 2>&1; then
+  pre-commit run --hook-stage pre-commit
+fi
+#
+# Frontend hooks (prettier via lint-staged)
+npx lint-staged
