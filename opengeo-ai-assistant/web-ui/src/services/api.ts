@@ -86,11 +86,13 @@ class ApiService {
 
   constructor() {
     try {
+      const apiKey = import.meta.env.VITE_API_KEY ?? '';
       this.api = axios.create({
         baseURL: API_BASE || undefined,
         timeout: 300000, // 5 minutes — extreme weather queries via chat can be slow (NetCDF sampling)
         headers: {
           'Content-Type': 'application/json',
+          ...(apiKey ? { 'X-Api-Key': apiKey } : {}),
         },
       });
 

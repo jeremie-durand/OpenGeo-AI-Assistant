@@ -350,17 +350,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add Entra ID JWT auth middleware (validates Bearer tokens on protected routes)
+# Add API key auth middleware (validates X-Api-Key header on protected routes)
 # Registered AFTER CORSMiddleware so CORS headers are always added, even on 401.
-# Open paths (/api/health, /docs, etc.) are excluded from auth.
-ENABLE_AUTH = os.environ.get("ENABLE_AUTH", "true").lower() == "true"
+# Open paths (/api/health, /api/config, /) are excluded from auth.
+ENABLE_AUTH = os.environ.get("ENABLE_AUTH", "false").lower() == "true"
 if ENABLE_AUTH:
-    try:
-        from auth_middleware import EntraAuthMiddleware
-        app.add_middleware(EntraAuthMiddleware)
-        logger.info("[AUTH] Entra ID auth middleware registered")
-    except ImportError as e:
-        logger.warning(f"[AUTH] Auth middleware not available — all routes are open: {e}")
+    from auth_middleware import ApiKeyAuthMiddleware
+    app.add_middleware(ApiKeyAuthMiddleware)
+    logger.info("[AUTH] API key auth middleware registered")
 else:
     logger.warning("[AUTH] ENABLE_AUTH is false — all routes are open (no authentication checks)")
 
