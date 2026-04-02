@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+from cachetools import TTLCache
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from rate_limit_middleware import RateLimitMiddleware
@@ -43,7 +44,7 @@ from quickstart_cache import get_quickstart_classification, get_quickstart_locat
 # This allows instant troubleshooting by including trace in the response
 # No need to wait for Log Analytics - see exactly what each agent did
 # ============================================================================
-pipeline_traces: Dict[str, List[Dict]] = {}  # session_id -> list of trace entries
+pipeline_traces: TTLCache = TTLCache(maxsize=500, ttl=1800)  # 30-min TTL, max 500 sessions
 
 def get_pipeline_trace(session_id: str) -> List[Dict]:
     """Get all trace entries for a session"""
