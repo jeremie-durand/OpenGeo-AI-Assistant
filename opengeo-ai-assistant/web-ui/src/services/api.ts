@@ -16,7 +16,7 @@ const isDevelopment = import.meta.env.DEV;
 // 2. Production with build-time env var: Use configured backend URL  
 // 3. Fallback: Use current origin (works if frontend and backend are on same domain)
 const API_BASE = isDevelopment
-  ? (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000')
+  ? (import.meta.env.BACKEND_URL || 'http://localhost:8000')
   : (import.meta.env.VITE_API_BASE_URL || window.location.origin);
 
 // Only log API configuration in development mode

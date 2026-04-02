@@ -41,7 +41,7 @@ interface HealthCheckInfoProps {
 }
 
 const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({ 
-  apiBaseUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+  apiBaseUrl = import.meta.env.BACKEND_URL || 'http://localhost:8000'
 }) => {
   const [healthData, setHealthData] = useState<HealthCheckData | null>(null);
   const [loading, setLoading] = useState(true);

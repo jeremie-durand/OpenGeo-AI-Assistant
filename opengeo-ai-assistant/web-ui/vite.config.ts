@@ -126,8 +126,9 @@ export default defineConfig(({ command, mode }) => {
       // VITE_API_BASE_URL is set by the deployment workflow at build time
       // For local development, use localhost backend
       'import.meta.env.VITE_API_BASE_URL': JSON.stringify(
-        isDev ? (env.VITE_BACKEND_URL || 'http://localhost:8000') : process.env.VITE_API_BASE_URL || ''
-      )
+        isDev ? (env.BACKEND_URL || 'http://localhost:8000') : process.env.VITE_API_BASE_URL || ''
+      ),
+      'import.meta.env.BACKEND_URL': JSON.stringify(env.BACKEND_URL || 'http://localhost:8000')
     }
   };
 });

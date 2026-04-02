@@ -5,7 +5,7 @@
 // In production, VITE_API_BASE_URL is set dynamically during GitHub Actions build
 const isDevelopment = import.meta.env.DEV;
 const API_BASE_URL = isDevelopment
-  ? (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000')
+  ? (import.meta.env.BACKEND_URL || 'http://localhost:8000')
   : import.meta.env.VITE_API_BASE_URL || '';  // Production: injected at build time, fallback to same-origin
 
 // API endpoint configuration
