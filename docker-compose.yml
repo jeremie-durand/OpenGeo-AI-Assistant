@@ -28,7 +28,7 @@ services:
     env_file:
       - .env
     environment:
-      - CORS_ORIGINS=http://localhost:3000
+      - CORS_ORIGINS=${FRONTEND_URL:-http://localhost:3000}
     restart: unless-stopped
     deploy:
       resources:
