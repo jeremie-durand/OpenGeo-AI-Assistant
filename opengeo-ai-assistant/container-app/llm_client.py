@@ -2,9 +2,32 @@
 import os
 from typing import Any, Dict, List, Optional
 import logging
+from urllib.parse import urlparse
 
 from openai import AsyncOpenAI
 from anthropic_client import AnthropicClient
+
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
+
+
+def _validate_base_url(base_url: str) -> None:
+    """Raise LLMConfigurationError if LLM_BASE_URL is not a safe endpoint."""
+    parsed = urlparse(base_url)
+    if parsed.scheme == "https":
+        return
+    if parsed.scheme == "http":
+        host = parsed.hostname or ""
+        if host in _LOCAL_HOSTS:
+            return
+        raise LLMConfigurationError(
+            f"LLM_BASE_URL uses http:// with non-local host '{host}'. "
+            "Use https:// for remote endpoints, or http://localhost / "
+            "http://host.docker.internal for local models."
+        )
+    raise LLMConfigurationError(
+        f"LLM_BASE_URL has unsupported scheme '{parsed.scheme}'. "
+        "Only https:// (remote) and http://localhost (local) are allowed."
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +164,8 @@ class LLMClient:
         api_key = os.getenv("LLM_API_KEY", "").strip()
         model = os.getenv("LLM_MODEL", "").strip()
         base_url = os.getenv("LLM_BASE_URL", "").strip() or None
+        if base_url:
+            _validate_base_url(base_url)
         api_version = os.getenv("LLM_API_VERSION", "").strip() or None
         org_id = os.getenv("LLM_ORG_ID", "").strip() or None
         raw_max_tokens = os.getenv("LLM_MAX_TOKENS", "2048").strip()
