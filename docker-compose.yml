@@ -3,7 +3,7 @@ services:
     build:
       context: ./opengeo-ai-assistant/web-ui
       dockerfile: Dockerfile
-    container_name: opengeo-ai-assistant--frontend
+    container_name: opengeo-ai-assistant-frontend
     ports:
       - "3000:3000"
     depends_on:
