@@ -10,11 +10,11 @@ This agent:
 4. Synthesizes results into coherent damage reports
 """
 
+import json
 import logging
 import os
-import json
-from typing import Dict, Any, Optional, List
 from datetime import datetime
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,9 @@ Keep responses factual. Acknowledge limitations — satellite imagery may not sh
 class BuildingDamageSession:
     """Represents a conversation session with the building damage agent."""
 
-    def __init__(self, session_id: str, latitude: float, longitude: float, thread_id: str):
+    def __init__(
+        self, session_id: str, latitude: float, longitude: float, thread_id: str
+    ):
         self.session_id = session_id
         self.latitude = latitude
         self.longitude = longitude
@@ -115,8 +117,10 @@ class BuildingDamageAgent:
         for attempt in range(3):
             try:
                 if attempt > 0:
-                    wait_secs = 2 ** attempt
-                    logger.info(f"[RETRY] BuildingDamageAgent init attempt {attempt + 1}/3 after {wait_secs}s...")
+                    wait_secs = 2**attempt
+                    logger.info(
+                        f"[RETRY] BuildingDamageAgent init attempt {attempt + 1}/3 after {wait_secs}s..."
+                    )
                     await asyncio.sleep(wait_secs)
                     # Reset state for fresh attempt
                     self._agents_client = None
@@ -127,7 +131,9 @@ class BuildingDamageAgent:
                 return  # Success
             except Exception as e:
                 last_error = e
-                logger.warning(f"[RETRY] BuildingDamageAgent init attempt {attempt + 1} failed: {e}")
+                logger.warning(
+                    f"[RETRY] BuildingDamageAgent init attempt {attempt + 1} failed: {e}"
+                )
 
         raise last_error
 
@@ -138,12 +144,15 @@ class BuildingDamageAgent:
         logger.info(f"BuildingDamageAgent using model: {model}")
 
         from semantic_translator import get_llm_client
+
         self._agents_client = get_llm_client(model=model, vision=True)
         self._agent_id = self._agents_client.model
         self._initialized = True
         logger.info(f"BuildingDamageAgent initialized: model={self._agent_id}")
 
-    async def _get_or_create_session(self, session_id: str, latitude: float, longitude: float) -> BuildingDamageSession:
+    async def _get_or_create_session(
+        self, session_id: str, latitude: float, longitude: float
+    ) -> BuildingDamageSession:
         if session_id in self.sessions:
             session = self.sessions[session_id]
             session.update_location(latitude, longitude)
@@ -152,27 +161,47 @@ class BuildingDamageAgent:
         thread = await self._agents_client.threads.create()
         session = BuildingDamageSession(session_id, latitude, longitude, thread.id)
         self.sessions[session_id] = session
-        logger.info(f"Created new building damage session: {session_id} -> thread: {thread.id}")
+        logger.info(
+            f"Created new building damage session: {session_id} -> thread: {thread.id}"
+        )
         return session
 
-    async def _analyze_screenshot_direct(self, screenshot_base64: str, latitude: float, longitude: float) -> Optional[str]:
+    async def _analyze_screenshot_direct(
+        self, screenshot_base64: str, latitude: float, longitude: float
+    ) -> Optional[str]:
         """Directly analyze a screenshot using GPT-5 Vision for damage."""
         try:
             from semantic_translator import get_llm_client
+
             client = get_llm_client(model=os.getenv("LLM_MODEL", "gpt-5"), vision=True)
             clean_base64 = screenshot_base64
-            if screenshot_base64.startswith('data:image'):
-                clean_base64 = screenshot_base64.split(',', 1)[1]
+            if screenshot_base64.startswith("data:image"):
+                clean_base64 = screenshot_base64.split(",", 1)[1]
             response = await client.chat.completions.create(
                 model=os.getenv("LLM_MODEL", "gpt-5"),
                 messages=[
-                    {"role": "system", "content": "You are an expert in structural damage assessment from satellite imagery."},
-                    {"role": "user", "content": [
-                        {"type": "text", "text": f"Analyze this satellite image at ({latitude:.4f}, {longitude:.4f}) for building damage. Look for collapsed structures, debris, burn scars, water damage, and infrastructure impact."},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{clean_base64}", "detail": "high"}}
-                    ]}
+                    {
+                        "role": "system",
+                        "content": "You are an expert in structural damage assessment from satellite imagery.",
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"Analyze this satellite image at ({latitude:.4f}, {longitude:.4f}) for building damage. Look for collapsed structures, debris, burn scars, water damage, and infrastructure impact.",
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{clean_base64}",
+                                    "detail": "high",
+                                },
+                            },
+                        ],
+                    },
                 ],
-                max_completion_tokens=1500
+                max_completion_tokens=1500,
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -191,6 +220,7 @@ class BuildingDamageAgent:
     ) -> Dict[str, Any]:
         """Perform building damage assessment via Agent Service."""
         import uuid
+
         await self._ensure_initialized()
 
         if not session_id:
@@ -202,6 +232,7 @@ class BuildingDamageAgent:
         location_name = f"Location ({latitude:.4f}, {longitude:.4f})"
         try:
             from semantic_translator import geocoding_plugin
+
             rg = await geocoding_plugin.reverse_geocode(latitude, longitude)
             data = json.loads(rg)
             if not data.get("error"):
@@ -209,17 +240,24 @@ class BuildingDamageAgent:
                 region = data.get("region", "")
                 country = data.get("country", "")
                 parts = [p for p in [name, region, country] if p and p != name]
-                location_name = f"{name}, {', '.join(parts)}" if name and parts else name or location_name
+                location_name = (
+                    f"{name}, {', '.join(parts)}"
+                    if name and parts
+                    else name or location_name
+                )
         except Exception:
             pass
 
         visual_analysis = None
         if include_vision_analysis and screenshot_base64:
             import asyncio
+
             try:
                 result = await asyncio.wait_for(
-                    self._analyze_screenshot_direct(screenshot_base64, latitude, longitude),
-                    timeout=15.0
+                    self._analyze_screenshot_direct(
+                        screenshot_base64, latitude, longitude
+                    ),
+                    timeout=15.0,
                 )
                 if result and len(result.strip()) > 0:
                     visual_analysis = result
@@ -236,59 +274,91 @@ class BuildingDamageAgent:
 - Analysis radius: {radius_miles} miles"""
 
         if visual_analysis:
-            context_message += f"\n\n[Visual Analysis of Current Map View]\n{visual_analysis}"
+            context_message += (
+                f"\n\n[Visual Analysis of Current Map View]\n{visual_analysis}"
+            )
 
-        query = user_context or "Assess building damage at this location. Classify severity and identify damage indicators."
+        query = (
+            user_context
+            or "Assess building damage at this location. Classify severity and identify damage indicators."
+        )
         context_message += f"\n\n[User Question]\n{query}"
 
         # Set screenshot context so tools can use the user's high-res map view
-        from geoint.building_damage_tools import set_screenshot_context, clear_screenshot_context
+        from geoint.building_damage_tools import (
+            clear_screenshot_context,
+            set_screenshot_context,
+        )
+
         set_screenshot_context(screenshot_base64, latitude, longitude)
 
         try:
-            return await self._run_agent(session, session_id, context_message, latitude, longitude, radius_miles)
+            return await self._run_agent(
+                session, session_id, context_message, latitude, longitude, radius_miles
+            )
         finally:
             clear_screenshot_context()
 
-    async def _run_agent(self, session, session_id, context_message, latitude, longitude, radius_miles):
+    async def _run_agent(
+        self, session, session_id, context_message, latitude, longitude, radius_miles
+    ):
         """Run the agent with retries. Extracted so screenshot context can be cleaned up via try/finally."""
         max_retries = 3
         _retryable_patterns = [
-            "404", "Resource not found", "invalid_engine_error",
-            "Failed to resolve model", "InternalServerError",
-            "Unable to get resource", "DeploymentNotFound",
-            "server_error", "something went wrong",
+            "404",
+            "Resource not found",
+            "invalid_engine_error",
+            "Failed to resolve model",
+            "InternalServerError",
+            "Unable to get resource",
+            "DeploymentNotFound",
+            "server_error",
+            "something went wrong",
         ]
         for attempt in range(max_retries):
             try:
                 # Re-create thread if we had to re-initialize (stale session)
                 if attempt > 0:
                     import asyncio
-                    await asyncio.sleep(2 ** attempt)
-                    session = await self._get_or_create_session(f"{session_id}_retry{attempt}", latitude, longitude)
+
+                    await asyncio.sleep(2**attempt)
+                    session = await self._get_or_create_session(
+                        f"{session_id}_retry{attempt}", latitude, longitude
+                    )
 
                 await self._agents_client.messages.create(
-                    thread_id=session.thread_id, role="user", content=context_message)
+                    thread_id=session.thread_id, role="user", content=context_message
+                )
 
                 run = await self._agents_client.runs.create_and_process(
-                    thread_id=session.thread_id, agent_id=self._agent_id)
+                    thread_id=session.thread_id, agent_id=self._agent_id
+                )
 
                 if run.status == "failed":
                     error_text = str(run.last_error)
-                    is_retryable = any(p.lower() in error_text.lower() for p in _retryable_patterns)
+                    is_retryable = any(
+                        p.lower() in error_text.lower() for p in _retryable_patterns
+                    )
                     if is_retryable and attempt < max_retries - 1:
-                        logger.warning(f"Building damage run failed (retryable): {error_text[:200]}, attempt {attempt + 1}")
+                        logger.warning(
+                            f"Building damage run failed (retryable): {error_text[:200]}, attempt {attempt + 1}"
+                        )
                         self._initialized = False
                         self._agent_id = None
                         self._agents_client = None
                         self.sessions.clear()
                         await self._ensure_initialized()
                         continue
-                    return {"agent": self.name, "response": f"Error: {run.last_error}", "session_id": session_id}
+                    return {
+                        "agent": self.name,
+                        "response": f"Error: {run.last_error}",
+                        "session_id": session_id,
+                    }
 
                 # List messages in descending order (latest first)
                 messages_iterable = self._agents_client.messages.list(
-                    thread_id=session.thread_id, order="desc")
+                    thread_id=session.thread_id, order="desc"
+                )
 
                 response_content = ""
                 tool_calls = []
@@ -301,11 +371,14 @@ class BuildingDamageAgent:
 
                 try:
                     run_steps_iterable = self._agents_client.run_steps.list(
-                        thread_id=session.thread_id, run_id=run.id)
+                        thread_id=session.thread_id, run_id=run.id
+                    )
                     async for step in run_steps_iterable:
-                        if hasattr(step, 'step_details') and hasattr(step.step_details, 'tool_calls'):
+                        if hasattr(step, "step_details") and hasattr(
+                            step.step_details, "tool_calls"
+                        ):
                             for tc in step.step_details.tool_calls:
-                                if hasattr(tc, 'function'):
+                                if hasattr(tc, "function"):
                                     tool_calls.append({"tool": tc.function.name})
                 except Exception:
                     pass
@@ -321,14 +394,18 @@ class BuildingDamageAgent:
                     "session_id": session_id,
                     "location": {"latitude": latitude, "longitude": longitude},
                     "radius_miles": radius_miles,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.utcnow().isoformat(),
                 }
 
             except Exception as e:
                 error_str = str(e)
-                is_retryable = any(p.lower() in error_str.lower() for p in _retryable_patterns)
+                is_retryable = any(
+                    p.lower() in error_str.lower() for p in _retryable_patterns
+                )
                 if is_retryable and attempt < max_retries - 1:
-                    logger.warning(f"Building damage agent error (retryable): {error_str[:200]}, re-initializing... (attempt {attempt + 1})")
+                    logger.warning(
+                        f"Building damage agent error (retryable): {error_str[:200]}, re-initializing... (attempt {attempt + 1})"
+                    )
                     # Reset initialization state so _ensure_initialized re-creates the agent
                     self._initialized = False
                     self._agent_id = None
@@ -338,22 +415,40 @@ class BuildingDamageAgent:
                         await self._ensure_initialized()
                         continue  # Retry with fresh agent
                     except Exception as reinit_err:
-                        logger.error(f"Building damage agent re-initialization failed: {reinit_err}")
-                        return {"agent": self.name, "response": f"Error: Agent service unavailable - {str(reinit_err)}", "session_id": session_id}
+                        logger.error(
+                            f"Building damage agent re-initialization failed: {reinit_err}"
+                        )
+                        return {
+                            "agent": self.name,
+                            "response": f"Error: Agent service unavailable - {str(reinit_err)}",
+                            "session_id": session_id,
+                        }
 
                 logger.error(f"Building damage agent error: {e}")
                 import traceback
-                logger.error(traceback.format_exc())
-                return {"agent": self.name, "response": f"Error: {error_str}", "session_id": session_id}
 
-    async def chat(self, session_id: str, user_message: str, latitude: float, longitude: float,
-                   screenshot_base64: Optional[str] = None) -> Dict[str, Any]:
+                logger.error(traceback.format_exc())
+                return {
+                    "agent": self.name,
+                    "response": f"Error: {error_str}",
+                    "session_id": session_id,
+                }
+
+    async def chat(
+        self,
+        session_id: str,
+        user_message: str,
+        latitude: float,
+        longitude: float,
+        screenshot_base64: Optional[str] = None,
+    ) -> Dict[str, Any]:
         return await self.analyze_building_damage(
-            latitude=latitude, longitude=longitude,
+            latitude=latitude,
+            longitude=longitude,
             user_context=user_message,
             include_vision_analysis=bool(screenshot_base64),
             screenshot_base64=screenshot_base64,
-            session_id=session_id
+            session_id=session_id,
         )
 
     async def cleanup(self):

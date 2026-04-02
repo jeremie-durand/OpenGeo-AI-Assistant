@@ -1,11 +1,10 @@
-
+import logging
 import os
 from typing import Any, Dict, List, Optional
-import logging
 from urllib.parse import urlparse
 
-from openai import AsyncOpenAI
 from anthropic_client import AnthropicClient
+from openai import AsyncOpenAI
 
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
 
@@ -29,6 +28,7 @@ def _validate_base_url(base_url: str) -> None:
         "Only https:// (remote) and http://localhost (local) are allowed."
     )
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,16 +36,19 @@ logger = logging.getLogger(__name__)
 # OpenAI-compatible shim for Anthropic responses
 # ---------------------------------------------------------------------------
 
+
 class _Message:
     def __init__(self, content: str, role: str = "assistant"):
         self.content = content
         self.role = role
+
 
 class _Choice:
     def __init__(self, content: str):
         self.message = _Message(content)
         self.finish_reason = "stop"
         self.index = 0
+
 
 class _CompletionResponse:
     def __init__(self, content: str, model: str):
@@ -55,7 +58,13 @@ class _CompletionResponse:
 
     def model_dump(self) -> Dict[str, Any]:
         return {
-            "choices": [{"message": {"content": c.message.content, "role": c.message.role}, "finish_reason": c.finish_reason} for c in self.choices],
+            "choices": [
+                {
+                    "message": {"content": c.message.content, "role": c.message.role},
+                    "finish_reason": c.finish_reason,
+                }
+                for c in self.choices
+            ],
             "model": self.model,
             "object": self.object,
         }
@@ -77,7 +86,10 @@ class _CompletionsProxy:
         if self._llm.provider == "openai":
             # Delegate straight to the raw AsyncOpenAI client so callers get a
             # real OpenAI response object (with .choices[0].message.content).
-            params: Dict[str, Any] = {"model": model or self._llm.model, "messages": messages}
+            params: Dict[str, Any] = {
+                "model": model or self._llm.model,
+                "messages": messages,
+            }
             if self._llm.max_tokens is not None:
                 params["max_tokens"] = self._llm.max_tokens
             params.update(kwargs)
@@ -88,7 +100,11 @@ class _CompletionsProxy:
             # Extract text from Anthropic response format.
             content_blocks = raw.get("content", [])
             if content_blocks and isinstance(content_blocks, list):
-                text = content_blocks[0].get("text", "") if isinstance(content_blocks[0], dict) else str(content_blocks[0])
+                text = (
+                    content_blocks[0].get("text", "")
+                    if isinstance(content_blocks[0], dict)
+                    else str(content_blocks[0])
+                )
             else:
                 text = str(raw)
             return _CompletionResponse(text, model or self._llm.model)
@@ -152,7 +168,9 @@ class LLMClient:
                 client_kwargs["organization"] = org_id
             self._client = AsyncOpenAI(**client_kwargs)
         elif self.provider == "anthropic":
-            self._client = AnthropicClient(api_key=api_key, model=model, base_url=base_url)
+            self._client = AnthropicClient(
+                api_key=api_key, model=model, base_url=base_url
+            )
         else:
             raise LLMConfigurationError(
                 f"Unsupported LLM_PROVIDER '{provider}'. Only 'openai' and 'anthropic' are supported."
@@ -169,7 +187,9 @@ class LLMClient:
         api_version = os.getenv("LLM_API_VERSION", "").strip() or None
         org_id = os.getenv("LLM_ORG_ID", "").strip() or None
         raw_max_tokens = os.getenv("LLM_MAX_TOKENS", "2048").strip()
-        max_tokens: Optional[int] = int(raw_max_tokens) if raw_max_tokens.isdigit() else None
+        max_tokens: Optional[int] = (
+            int(raw_max_tokens) if raw_max_tokens.isdigit() else None
+        )
 
         missing: List[str] = []
         if not api_key:
@@ -183,7 +203,10 @@ class LLMClient:
             )
 
         logger.info(
-            "[LLM] Using provider=%s model=%s base_url=%s", provider, model, base_url or "<default>"
+            "[LLM] Using provider=%s model=%s base_url=%s",
+            provider,
+            model,
+            base_url or "<default>",
         )
         return cls(
             provider=provider,
@@ -232,7 +255,9 @@ class LLMClient:
 _global_client: Optional[LLMClient] = None
 
 
-def get_llm_client(model: Optional[str] = None, vision: bool = False) -> OpenAICompatClient:
+def get_llm_client(
+    model: Optional[str] = None, vision: bool = False
+) -> OpenAICompatClient:
     """Return an OpenAI-compatible client for the configured provider.
 
     The `model` and `vision` parameters are accepted for API compatibility with

@@ -16,22 +16,22 @@ Architecture:
     3. Provide rendering configs for tile generation
     4. Provide metadata for GPT collection selection
     5. Provide classification for intelligent querying
-    
+
 Performance:
     - NO filesystem scanning during runtime
     - ALL data loaded into memory at startup
     - Fast dictionary lookups for any collection
-    
+
 Usage:
     # For rendering
     from pc_tasks_config_loader import get_pc_rendering_config
     config = get_pc_rendering_config("modis-14A1-061")
-    
+
     # For GPT catalog
     from pc_tasks_config_loader import get_collection_description, get_collection_keywords
     desc = get_collection_description("sentinel-2-l2a")
     keywords = get_collection_keywords("sentinel-2-l2a")
-    
+
     # For query rules
     from pc_tasks_config_loader import supports_temporal_filtering, supports_cloud_filtering
     temporal = supports_temporal_filtering("sentinel-2-l2a")
@@ -40,15 +40,16 @@ Usage:
 
 import json
 import logging
-from pathlib import Path
-from typing import Optional, Dict, Tuple, List, Any
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
 class DataType(str, Enum):
     """STAC data types for rendering"""
+
     OPTICAL = "optical"
     OPTICAL_REFLECTANCE = "optical_reflectance"
     SAR = "sar"
@@ -66,7 +67,7 @@ class DataType(str, Enum):
 
 class RenderingConfig:
     """Complete rendering configuration for a collection"""
-    
+
     def __init__(
         self,
         collection_id: str,
@@ -106,7 +107,7 @@ class RenderingConfig:
         self.unscale = unscale
         self.params_to_remove = params_to_remove or self._get_default_params_to_remove()
         self.notes = notes
-    
+
     def _get_default_params_to_remove(self) -> list:
         """
         Get default parameters to remove from STAC API tilejson URLs.
@@ -114,16 +115,16 @@ class RenderingConfig:
         """
         # Always remove these (universal problems)
         always_remove = [
-            "asset_bidx",      # Causes 404 with MPC API
-            "color_formula"    # Prevents duplicate color_formula parameters
+            "asset_bidx",  # Causes 404 with MPC API
+            "color_formula",  # Prevents duplicate color_formula parameters
         ]
-        
+
         # Data-type specific removals
         if self.data_type in [DataType.OPTICAL, DataType.OPTICAL_REFLECTANCE]:
             # Optical imagery issues
             return always_remove + [
-                "nodata",   # nodata=0 causes gray/blurry images
-                "assets"    # Remove assets parameter
+                "nodata",  # nodata=0 causes gray/blurry images
+                "assets",  # Remove assets parameter
             ]
         elif self.data_type == DataType.SAR:
             # SAR imagery issues
@@ -134,23 +135,23 @@ class RenderingConfig:
         else:
             # Default: just remove universal problems
             return always_remove
-    
+
     def clean_stac_url(self, url: str) -> str:
         """
         Clean a STAC tilejson URL by removing problematic parameters.
-        
+
         Args:
             url: Original tilejson URL from STAC API
-            
+
         Returns:
             Cleaned URL with problematic parameters removed
         """
         if "?" not in url:
             return url
-        
+
         base_url, params = url.split("?", 1)
         param_list = params.split("&")
-        
+
         # Filter out problematic parameters
         clean_params = []
         for param in param_list:
@@ -161,13 +162,13 @@ class RenderingConfig:
                     break
             if not should_remove:
                 clean_params.append(param)
-        
+
         # Rebuild URL
         if clean_params:
             return f"{base_url}?{'&'.join(clean_params)}"
         else:
             return base_url
-    
+
     def to_dict(self) -> Dict:
         """Convert to dictionary for TiTiler parameters"""
         params = {
@@ -175,9 +176,9 @@ class RenderingConfig:
             "format": "png",
             "resampling": self.resampling,
             "min_zoom": self.min_zoom,
-            "max_zoom": self.max_zoom
+            "max_zoom": self.max_zoom,
         }
-        
+
         if self.assets:
             params["assets"] = self.assets
         if self.rescale:
@@ -192,9 +193,9 @@ class RenderingConfig:
             params["asset_bidx"] = self.asset_bidx
         if self.nodata is not None:
             params["nodata"] = self.nodata
-            
+
         return params
-    
+
     def __repr__(self):
         return f"RenderingConfig({self.collection_id}, {self.data_type})"
 
@@ -212,21 +213,19 @@ COLLECTION_ID_ALIASES = {
     # Sentinel-2: STAC uses "sentinel-2-l2a" but PC tasks uses "sentinel-2"
     "sentinel-2-l2a": "sentinel-2",
     "sentinel-2-l1c": "sentinel-2",
-    
     # ASTER: STAC may use different naming
     "aster-l1t": "aster",
-    
     # Add more aliases as needed when STAC API names differ from PC repo names
 }
 
 
 class UnifiedPCLoader:
     """Load ALL Planetary Computer configurations from unified JSON"""
-    
+
     def __init__(self, json_path: Optional[str] = None):
         """
         Initialize unified PC loader
-        
+
         Args:
             json_path: Path to pc_rendering_config.json file.
                       If None, auto-detects from current directory.
@@ -236,159 +235,175 @@ class UnifiedPCLoader:
         else:
             # Auto-detect: JSON file in same directory as this module
             self.json_path = Path(__file__).parent / "pc_rendering_config.json"
-        
+
         self._rendering_cache: Dict[str, RenderingConfig] = {}
         self._metadata_cache: Dict[str, Dict[str, Any]] = {}
         self._classification_cache: Dict[str, Dict[str, Any]] = {}
         self._categories_cache: List[Dict[str, Any]] = []
         self._json_metadata: Dict[str, Any] = {}
         self._initialized = False
-        
+
         # Load everything at startup
         self._load_unified_json()
-    
+
     def _load_unified_json(self):
         """Load complete unified JSON into memory"""
         if not self.json_path.exists():
             logger.error(f" Unified config JSON not found at: {self.json_path}")
-            logger.error(f"   Run scripts/extract_all_pc_configs.py to generate it")
+            logger.error("   Run scripts/extract_all_pc_configs.py to generate it")
             return
-        
+
         try:
-            with open(self.json_path, encoding='utf-8') as f:
+            with open(self.json_path, encoding="utf-8") as f:
                 data = json.load(f)
-            
-            self._json_metadata = data.get('metadata', {})
-            self._categories_cache = data.get('categories', [])
-            collections_data = data.get('collections', {})
-            
-            logger.info(f" Loading unified PC configuration...")
+
+            self._json_metadata = data.get("metadata", {})
+            self._categories_cache = data.get("categories", [])
+            collections_data = data.get("collections", {})
+
+            logger.info(" Loading unified PC configuration...")
             logger.info(f"   Source: {self.json_path.name}")
             logger.info(f"   Collections: {len(collections_data)}")
-            logger.info(f"   Last updated: {self._json_metadata.get('last_updated', 'unknown')}")
-            
+            logger.info(
+                f"   Last updated: {self._json_metadata.get('last_updated', 'unknown')}"
+            )
+
             # Process each collection
             for collection_id, config_data in collections_data.items():
                 try:
                     # Parse rendering config
-                    render_config = self._create_rendering_config(collection_id, config_data)
+                    render_config = self._create_rendering_config(
+                        collection_id, config_data
+                    )
                     self._rendering_cache[collection_id] = render_config
-                    
+
                     # Cache metadata
-                    self._metadata_cache[collection_id] = config_data.get('metadata', {})
-                    
+                    self._metadata_cache[collection_id] = config_data.get(
+                        "metadata", {}
+                    )
+
                     # Cache classification
-                    self._classification_cache[collection_id] = config_data.get('classification', {})
-                    
+                    self._classification_cache[collection_id] = config_data.get(
+                        "classification", {}
+                    )
+
                 except Exception as e:
                     logger.warning(f"  Failed to parse config for {collection_id}: {e}")
                     continue
-            
+
             self._initialized = True
-            logger.info(f" Loaded {len(self._rendering_cache)} configurations in memory")
+            logger.info(
+                f" Loaded {len(self._rendering_cache)} configurations in memory"
+            )
             logger.info(f"   Memory footprint: ~{len(str(data)) / 1024:.1f} KB")
-            
+
         except Exception as e:
             logger.error(f" Failed to load unified config JSON: {e}")
             import traceback
+
             traceback.print_exc()
-    
-    def _create_rendering_config(self, collection_id: str, config_data: dict) -> RenderingConfig:
+
+    def _create_rendering_config(
+        self, collection_id: str, config_data: dict
+    ) -> RenderingConfig:
         """Create RenderingConfig from unified JSON data"""
-        rendering = config_data.get('rendering', {})
-        classification = config_data.get('classification', {})
-        
+        rendering = config_data.get("rendering", {})
+        classification = config_data.get("classification", {})
+
         # Map data_type string to DataType enum
-        data_type_str = classification.get('data_type', 'unknown')
-        data_type = DataType(data_type_str) if data_type_str in [dt.value for dt in DataType] else DataType.UNKNOWN
-        
+        data_type_str = classification.get("data_type", "unknown")
+        data_type = (
+            DataType(data_type_str)
+            if data_type_str in [dt.value for dt in DataType]
+            else DataType.UNKNOWN
+        )
+
         # Parse rescale if present
         rescale = None
-        if 'rescale' in rendering:
-            rescale_val = rendering['rescale']
+        if "rescale" in rendering:
+            rescale_val = rendering["rescale"]
             if isinstance(rescale_val, list) and len(rescale_val) == 2:
                 rescale = (float(rescale_val[0]), float(rescale_val[1]))
-            elif isinstance(rescale_val, str) and ',' in rescale_val:
-                parts = rescale_val.split(',')
+            elif isinstance(rescale_val, str) and "," in rescale_val:
+                parts = rescale_val.split(",")
                 rescale = (float(parts[0]), float(parts[1]))
-        
+
         return RenderingConfig(
             collection_id=collection_id,
             data_type=data_type,
-            assets=rendering.get('assets', []),
+            assets=rendering.get("assets", []),
             rescale=rescale,
-            colormap=rendering.get('colormap_name'),
-            resampling='bilinear',  # Default
-            color_formula=rendering.get('color_formula'),
-            expression=rendering.get('expression'),
-            asset_bidx=rendering.get('asset_bidx'),
-            nodata=rendering.get('nodata'),
+            colormap=rendering.get("colormap_name"),
+            resampling="bilinear",  # Default
+            color_formula=rendering.get("color_formula"),
+            expression=rendering.get("expression"),
+            asset_bidx=rendering.get("asset_bidx"),
+            nodata=rendering.get("nodata"),
             tile_scale=2,  # Default
-            min_zoom=rendering.get('min_zoom', 6),
-            max_zoom=rendering.get('max_zoom', 18),
-            notes=f"From unified PC config - {collection_id}"
+            min_zoom=rendering.get("min_zoom", 6),
+            max_zoom=rendering.get("max_zoom", 18),
+            notes=f"From unified PC config - {collection_id}",
         )
-    
+
     def _resolve_collection_id(self, collection_id: str) -> str:
         """
         Resolve collection ID using aliases.
-        
+
         The STAC API often uses different collection IDs than the PC tasks repo.
         For example: STAC uses "sentinel-2-l2a" but PC repo uses "sentinel-2".
-        
+
         Args:
             collection_id: The collection ID from STAC API
-            
+
         Returns:
             The resolved collection ID (aliased if match found, original otherwise)
         """
         return COLLECTION_ID_ALIASES.get(collection_id, collection_id)
-    
+
     def get_rendering_config(self, collection_id: str) -> Optional[RenderingConfig]:
         """Get rendering config for a collection (with alias resolution)"""
         if not self._initialized:
             logger.warning(f"  PC loader not initialized, cannot load {collection_id}")
             return None
-        
+
         # First try exact match
         config = self._rendering_cache.get(collection_id)
         if config:
             return config
-        
+
         # Try alias resolution (e.g., sentinel-2-l2a -> sentinel-2)
         resolved_id = self._resolve_collection_id(collection_id)
         if resolved_id != collection_id:
             logger.info(f" Collection ID alias: {collection_id} -> {resolved_id}")
             return self._rendering_cache.get(resolved_id)
-        
+
         return None
-    
+
     def get_all_rendering_configs(self) -> Dict[str, RenderingConfig]:
         """Get all rendering configs"""
         if not self._initialized:
             return {}
         return self._rendering_cache.copy()
-    
+
     def get_metadata(self, collection_id: str) -> Optional[Dict[str, Any]]:
         """Get metadata (title, description, keywords) for a collection"""
         if not self._initialized:
             return None
         return self._metadata_cache.get(collection_id)
-    
+
     def get_classification(self, collection_id: str) -> Optional[Dict[str, Any]]:
         """Get classification (data_type, capabilities) for a collection"""
         if not self._initialized:
             return None
         return self._classification_cache.get(collection_id)
-    
+
     def get_all_collection_ids(self) -> List[str]:
         """Get list of all collection IDs"""
         return sorted(self._rendering_cache.keys())
-    
+
     def get_categories(self) -> List[Dict[str, Any]]:
         """Get categories for organizing collections"""
         return self._categories_cache
-    
 
 
 # ============================================================================
@@ -410,13 +425,14 @@ def _get_loader() -> UnifiedPCLoader:
 # Rendering Configuration API
 # ============================================================================
 
+
 def get_pc_rendering_config(collection_id: str) -> Optional[RenderingConfig]:
     """
     Get rendering configuration for a collection
-    
+
     Args:
         collection_id: STAC collection ID (e.g., "modis-14A1-061")
-        
+
     Returns:
         RenderingConfig if found, None otherwise
     """
@@ -427,7 +443,7 @@ def get_pc_rendering_config(collection_id: str) -> Optional[RenderingConfig]:
 def get_all_pc_configs() -> Dict[str, RenderingConfig]:
     """
     Get all available rendering configs
-    
+
     Returns:
         Dictionary of collection_id -> RenderingConfig
     """
@@ -439,64 +455,62 @@ def get_all_pc_configs() -> Dict[str, RenderingConfig]:
 # Metadata API (for GPT catalog)
 # ============================================================================
 
+
 def get_collection_description(collection_id: str) -> Optional[str]:
     """Get description for a collection"""
     loader = _get_loader()
     metadata = loader.get_metadata(collection_id)
-    return metadata.get('description') if metadata else None
+    return metadata.get("description") if metadata else None
 
 
 def get_collection_keywords(collection_id: str) -> List[str]:
     """Get keywords for a collection"""
     loader = _get_loader()
     metadata = loader.get_metadata(collection_id)
-    return metadata.get('keywords', []) if metadata else []
+    return metadata.get("keywords", []) if metadata else []
 
 
 def get_collection_title(collection_id: str) -> Optional[str]:
     """Get title for a collection"""
     loader = _get_loader()
     metadata = loader.get_metadata(collection_id)
-    return metadata.get('title') if metadata else None
+    return metadata.get("title") if metadata else None
 
 
 def get_collection_metadata(collection_id: str) -> Optional[Dict[str, Any]]:
     """Get complete metadata for a collection"""
     loader = _get_loader()
     return loader.get_metadata(collection_id)
-    
+
     if template_files:
         try:
             import json
-            with open(template_files[0], 'r', encoding='utf-8') as f:
+
+            with open(template_files[0], "r", encoding="utf-8") as f:
                 template = json.load(f)
-                return template.get('keywords', [])
+                return template.get("keywords", [])
         except Exception as e:
             logger.warning(f"  Could not read keywords for {collection_id}: {e}")
-    
+
     return []
 
 
 def get_collection_metadata(collection_id: str) -> Optional[Dict[str, Any]]:
     """
     Get comprehensive metadata for a collection (description, keywords, title).
-    
+
     Args:
         collection_id: STAC collection ID
-        
+
     Returns:
         Dictionary with metadata or None
     """
     description = get_collection_description(collection_id)
     keywords = get_collection_keywords(collection_id)
-    
+
     if description or keywords:
-        return {
-            'id': collection_id,
-            'description': description,
-            'keywords': keywords
-        }
-    
+        return {"id": collection_id, "description": description, "keywords": keywords}
+
     return None
 
 
@@ -504,20 +518,20 @@ def build_gpt_collection_catalog() -> str:
     """
     Build comprehensive collection catalog for GPT context.
     Loads all collections from PC repository with descriptions and keywords.
-    
+
     Returns:
         Formatted catalog string for GPT
     """
     loader = _get_loader()
-    
+
     if not loader._initialized:
         return "No PC repository available."
-    
+
     categories = loader.get_categories()
-    
+
     if not categories:
         return "No collections available."
-    
+
     catalog = [
         "AVAILABLE PLANETARY COMPUTER STAC COLLECTIONS",
         "=" * 80,
@@ -525,27 +539,29 @@ def build_gpt_collection_catalog() -> str:
         f"Categories: {len(categories)}",
         "",
     ]
-    
+
     for category in categories:
-        catalog.append(f"\n{category['name'].upper()} ({category['count']} collections)")
+        catalog.append(
+            f"\n{category['name'].upper()} ({category['count']} collections)"
+        )
         catalog.append("-" * 80)
-        
-        for collection in category['collections']:
+
+        for collection in category["collections"]:
             catalog.append(f"\n{collection['id']}:")
             catalog.append(f"  Title: {collection['title']}")
-            
+
             # Add description (truncated)
-            desc = collection.get('description', '')
+            desc = collection.get("description", "")
             if desc:
                 if len(desc) > 200:
                     desc = desc[:200] + "..."
                 catalog.append(f"  Description: {desc}")
-            
+
             # Add keywords
-            keywords = collection.get('keywords', [])
+            keywords = collection.get("keywords", [])
             if keywords:
                 catalog.append(f"  Keywords: {', '.join(keywords[:10])}")
-    
+
     return "\n".join(catalog)
 
 
@@ -558,19 +574,19 @@ def get_all_collection_ids() -> List[str]:
 def load_pc_metadata() -> Dict[str, Any]:
     """
     Load PC metadata (for compatibility with old code)
-    
+
     Returns:
         Metadata structure with categories
     """
     loader = _get_loader()
-    
+
     return {
-        'metadata': {
-            'total_collections': len(loader.get_all_collection_ids()),
-            'source': 'unified pc_rendering_config.json',
-            'loader': 'unified_pc_loader'
+        "metadata": {
+            "total_collections": len(loader.get_all_collection_ids()),
+            "source": "unified pc_rendering_config.json",
+            "loader": "unified_pc_loader",
         },
-        'categories': loader.get_categories()
+        "categories": loader.get_categories(),
     }
 
 
@@ -598,7 +614,7 @@ def supports_cloud_filtering(collection_id: str) -> bool:
 def get_cloud_cover_property(collection_id: str) -> str:
     """Get cloud cover property name for collection."""
     # Most collections use eo:cloud_cover
-    return 'eo:cloud_cover'
+    return "eo:cloud_cover"
 
 
 def get_query_rules(collection_id: str) -> Dict[str, Any]:
@@ -606,12 +622,12 @@ def get_query_rules(collection_id: str) -> Dict[str, Any]:
     config = get_pc_rendering_config(collection_id)
     if not config:
         return {}
-    
+
     rules = {
-        'supports_temporal': supports_temporal_filtering(collection_id),
-        'supports_cloud_filter': supports_cloud_filtering(collection_id),
-        'is_static': is_static_collection(collection_id),
-        'data_type': config.data_type.value
+        "supports_temporal": supports_temporal_filtering(collection_id),
+        "supports_cloud_filter": supports_cloud_filtering(collection_id),
+        "is_static": is_static_collection(collection_id),
+        "data_type": config.data_type.value,
     }
-    
+
     return rules

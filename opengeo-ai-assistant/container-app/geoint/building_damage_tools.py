@@ -9,13 +9,12 @@ Usage:
     tool = AsyncFunctionTool(functions)
 """
 
-import logging
-import json
 import asyncio
 import concurrent.futures
+import json
+import logging
 import os
-import base64
-from typing import Dict, Any, Set, Callable, Optional
+from typing import Callable, Dict, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +26,20 @@ _current_latitude: Optional[float] = None
 _current_longitude: Optional[float] = None
 
 
-def set_screenshot_context(screenshot_base64: Optional[str],
-                           latitude: Optional[float] = None,
-                           longitude: Optional[float] = None) -> None:
+def set_screenshot_context(
+    screenshot_base64: Optional[str],
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+) -> None:
     """Store the user's current map screenshot for tool use."""
     global _current_screenshot_base64, _current_latitude, _current_longitude
     _current_screenshot_base64 = screenshot_base64
     _current_latitude = latitude
     _current_longitude = longitude
     if screenshot_base64:
-        logger.info(f"Screenshot context set ({len(screenshot_base64)} chars) at ({latitude}, {longitude})")
+        logger.info(
+            f"Screenshot context set ({len(screenshot_base64)} chars) at ({latitude}, {longitude})"
+        )
     else:
         logger.info("Screenshot context cleared")
 
@@ -49,8 +52,9 @@ def clear_screenshot_context() -> None:
     _current_longitude = None
 
 
-def _analyze_screenshot_with_vision_sync(screenshot_base64: str, latitude: float,
-                                          longitude: float, user_query: str) -> Dict:
+def _analyze_screenshot_with_vision_sync(
+    screenshot_base64: str, latitude: float, longitude: float, user_query: str
+) -> Dict:
     """Analyze the user's map screenshot with GPT-5 Vision (sync wrapper).
 
     Uses the high-resolution screenshot the user is actually looking at
@@ -58,6 +62,7 @@ def _analyze_screenshot_with_vision_sync(screenshot_base64: str, latitude: float
     """
 
     from semantic_translator import get_llm_client
+
     client = get_llm_client(model=os.getenv("LLM_MODEL", "gpt-5"), vision=True)
 
     clean_base64 = screenshot_base64
@@ -89,13 +94,19 @@ def _analyze_screenshot_with_vision_sync(screenshot_base64: str, latitude: float
     response = client.chat.completions.create(
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": [
-                {"type": "text", "text": user_prompt},
-                {"type": "image_url", "image_url": {
-                    "url": f"data:image/png;base64,{clean_base64}",
-                    "detail": "high",
-                }},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{clean_base64}",
+                            "detail": "high",
+                        },
+                    },
+                ],
+            },
         ],
         max_completion_tokens=1500,
         temperature=1.0,
@@ -116,13 +127,19 @@ def _analyze_screenshot_with_vision_sync(screenshot_base64: str, latitude: float
     }
 
 
-def _run_vision_analysis_sync(latitude: float, longitude: float, module_type: str,
-                               radius_miles: float, user_query: str) -> Dict:
+def _run_vision_analysis_sync(
+    latitude: float,
+    longitude: float,
+    module_type: str,
+    radius_miles: float,
+    user_query: str,
+) -> Dict:
     """Run the async VisionAnalyzer in a dedicated thread with its own event loop.
 
     This avoids conflicts with the Agent SDK's running event loop.
     """
     from geoint.vision_analyzer import get_vision_analyzer
+
     vision_analyzer = get_vision_analyzer()
 
     def _run():
@@ -145,7 +162,9 @@ def _run_vision_analysis_sync(latitude: float, longitude: float, module_type: st
         return pool.submit(_run).result(timeout=180)
 
 
-def assess_building_damage(latitude: float, longitude: float, radius_miles: float = 5.0) -> str:
+def assess_building_damage(
+    latitude: float, longitude: float, radius_miles: float = 5.0
+) -> str:
     """Assess building damage at a location using the user's current map view or satellite imagery.
     Returns damage severity classification and structural integrity assessment.
     Use this when the user asks about building damage, structural damage, disaster impact, or damage assessment.
@@ -160,32 +179,43 @@ def assess_building_damage(latitude: float, longitude: float, radius_miles: floa
         if _current_screenshot_base64 and len(_current_screenshot_base64) > 5000:
             logger.info("Using user's map screenshot for damage assessment (high-res)")
             vision_result = _analyze_screenshot_with_vision_sync(
-                _current_screenshot_base64, latitude, longitude,
+                _current_screenshot_base64,
+                latitude,
+                longitude,
                 "Assess building damage and structural integrity in this location",
             )
         else:
             logger.info("No screenshot available — falling back to Sentinel-2 imagery")
             vision_result = _run_vision_analysis_sync(
-                latitude, longitude, "building_damage", radius_miles,
+                latitude,
+                longitude,
+                "building_damage",
+                radius_miles,
                 "Assess building damage and structural integrity in this location",
             )
-        return json.dumps({
-            "location": {"latitude": latitude, "longitude": longitude},
-            "radius_miles": radius_miles,
-            "visual_assessment": vision_result.get("visual_analysis"),
-            "features_identified": vision_result.get("features_identified", []),
-            "imagery_metadata": vision_result.get("imagery_metadata", {}),
-            "confidence": vision_result.get("confidence", 0.0),
-            "methodology": vision_result.get("imagery_metadata", {}).get("note",
-                "LLM Vision analysis of satellite imagery for structural damage indicators")
-        })
+        return json.dumps(
+            {
+                "location": {"latitude": latitude, "longitude": longitude},
+                "radius_miles": radius_miles,
+                "visual_assessment": vision_result.get("visual_analysis"),
+                "features_identified": vision_result.get("features_identified", []),
+                "imagery_metadata": vision_result.get("imagery_metadata", {}),
+                "confidence": vision_result.get("confidence", 0.0),
+                "methodology": vision_result.get("imagery_metadata", {}).get(
+                    "note",
+                    "LLM Vision analysis of satellite imagery for structural damage indicators",
+                ),
+            }
+        )
     except Exception as e:
         logger.error(f"Building damage assessment failed: {e}")
-        return json.dumps({
-            "location": {"latitude": latitude, "longitude": longitude},
-            "status": "error",
-            "message": f"Unable to perform damage assessment: {str(e)}. Satellite imagery may not be available."
-        })
+        return json.dumps(
+            {
+                "location": {"latitude": latitude, "longitude": longitude},
+                "status": "error",
+                "message": f"Unable to perform damage assessment: {str(e)}. Satellite imagery may not be available.",
+            }
+        )
 
 
 def classify_damage_severity(latitude: float, longitude: float) -> str:
@@ -198,36 +228,57 @@ def classify_damage_severity(latitude: float, longitude: float) -> str:
     :return: JSON string with severity classification and confidence level
     """
     try:
-        query = ("Classify the damage severity at this location. Use one of: "
-                 "No Damage, Minor Damage, Major Damage, Destroyed. "
-                 "Look for collapsed structures, debris, burn scars, water damage.")
+        query = (
+            "Classify the damage severity at this location. Use one of: "
+            "No Damage, Minor Damage, Major Damage, Destroyed. "
+            "Look for collapsed structures, debris, burn scars, water damage."
+        )
 
         if _current_screenshot_base64 and len(_current_screenshot_base64) > 5000:
-            logger.info("Using user's map screenshot for severity classification (high-res)")
+            logger.info(
+                "Using user's map screenshot for severity classification (high-res)"
+            )
             vision_result = _analyze_screenshot_with_vision_sync(
-                _current_screenshot_base64, latitude, longitude, query,
+                _current_screenshot_base64,
+                latitude,
+                longitude,
+                query,
             )
         else:
             logger.info("No screenshot available — falling back to Sentinel-2 imagery")
             vision_result = _run_vision_analysis_sync(
-                latitude, longitude, "building_damage", 2.0, query,
+                latitude,
+                longitude,
+                "building_damage",
+                2.0,
+                query,
             )
-        return json.dumps({
-            "location": {"latitude": latitude, "longitude": longitude},
-            "visual_assessment": vision_result.get("visual_analysis"),
-            "features_identified": vision_result.get("features_identified", []),
-            "confidence": vision_result.get("confidence", 0.0),
-            "categories": ["No Damage", "Minor Damage", "Major Damage", "Destroyed"],
-            "methodology": vision_result.get("imagery_metadata", {}).get("note",
-                "LLM Vision classification of satellite imagery")
-        })
+        return json.dumps(
+            {
+                "location": {"latitude": latitude, "longitude": longitude},
+                "visual_assessment": vision_result.get("visual_analysis"),
+                "features_identified": vision_result.get("features_identified", []),
+                "confidence": vision_result.get("confidence", 0.0),
+                "categories": [
+                    "No Damage",
+                    "Minor Damage",
+                    "Major Damage",
+                    "Destroyed",
+                ],
+                "methodology": vision_result.get("imagery_metadata", {}).get(
+                    "note", "LLM Vision classification of satellite imagery"
+                ),
+            }
+        )
     except Exception as e:
         logger.error(f"Damage severity classification failed: {e}")
-        return json.dumps({
-            "location": {"latitude": latitude, "longitude": longitude},
-            "status": "error",
-            "message": f"Unable to classify damage severity: {str(e)}"
-        })
+        return json.dumps(
+            {
+                "location": {"latitude": latitude, "longitude": longitude},
+                "status": "error",
+                "message": f"Unable to classify damage severity: {str(e)}",
+            }
+        )
 
 
 def create_building_damage_functions() -> Set[Callable]:

@@ -23,12 +23,12 @@ Usage:
     tool = FunctionTool(functions)
 """
 
-import os
-import logging
 import json
+import logging
+import os
 import time
-from typing import Dict, Any, List, Set, Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Callable, Dict, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +38,10 @@ logger = logging.getLogger(__name__)
 # WEATHER_DATA_SOURCE: "planetary_computer" (default) or "open_meteo"
 # OPEN_METEO_API_KEY:  Optional. Leave unset for the free tier (no key needed).
 #                      Set to your key for the Open-Meteo commercial API.
-_WEATHER_DATA_SOURCE = os.environ.get("WEATHER_DATA_SOURCE", "planetary_computer").lower()
-_OPEN_METEO_API_KEY  = os.environ.get("OPEN_METEO_API_KEY", "")
+_WEATHER_DATA_SOURCE = os.environ.get(
+    "WEATHER_DATA_SOURCE", "planetary_computer"
+).lower()
+_OPEN_METEO_API_KEY = os.environ.get("OPEN_METEO_API_KEY", "")
 
 # Module-level STAC catalog (lazy-loaded)
 _catalog = None
@@ -84,7 +86,8 @@ _values_pool = ThreadPoolExecutor(max_workers=4)
 # A shared instance lets concurrent readers reuse connections and
 # benefit from block-level caching of previously-read byte ranges.
 _https_fs = None
-_https_fs_lock = __import__('threading').Lock()
+_https_fs_lock = __import__("threading").Lock()
+
 
 def _get_https_fs():
     """Return a shared fsspec HTTPS filesystem (lazy-init, thread-safe)."""
@@ -92,14 +95,15 @@ def _get_https_fs():
     if _https_fs is None:
         with _https_fs_lock:
             if _https_fs is None:
-                import fsspec
                 import aiohttp
+                import fsspec
+
                 # 4 MB blocks — NetCDF metadata (HDF5 btree, chunk tables)
                 # fits in ~2-4 MB, so one read fetches all metadata at once
                 # instead of multiple 1 MB round-trips.
                 _https_fs = fsspec.filesystem(
                     "https",
-                    block_size=4 * 2**20,   # 4 MB
+                    block_size=4 * 2**20,  # 4 MB
                     client_kwargs={
                         "timeout": aiohttp.ClientTimeout(
                             total=60,
@@ -110,79 +114,95 @@ def _get_https_fs():
                 )
     return _https_fs
 
+
 # NEX-GDDP-CMIP6 collection ID
 CMIP6_COLLECTION = "nasa-nex-gddp-cmip6"
 
 # Climate variable metadata
 CLIMATE_VAR_INFO: Dict[str, Dict[str, Any]] = {
-    'tas': {
-        'name': 'Daily Near-Surface Air Temperature',
-        'unit': 'K', 'display_unit': '°F',
-        'convert': lambda v: round((v - 273.15) * 9/5 + 32, 1),
-        'valid_range': (150, 350),
-        'category': 'temperature',
+    "tas": {
+        "name": "Daily Near-Surface Air Temperature",
+        "unit": "K",
+        "display_unit": "°F",
+        "convert": lambda v: round((v - 273.15) * 9 / 5 + 32, 1),
+        "valid_range": (150, 350),
+        "category": "temperature",
     },
-    'tasmax': {
-        'name': 'Daily Maximum Temperature',
-        'unit': 'K', 'display_unit': '°F',
-        'convert': lambda v: round((v - 273.15) * 9/5 + 32, 1),
-        'valid_range': (150, 380),
-        'category': 'temperature',
+    "tasmax": {
+        "name": "Daily Maximum Temperature",
+        "unit": "K",
+        "display_unit": "°F",
+        "convert": lambda v: round((v - 273.15) * 9 / 5 + 32, 1),
+        "valid_range": (150, 380),
+        "category": "temperature",
     },
-    'tasmin': {
-        'name': 'Daily Minimum Temperature',
-        'unit': 'K', 'display_unit': '°F',
-        'convert': lambda v: round((v - 273.15) * 9/5 + 32, 1),
-        'valid_range': (150, 350),
-        'category': 'temperature',
+    "tasmin": {
+        "name": "Daily Minimum Temperature",
+        "unit": "K",
+        "display_unit": "°F",
+        "convert": lambda v: round((v - 273.15) * 9 / 5 + 32, 1),
+        "valid_range": (150, 350),
+        "category": "temperature",
     },
-    'pr': {
-        'name': 'Precipitation',
-        'unit': 'kg m⁻² s⁻¹', 'display_unit': 'mm/day',
-        'convert': lambda v: round(v * 86400, 2),
-        'valid_range': (0, 1),
-        'category': 'precipitation',
+    "pr": {
+        "name": "Precipitation",
+        "unit": "kg m⁻² s⁻¹",
+        "display_unit": "mm/day",
+        "convert": lambda v: round(v * 86400, 2),
+        "valid_range": (0, 1),
+        "category": "precipitation",
     },
-    'sfcWind': {
-        'name': 'Near-Surface Wind Speed',
-        'unit': 'm/s', 'display_unit': 'm/s',
-        'convert': lambda v: round(v, 2),
-        'valid_range': (0, 100),
-        'category': 'wind',
+    "sfcWind": {
+        "name": "Near-Surface Wind Speed",
+        "unit": "m/s",
+        "display_unit": "m/s",
+        "convert": lambda v: round(v, 2),
+        "valid_range": (0, 100),
+        "category": "wind",
     },
-    'hurs': {
-        'name': 'Near-Surface Relative Humidity',
-        'unit': '%', 'display_unit': '%',
-        'convert': lambda v: round(v, 1),
-        'valid_range': (0, 100),
-        'category': 'humidity',
+    "hurs": {
+        "name": "Near-Surface Relative Humidity",
+        "unit": "%",
+        "display_unit": "%",
+        "convert": lambda v: round(v, 1),
+        "valid_range": (0, 100),
+        "category": "humidity",
     },
-    'huss': {
-        'name': 'Near-Surface Specific Humidity',
-        'unit': 'kg/kg', 'display_unit': 'g/kg',
-        'convert': lambda v: round(v * 1000, 3),
-        'valid_range': (0, 0.1),
-        'category': 'humidity',
+    "huss": {
+        "name": "Near-Surface Specific Humidity",
+        "unit": "kg/kg",
+        "display_unit": "g/kg",
+        "convert": lambda v: round(v * 1000, 3),
+        "valid_range": (0, 0.1),
+        "category": "humidity",
     },
-    'rlds': {
-        'name': 'Downwelling Longwave Radiation',
-        'unit': 'W/m²', 'display_unit': 'W/m²',
-        'convert': lambda v: round(v, 1),
-        'valid_range': (0, 600),
-        'category': 'radiation',
+    "rlds": {
+        "name": "Downwelling Longwave Radiation",
+        "unit": "W/m²",
+        "display_unit": "W/m²",
+        "convert": lambda v: round(v, 1),
+        "valid_range": (0, 600),
+        "category": "radiation",
     },
-    'rsds': {
-        'name': 'Downwelling Shortwave Radiation',
-        'unit': 'W/m²', 'display_unit': 'W/m²',
-        'convert': lambda v: round(v, 1),
-        'valid_range': (0, 500),
-        'category': 'radiation',
+    "rsds": {
+        "name": "Downwelling Shortwave Radiation",
+        "unit": "W/m²",
+        "display_unit": "W/m²",
+        "convert": lambda v: round(v, 1),
+        "valid_range": (0, 500),
+        "category": "radiation",
     },
 }
 
 # Default models/scenarios to search
-PREFERRED_MODELS = ['ACCESS-CM2', 'GFDL-ESM4', 'MPI-ESM1-2-HR', 'UKESM1-0-LL', 'EC-Earth3']
-PREFERRED_SCENARIOS = ['ssp245', 'ssp585']  # Moderate & worst-case
+PREFERRED_MODELS = [
+    "ACCESS-CM2",
+    "GFDL-ESM4",
+    "MPI-ESM1-2-HR",
+    "UKESM1-0-LL",
+    "EC-Earth3",
+]
+PREFERRED_SCENARIOS = ["ssp245", "ssp585"]  # Moderate & worst-case
 
 
 def _get_catalog():
@@ -190,6 +210,7 @@ def _get_catalog():
     global _catalog
     if _catalog is None:
         from pystac_client import Client
+
         _catalog = Client.open(_stac_endpoint)
     return _catalog
 
@@ -209,11 +230,11 @@ def _search_cmip6_items(
 ) -> list:
     """
     Search Planetary Computer for NEX-GDDP-CMIP6 items.
-    
+
     Returns raw STAC items matching the given scenario and year.
     Uses an in-memory cache keyed by (scenario, year) since CMIP6 items
     are GLOBAL and contain ALL climate variables as separate assets.
-    
+
     Filterable properties: cmip6:year, cmip6:model, cmip6:scenario
     (NOT cmip6:variable — variables are asset keys, not item properties).
     """
@@ -224,7 +245,7 @@ def _search_cmip6_items(
     # Cache key excludes 'limit' — CMIP6 items are global, same results
     # for any limit.  We always fetch max(limit, 5) and slice in caller.
     cache_key = f"{scenario}:{target_year}"
-    
+
     # Check cache first — same items work for any variable
     now = time.time()
     if cache_key in _stac_search_cache:
@@ -233,40 +254,46 @@ def _search_cmip6_items(
             cached = _stac_search_cache[cache_key]
             # Filter cached items to those with the requested variable
             valid = [f for f in cached if variable in f.get("assets", {})][:limit]
-            logger.info(f"[CMIP6] Cache HIT for {scenario}/{target_year}: {len(valid)}/{len(cached)} items have '{variable}' ({cache_age:.0f}s old)")
+            logger.info(
+                f"[CMIP6] Cache HIT for {scenario}/{target_year}: {len(valid)}/{len(cached)} items have '{variable}' ({cache_age:.0f}s old)"
+            )
             return valid
         else:
             # Expired
             del _stac_search_cache[cache_key]
             _stac_cache_timestamps.pop(cache_key, None)
-    
+
     search_body: Dict[str, Any] = {
         "collections": [CMIP6_COLLECTION],
         "limit": max(limit, 5),  # always fetch enough to satisfy any caller
     }
-    
+
     search_body["query"] = {
         "cmip6:year": {"eq": target_year},
     }
     if scenario:
         search_body["query"]["cmip6:scenario"] = {"eq": scenario}
-    
+
     if PREFERRED_MODELS:
         search_body["query"]["cmip6:model"] = {"in": PREFERRED_MODELS}
-    
+
     try:
-        logger.info(f"[CMIP6] Searching for {variable} asset in {scenario}/{target_year} items (limit={limit})")
-        
+        logger.info(
+            f"[CMIP6] Searching for {variable} asset in {scenario}/{target_year} items (limit={limit})"
+        )
+
         with httpx.Client(timeout=30) as client:
             resp = client.post(
                 f"{_stac_endpoint}/search",
                 json=search_body,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
             )
             if resp.status_code == 200:
                 features = resp.json().get("features", [])
-                logger.info(f"[CMIP6] Found {len(features)} items for {scenario}/{target_year}")
-                
+                logger.info(
+                    f"[CMIP6] Found {len(features)} items for {scenario}/{target_year}"
+                )
+
                 # Sign ALL items and cache them (they contain every variable)
                 signed_features = []
                 for f in features:
@@ -274,23 +301,33 @@ def _search_cmip6_items(
                         signed_features.append(pc.sign(f))
                     except Exception:
                         signed_features.append(f)
-                
+
                 # Store in cache (all variables, not filtered)
                 _stac_search_cache[cache_key] = signed_features
                 _stac_cache_timestamps[cache_key] = now
-                
+
                 # Filter to items that have the requested variable, slice to caller limit
-                valid_features = [f for f in signed_features if variable in f.get("assets", {})][:limit]
-                
+                valid_features = [
+                    f for f in signed_features if variable in f.get("assets", {})
+                ][:limit]
+
                 if not valid_features and features:
-                    logger.warning(f"[CMIP6] {len(features)} items found but none have '{variable}' asset")
+                    logger.warning(
+                        f"[CMIP6] {len(features)} items found but none have '{variable}' asset"
+                    )
                     first_assets = list(features[0].get("assets", {}).keys())
-                    logger.warning(f"[CMIP6] Available assets in first item: {first_assets}")
-                
-                logger.info(f"[CMIP6] {len(valid_features)} items have '{variable}' asset (cached {len(signed_features)} items)")
+                    logger.warning(
+                        f"[CMIP6] Available assets in first item: {first_assets}"
+                    )
+
+                logger.info(
+                    f"[CMIP6] {len(valid_features)} items have '{variable}' asset (cached {len(signed_features)} items)"
+                )
                 return valid_features
             else:
-                logger.warning(f"STAC search returned {resp.status_code}: {resp.text[:200]}")
+                logger.warning(
+                    f"STAC search returned {resp.status_code}: {resp.text[:200]}"
+                )
                 return []
     except Exception as e:
         logger.error(f"CMIP6 STAC search failed: {e}")
@@ -307,28 +344,33 @@ def _sample_netcdf(
 ) -> Dict[str, Any]:
     """
     Sample a single NetCDF asset at (lat, lon) using xarray + h5netcdf.
-    
+
     Uses xarray with h5netcdf engine and fsspec for remote HTTP access.
     This avoids GDAL's netCDF driver which requires userfaultfd (blocked
     by Docker's default seccomp profile in many environments) and can have slow cold-cache performance.
-    
+
     Args:
         aggregate: How to aggregate across time dimension.
             "last"  — single value from the last timestep (good for temperature)
             "annual" — mean, max, min across all timesteps (good for precip/wind)
         _retry_attempt: Internal retry counter (0-based). Max 2 retries.
-    
+
     Returns dict with 'raw_value', 'display_value', 'display_unit', etc.
     or 'error' key on failure.
     """
-    import xarray as xr
-    import fsspec
     import numpy as np
+    import xarray as xr
 
-    var_info = CLIMATE_VAR_INFO.get(variable, {
-        'name': variable, 'unit': 'raw', 'display_unit': '',
-        'convert': lambda v: round(v, 4), 'valid_range': None,
-    })
+    var_info = CLIMATE_VAR_INFO.get(
+        variable,
+        {
+            "name": variable,
+            "unit": "raw",
+            "display_unit": "",
+            "convert": lambda v: round(v, 4),
+            "valid_range": None,
+        },
+    )
 
     sample_lng = _convert_longitude(longitude)
 
@@ -344,7 +386,9 @@ def _sample_netcdf(
             _netcdf_result_cache.pop(cache_key, None)
             _netcdf_result_cache_ts.pop(cache_key, None)
 
-    logger.info(f"[CMIP6] Sampling NetCDF: variable={variable}, lat={latitude}, lng={longitude}, sample_lng={sample_lng}, aggregate={aggregate}")
+    logger.info(
+        f"[CMIP6] Sampling NetCDF: variable={variable}, lat={latitude}, lng={longitude}, sample_lng={sample_lng}, aggregate={aggregate}"
+    )
     logger.info(f"[CMIP6] href (first 120 chars): {href[:120]}...")
 
     try:
@@ -362,7 +406,9 @@ def _sample_netcdf(
 
             if variable not in ds.data_vars:
                 available = list(ds.data_vars.keys())
-                return {"error": f"Variable '{variable}' not found. Available: {available}"}
+                return {
+                    "error": f"Variable '{variable}' not found. Available: {available}"
+                }
 
             var_data = ds[variable]
 
@@ -373,7 +419,9 @@ def _sample_netcdf(
             except KeyError:
                 # Try alternate dimension names
                 dim_names = list(var_data.dims)
-                logger.warning(f"[CMIP6] Unexpected dims: {dim_names}, trying positional selection")
+                logger.warning(
+                    f"[CMIP6] Unexpected dims: {dim_names}, trying positional selection"
+                )
                 return {"error": f"Cannot map coordinates to dimensions: {dim_names}"}
 
             has_time = "time" in point.dims
@@ -396,7 +444,9 @@ def _sample_netcdf(
                     step = max(1, n_times // 6)
                     point_subset = point.isel(time=slice(0, None, step))
                     n_sampled = point_subset.sizes.get("time", 0)
-                    logger.info(f"[CMIP6] Subsampling {variable}: every {step}th day → {n_sampled} of {n_times} days")
+                    logger.info(
+                        f"[CMIP6] Subsampling {variable}: every {step}th day → {n_sampled} of {n_times} days"
+                    )
                 else:
                     point_subset = point
                     n_sampled = n_times
@@ -405,14 +455,22 @@ def _sample_netcdf(
                 # Wrap .values in a timeout to prevent indefinite blocking
                 # on slow HTTP range requests (cold cache can take 40-60s+)
                 # Uses _values_pool (NOT _netcdf_pool) to avoid thread starvation
-                _read_future = _values_pool.submit(lambda ps=point_subset: ps.values.astype(float))
+                _read_future = _values_pool.submit(
+                    lambda ps=point_subset: ps.values.astype(float)
+                )
                 try:
                     all_values = _read_future.result(timeout=45)
                 except TimeoutError:
-                    logger.warning(f"[CMIP6] .values read TIMED OUT after 45s for {variable} ({n_sampled} timesteps)")
-                    raise TimeoutError(f"NetCDF read timed out for {variable} (cold cache)")
+                    logger.warning(
+                        f"[CMIP6] .values read TIMED OUT after 45s for {variable} ({n_sampled} timesteps)"
+                    )
+                    raise TimeoutError(
+                        f"NetCDF read timed out for {variable} (cold cache)"
+                    )
                 t_read_elapsed = time.time() - t_read_start
-                logger.info(f"[CMIP6] NetCDF .values read took {t_read_elapsed:.1f}s for {n_sampled} timesteps")
+                logger.info(
+                    f"[CMIP6] NetCDF .values read took {t_read_elapsed:.1f}s for {n_sampled} timesteps"
+                )
 
                 valid_mask = ~np.isnan(all_values)
                 if not valid_mask.any():
@@ -423,9 +481,9 @@ def _sample_netcdf(
                 raw_max = float(np.max(valid))
                 raw_min = float(np.min(valid))
 
-                display_mean = var_info['convert'](raw_mean)
-                display_max = var_info['convert'](raw_max)
-                display_min = var_info['convert'](raw_min)
+                display_mean = var_info["convert"](raw_mean)
+                display_max = var_info["convert"](raw_max)
+                display_min = var_info["convert"](raw_min)
 
                 result = {
                     "raw_mean": round(raw_mean, 6),
@@ -435,14 +493,16 @@ def _sample_netcdf(
                     "display_max": display_max,
                     "display_min": display_min,
                     "display_value": display_mean,
-                    "display_unit": var_info['display_unit'],
-                    "variable_name": var_info['name'],
+                    "display_unit": var_info["display_unit"],
+                    "variable_name": var_info["name"],
                     "aggregation": "annual",
                     "days_sampled": int(valid_mask.sum()),
                     "total_days": n_times,
                     "grid_resolution": "0.25° × 0.25°",
                 }
-                logger.info(f"[CMIP6]  NetCDF annual stats: {variable} mean={display_mean}, max={display_max}, min={display_min} {var_info['display_unit']} ({int(valid_mask.sum())} of {n_times} days sampled, read={t_read_elapsed:.1f}s)")
+                logger.info(
+                    f"[CMIP6]  NetCDF annual stats: {variable} mean={display_mean}, max={display_max}, min={display_min} {var_info['display_unit']} ({int(valid_mask.sum())} of {n_times} days sampled, read={t_read_elapsed:.1f}s)"
+                )
                 _netcdf_result_cache[cache_key] = result
                 _netcdf_result_cache_ts[cache_key] = now
                 return result
@@ -459,32 +519,40 @@ def _sample_netcdf(
                 try:
                     raw_value = _read_future.result(timeout=30)
                 except TimeoutError:
-                    logger.warning(f"[CMIP6] Single-timestep .values read TIMED OUT after 30s for {variable}")
-                    raise TimeoutError(f"NetCDF single-timestep read timed out for {variable}")
+                    logger.warning(
+                        f"[CMIP6] Single-timestep .values read TIMED OUT after 30s for {variable}"
+                    )
+                    raise TimeoutError(
+                        f"NetCDF single-timestep read timed out for {variable}"
+                    )
                 t_read_elapsed = time.time() - t_read_start
-                logger.info(f"[CMIP6] Single-timestep .values read took {t_read_elapsed:.1f}s")
+                logger.info(
+                    f"[CMIP6] Single-timestep .values read took {t_read_elapsed:.1f}s"
+                )
 
                 # Check for NaN (masked/fill values become NaN in xarray)
                 if np.isnan(raw_value):
                     return {"error": "No data at this location (masked)"}
 
                 # Validate raw value against expected range
-                vr = var_info.get('valid_range')
+                vr = var_info.get("valid_range")
                 if vr and not (vr[0] <= raw_value <= vr[1]):
                     return {"error": f"Value {raw_value} outside valid range {vr}"}
 
-                display_value = var_info['convert'](raw_value)
+                display_value = var_info["convert"](raw_value)
 
                 result = {
                     "raw_value": round(raw_value, 4),
                     "display_value": display_value,
-                    "display_unit": var_info['display_unit'],
-                    "variable_name": var_info['name'],
+                    "display_unit": var_info["display_unit"],
+                    "variable_name": var_info["name"],
                     "band_sampled": total_timesteps,
                     "total_bands": total_timesteps,
                     "grid_resolution": "0.25° × 0.25°",
                 }
-                logger.info(f"[CMIP6]  NetCDF sampled OK: {variable}={display_value}{var_info['display_unit']} (raw={raw_value:.4f}, timestep={total_timesteps})")
+                logger.info(
+                    f"[CMIP6]  NetCDF sampled OK: {variable}={display_value}{var_info['display_unit']} (raw={raw_value:.4f}, timestep={total_timesteps})"
+                )
                 _netcdf_result_cache[cache_key] = result
                 _netcdf_result_cache_ts[cache_key] = now
                 return result
@@ -495,29 +563,54 @@ def _sample_netcdf(
                 pass
 
     except Exception as e:
-        logger.error(f"[CMIP6]  NetCDF sampling FAILED for {variable} (attempt {_retry_attempt + 1}): {type(e).__name__}: {e}")
+        logger.error(
+            f"[CMIP6]  NetCDF sampling FAILED for {variable} (attempt {_retry_attempt + 1}): {type(e).__name__}: {e}"
+        )
         logger.error(f"[CMIP6]   href={href[:250]}")
         import traceback
+
         logger.error(f"[CMIP6]   traceback: {traceback.format_exc()[-500:]}")
-        
+
         # Retry on transient errors (HTTP timeouts, connection resets, SAS token issues)
         _max_retries = 2
-        _retryable = ('TimeoutError', 'ConnectionError', 'ConnectionResetError',
-                       'HTTPError', 'ClientError', 'OSError', 'IOError', 'BlockingIOError')
+        _retryable = (
+            "TimeoutError",
+            "ConnectionError",
+            "ConnectionResetError",
+            "HTTPError",
+            "ClientError",
+            "OSError",
+            "IOError",
+            "BlockingIOError",
+        )
         error_type = type(e).__name__
-        is_retryable = error_type in _retryable or '403' in str(e) or '408' in str(e) or '429' in str(e) or '500' in str(e) or '502' in str(e) or '503' in str(e) or '504' in str(e) or 'timeout' in str(e).lower()
-        
+        is_retryable = (
+            error_type in _retryable
+            or "403" in str(e)
+            or "408" in str(e)
+            or "429" in str(e)
+            or "500" in str(e)
+            or "502" in str(e)
+            or "503" in str(e)
+            or "504" in str(e)
+            or "timeout" in str(e).lower()
+        )
+
         if is_retryable and _retry_attempt < _max_retries:
-            wait = 2 ** _retry_attempt  # 1s, 2s
-            logger.info(f"[CMIP6] Retrying {variable} in {wait}s (attempt {_retry_attempt + 2}/{_max_retries + 1})...")
+            wait = 2**_retry_attempt  # 1s, 2s
+            logger.info(
+                f"[CMIP6] Retrying {variable} in {wait}s (attempt {_retry_attempt + 2}/{_max_retries + 1})..."
+            )
             time.sleep(wait)
             # Reset shared filesystem on connection errors to force fresh TCP connections
-            if 'connection' in str(e).lower() or 'reset' in str(e).lower():
+            if "connection" in str(e).lower() or "reset" in str(e).lower():
                 global _https_fs
                 with _https_fs_lock:
                     _https_fs = None
-            return _sample_netcdf(href, variable, latitude, longitude, aggregate, _retry_attempt + 1)
-        
+            return _sample_netcdf(
+                href, variable, latitude, longitude, aggregate, _retry_attempt + 1
+            )
+
         return {"error": str(e)}
 
 
@@ -526,19 +619,26 @@ def _sample_netcdf(
 # ============================================================
 # Maps CMIP6 variable names → (open-meteo daily param, raw unit, converter, display unit)
 _OM_VAR_MAP: Dict[str, tuple] = {
-    'tasmax':  ('temperature_2m_max',           '°C',        lambda v: round(v * 9/5 + 32, 1), '°F'),
-    'tasmin':  ('temperature_2m_min',           '°C',        lambda v: round(v * 9/5 + 32, 1), '°F'),
-    'tas':     ('temperature_2m_mean',          '°C',        lambda v: round(v * 9/5 + 32, 1), '°F'),
-    'pr':      ('precipitation_sum',            'mm/day',    lambda v: round(v, 2),             'mm/day'),
-    'sfcWind': ('wind_speed_10m_mean',          'km/h',      lambda v: round(v / 3.6, 2),       'm/s'),
-    'hurs':    ('relative_humidity_2m_mean',    '%',         lambda v: round(v, 1),             '%'),
-    'rsds':    ('shortwave_radiation_sum',      'MJ/m²/day', lambda v: round(v * 1e6 / 86400, 1), 'W/m²'),
+    "tasmax": ("temperature_2m_max", "°C", lambda v: round(v * 9 / 5 + 32, 1), "°F"),
+    "tasmin": ("temperature_2m_min", "°C", lambda v: round(v * 9 / 5 + 32, 1), "°F"),
+    "tas": ("temperature_2m_mean", "°C", lambda v: round(v * 9 / 5 + 32, 1), "°F"),
+    "pr": ("precipitation_sum", "mm/day", lambda v: round(v, 2), "mm/day"),
+    "sfcWind": ("wind_speed_10m_mean", "km/h", lambda v: round(v / 3.6, 2), "m/s"),
+    "hurs": ("relative_humidity_2m_mean", "%", lambda v: round(v, 1), "%"),
+    "rsds": (
+        "shortwave_radiation_sum",
+        "MJ/m²/day",
+        lambda v: round(v * 1e6 / 86400, 1),
+        "W/m²",
+    ),
 }
 # Open-Meteo HighResMIP models used when WEATHER_DATA_SOURCE=open_meteo
 _OM_MODELS = "EC_Earth3P_HR,MRI_AGCM3_2_S,CMCC_CM2_VHR4"
 
 
-def _query_open_meteo(cmip_variables: list, latitude: float, longitude: float, year: int) -> Dict[str, Any]:
+def _query_open_meteo(
+    cmip_variables: list, latitude: float, longitude: float, year: int
+) -> Dict[str, Any]:
     """
     Query Open-Meteo Climate API for one full year and return results keyed by CMIP6 variable name.
 
@@ -550,16 +650,17 @@ def _query_open_meteo(cmip_variables: list, latitude: float, longitude: float, y
     - Supports years 1950-2050. Years beyond 2050 are capped at 2050.
     - SSP scenario selection is not supported; HighResMIP CMIP6 models are used regardless.
     """
-    import httpx
     import statistics
+
+    import httpx
 
     actual_year = min(max(year, 1950), 2050)
     start_date = f"{actual_year}-01-01"
-    end_date   = f"{actual_year}-12-31"
+    end_date = f"{actual_year}-12-31"
 
     # Build list of Open-Meteo daily params for the requested CMIP variables
-    om_params   = []
-    om_to_cmip  = {}  # om_param -> cmip_var
+    om_params = []
+    om_to_cmip = {}  # om_param -> cmip_var
     for cmip_var in cmip_variables:
         if cmip_var in _OM_VAR_MAP:
             om_param = _OM_VAR_MAP[cmip_var][0]
@@ -575,12 +676,12 @@ def _query_open_meteo(cmip_variables: list, latitude: float, longitude: float, y
         base_url = "https://climate-api.open-meteo.com/v1/climate"
 
     params: Dict[str, Any] = {
-        "latitude":   latitude,
-        "longitude":  longitude,
+        "latitude": latitude,
+        "longitude": longitude,
         "start_date": start_date,
-        "end_date":   end_date,
-        "models":     _OM_MODELS,
-        "daily":      ",".join(om_params),
+        "end_date": end_date,
+        "models": _OM_MODELS,
+        "daily": ",".join(om_params),
     }
     if _OPEN_METEO_API_KEY:
         params["apikey"] = _OPEN_METEO_API_KEY
@@ -592,7 +693,11 @@ def _query_open_meteo(cmip_variables: list, latitude: float, longitude: float, y
             data = resp.json()
     except Exception as e:
         logger.error(f"[OpenMeteo] API request failed: {e}")
-        return {cmip_var: {"error": str(e)} for cmip_var in cmip_variables if cmip_var in _OM_VAR_MAP}
+        return {
+            cmip_var: {"error": str(e)}
+            for cmip_var in cmip_variables
+            if cmip_var in _OM_VAR_MAP
+        }
 
     daily = data.get("daily", {})
     results: Dict[str, Any] = {}
@@ -604,31 +709,37 @@ def _query_open_meteo(cmip_variables: list, latitude: float, longitude: float, y
         # Single-model response: key is just "temperature_2m_max"
         raw_values: list = []
         for key, values in daily.items():
-            if (key == om_param or key.startswith(om_param + "_")) and isinstance(values, list):
+            if (key == om_param or key.startswith(om_param + "_")) and isinstance(
+                values, list
+            ):
                 raw_values.extend(v for v in values if v is not None)
 
         if not raw_values:
-            results[cmip_var] = {"error": f"No data returned by Open-Meteo for {om_param}"}
+            results[cmip_var] = {
+                "error": f"No data returned by Open-Meteo for {om_param}"
+            }
             continue
 
         mean_val = statistics.mean(raw_values)
-        max_val  = max(raw_values)
-        min_val  = min(raw_values)
-        yr_note  = f"(year capped at 2050)" if year > 2050 else ""
+        max_val = max(raw_values)
+        min_val = min(raw_values)
+        yr_note = "(year capped at 2050)" if year > 2050 else ""
         results[cmip_var] = {
-            "display_value":  convert_fn(mean_val),
-            "display_mean":   convert_fn(mean_val),
-            "display_max":    convert_fn(max_val),
-            "display_min":    convert_fn(min_val),
-            "display_unit":   display_unit,
-            "variable_name":  CLIMATE_VAR_INFO.get(cmip_var, {}).get('name', cmip_var),
+            "display_value": convert_fn(mean_val),
+            "display_mean": convert_fn(mean_val),
+            "display_max": convert_fn(max_val),
+            "display_min": convert_fn(min_val),
+            "display_unit": display_unit,
+            "variable_name": CLIMATE_VAR_INFO.get(cmip_var, {}).get("name", cmip_var),
             "grid_resolution": "~10 km (HighResMIP)",
-            "models":          _OM_MODELS,
+            "models": _OM_MODELS,
         }
         if yr_note:
             results[cmip_var]["note"] = yr_note
 
-    logger.info(f"[OpenMeteo] Sampled {list(results.keys())} for ({latitude},{longitude}) year={actual_year}")
+    logger.info(
+        f"[OpenMeteo] Sampled {list(results.keys())} for ({latitude},{longitude}) year={actual_year}"
+    )
     return results
 
 
@@ -636,22 +747,29 @@ def _query_open_meteo(cmip_variables: list, latitude: float, longitude: float, y
 # PUBLIC TOOL FUNCTIONS (registered with Agent Service)
 # ============================================================
 
-def get_temperature_projection(latitude: float, longitude: float, scenario: str = "ssp585", year: int = 2030) -> str:
+
+def get_temperature_projection(
+    latitude: float, longitude: float, scenario: str = "ssp585", year: int = 2030
+) -> str:
     """Get projected temperature data (max, min, mean) for a location from NASA NEX-GDDP-CMIP6 climate models.
     Returns daily maximum temperature, minimum temperature, and mean temperature in °F.
     Use this when the user asks about future temperatures, heat waves, warming, or thermal conditions.
-    
+
     :param latitude: Latitude of the location to analyze
-    :param longitude: Longitude of the location to analyze  
+    :param longitude: Longitude of the location to analyze
     :param scenario: SSP scenario - 'ssp245' (moderate) or 'ssp585' (worst-case). Default 'ssp585'
     :param year: Projection year (2015-2100). Default 2030
     :return: JSON string with projected temperature values and model metadata
     """
     try:
-        logger.info(f"[TOOL] get_temperature_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]")
+        logger.info(
+            f"[TOOL] get_temperature_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]"
+        )
 
         if _WEATHER_DATA_SOURCE == "open_meteo":
-            om = _query_open_meteo(['tasmax', 'tasmin', 'tas'], latitude, longitude, year)
+            om = _query_open_meteo(
+                ["tasmax", "tasmin", "tas"], latitude, longitude, year
+            )
             out: Dict[str, Any] = {
                 "location": {"latitude": latitude, "longitude": longitude},
                 "scenario": scenario,
@@ -660,42 +778,60 @@ def get_temperature_projection(latitude: float, longitude: float, scenario: str 
                 "note": "SSP scenario selection is not supported by Open-Meteo; HighResMIP models are used.",
                 "projections": {},
             }
-            for key, proj_key in [('tasmax', 'daily_max_temperature'), ('tasmin', 'daily_min_temperature'), ('tas', 'daily_mean_temperature')]:
-                if key in om and 'error' not in om[key]:
-                    out["projections"][proj_key] = {"value": om[key]["display_value"], "unit": om[key]["display_unit"], "description": om[key]["variable_name"]}
+            for key, proj_key in [
+                ("tasmax", "daily_max_temperature"),
+                ("tasmin", "daily_min_temperature"),
+                ("tas", "daily_mean_temperature"),
+            ]:
+                if key in om and "error" not in om[key]:
+                    out["projections"][proj_key] = {
+                        "value": om[key]["display_value"],
+                        "unit": om[key]["display_unit"],
+                        "description": om[key]["variable_name"],
+                    }
             if not out["projections"]:
                 out["error"] = "Open-Meteo returned no temperature data"
             return json.dumps(out)
 
-        temp_vars = ['tasmax', 'tasmin', 'tas']
+        temp_vars = ["tasmax", "tasmin", "tas"]
         results = {}
         models_used = set()
-        
+
         # Single STAC search (cache ensures this is only 1 HTTP call for all 3 vars)
         # Then parallel NetCDF sampling via ThreadPoolExecutor
         def _sample_var(var):
             """Sample one variable — runs in a worker thread."""
-            items = _search_cmip6_items(latitude, longitude, var, scenario, year, limit=3)
+            items = _search_cmip6_items(
+                latitude, longitude, var, scenario, year, limit=3
+            )
             if not items:
                 return var, {"error": f"No CMIP6 data found for {var}"}, None
             for item in items:
-                assets = item.get('assets', {})
-                href = assets.get(var, {}).get('href', '') if isinstance(assets.get(var), dict) else ''
+                assets = item.get("assets", {})
+                href = (
+                    assets.get(var, {}).get("href", "")
+                    if isinstance(assets.get(var), dict)
+                    else ""
+                )
                 if not href:
                     continue
                 sample = _sample_netcdf(href, var, latitude, longitude)
-                if 'error' not in sample:
+                if "error" not in sample:
                     var_info = CLIMATE_VAR_INFO[var]
-                    item_id = item.get('id', '')
-                    parts = item_id.split('.')
+                    item_id = item.get("id", "")
+                    parts = item_id.split(".")
                     model = parts[0] if parts else None
-                    return var, {
-                        "value": sample['display_value'],
-                        "unit": sample['display_unit'],
-                        "description": var_info['name'],
-                    }, model
+                    return (
+                        var,
+                        {
+                            "value": sample["display_value"],
+                            "unit": sample["display_unit"],
+                            "description": var_info["name"],
+                        },
+                        model,
+                    )
             return var, {"error": f"Sampling failed for {var}"}, None
-        
+
         # Submit all 3 variable samples in parallel (with timeout guards)
         futures = {_netcdf_pool.submit(_sample_var, v): v for v in temp_vars}
         try:
@@ -708,8 +844,10 @@ def get_temperature_projection(latitude: float, longitude: float, scenario: str 
                 except Exception as exc:
                     logger.warning(f"[TOOL] Temperature variable future failed: {exc}")
         except TimeoutError:
-            logger.warning("[TOOL] Not all temperature variables completed in time — using partial results")
-        
+            logger.warning(
+                "[TOOL] Not all temperature variables completed in time — using partial results"
+            )
+
         output = {
             "location": {"latitude": latitude, "longitude": longitude},
             "scenario": scenario,
@@ -717,32 +855,38 @@ def get_temperature_projection(latitude: float, longitude: float, scenario: str 
             "data_source": "NASA NEX-GDDP-CMIP6",
             "grid_resolution": "0.25° × 0.25°",
             "models_sampled": list(models_used),
-            "projections": {}
+            "projections": {},
         }
-        
-        if 'tasmax' in results and 'error' not in results.get('tasmax', {}):
-            output["projections"]["daily_max_temperature"] = results['tasmax']
-        if 'tasmin' in results and 'error' not in results.get('tasmin', {}):
-            output["projections"]["daily_min_temperature"] = results['tasmin']
-        if 'tas' in results and 'error' not in results.get('tas', {}):
-            output["projections"]["daily_mean_temperature"] = results['tas']
-        
+
+        if "tasmax" in results and "error" not in results.get("tasmax", {}):
+            output["projections"]["daily_max_temperature"] = results["tasmax"]
+        if "tasmin" in results and "error" not in results.get("tasmin", {}):
+            output["projections"]["daily_min_temperature"] = results["tasmin"]
+        if "tas" in results and "error" not in results.get("tas", {}):
+            output["projections"]["daily_mean_temperature"] = results["tas"]
+
         if not output["projections"]:
-            output["error"] = "Could not retrieve temperature data. " + json.dumps(results)
-        
-        logger.info(f"[TOOL] Temperature projection: {json.dumps(output.get('projections', {}))}")
+            output["error"] = "Could not retrieve temperature data. " + json.dumps(
+                results
+            )
+
+        logger.info(
+            f"[TOOL] Temperature projection: {json.dumps(output.get('projections', {}))}"
+        )
         return json.dumps(output)
-        
+
     except Exception as e:
         logger.error(f"[TOOL] Temperature projection failed: {e}")
         return json.dumps({"error": str(e)})
 
 
-def get_precipitation_projection(latitude: float, longitude: float, scenario: str = "ssp585", year: int = 2030) -> str:
+def get_precipitation_projection(
+    latitude: float, longitude: float, scenario: str = "ssp585", year: int = 2030
+) -> str:
     """Get projected precipitation (rainfall) data for a location from NASA NEX-GDDP-CMIP6 climate models.
     Returns daily precipitation in mm/day.
     Use this when the user asks about future rainfall, drought, flooding risk, or precipitation patterns.
-    
+
     :param latitude: Latitude of the location to analyze
     :param longitude: Longitude of the location to analyze
     :param scenario: SSP scenario - 'ssp245' (moderate) or 'ssp585' (worst-case). Default 'ssp585'
@@ -750,13 +894,20 @@ def get_precipitation_projection(latitude: float, longitude: float, scenario: st
     :return: JSON string with projected precipitation values and model metadata
     """
     try:
-        logger.info(f"[TOOL] get_precipitation_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]")
+        logger.info(
+            f"[TOOL] get_precipitation_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]"
+        )
 
         if _WEATHER_DATA_SOURCE == "open_meteo":
-            om = _query_open_meteo(['pr'], latitude, longitude, year)
-            pr = om.get('pr', {})
-            if 'error' in pr:
-                return json.dumps({"error": pr["error"], "location": {"latitude": latitude, "longitude": longitude}})
+            om = _query_open_meteo(["pr"], latitude, longitude, year)
+            pr = om.get("pr", {})
+            if "error" in pr:
+                return json.dumps(
+                    {
+                        "error": pr["error"],
+                        "location": {"latitude": latitude, "longitude": longitude},
+                    }
+                )
             out = {
                 "location": {"latitude": latitude, "longitude": longitude},
                 "scenario": scenario,
@@ -772,41 +923,53 @@ def get_precipitation_projection(latitude: float, longitude: float, scenario: st
             }
             return json.dumps(out)
 
-        items = _search_cmip6_items(latitude, longitude, 'pr', scenario, year, limit=5)
-        
+        items = _search_cmip6_items(latitude, longitude, "pr", scenario, year, limit=5)
+
         if not items:
-            return json.dumps({
-                "error": "No CMIP6 precipitation data found for this location/scenario",
-                "location": {"latitude": latitude, "longitude": longitude},
-                "scenario": scenario, "year": year,
-            })
-        
+            return json.dumps(
+                {
+                    "error": "No CMIP6 precipitation data found for this location/scenario",
+                    "location": {"latitude": latitude, "longitude": longitude},
+                    "scenario": scenario,
+                    "year": year,
+                }
+            )
+
         # Sample multiple models in PARALLEL for ensemble view
         model_results = []
         sample_tasks = []
         for item in items[:2]:
-            assets = item.get('assets', {})
-            href = assets.get('pr', {}).get('href', '') if isinstance(assets.get('pr'), dict) else ''
+            assets = item.get("assets", {})
+            href = (
+                assets.get("pr", {}).get("href", "")
+                if isinstance(assets.get("pr"), dict)
+                else ""
+            )
             if not href:
                 continue
-            item_id = item.get('id', '')
-            parts = item_id.split('.')
-            model_name = parts[0] if parts else 'Unknown'
+            item_id = item.get("id", "")
+            parts = item_id.split(".")
+            model_name = parts[0] if parts else "Unknown"
             sample_tasks.append((model_name, href))
-        
+
         def _sample_precip_model(model_name: str, href: str):
-            sample = _sample_netcdf(href, 'pr', latitude, longitude, aggregate="annual")
-            if 'error' not in sample:
+            sample = _sample_netcdf(href, "pr", latitude, longitude, aggregate="annual")
+            if "error" not in sample:
                 return {
                     "model": model_name,
-                    "mean_precipitation_mm_per_day": sample.get('display_mean', sample.get('display_value')),
-                    "max_precipitation_mm_per_day": sample.get('display_max'),
-                    "min_precipitation_mm_per_day": sample.get('display_min'),
-                    "unit": sample['display_unit'],
+                    "mean_precipitation_mm_per_day": sample.get(
+                        "display_mean", sample.get("display_value")
+                    ),
+                    "max_precipitation_mm_per_day": sample.get("display_max"),
+                    "min_precipitation_mm_per_day": sample.get("display_min"),
+                    "unit": sample["display_unit"],
                 }
             return None
-        
-        futures = {_netcdf_pool.submit(_sample_precip_model, name, href): name for name, href in sample_tasks}
+
+        futures = {
+            _netcdf_pool.submit(_sample_precip_model, name, href): name
+            for name, href in sample_tasks
+        }
         try:
             for future in as_completed(futures, timeout=150):
                 try:
@@ -816,18 +979,26 @@ def get_precipitation_projection(latitude: float, longitude: float, scenario: st
                 except Exception as exc:
                     logger.warning(f"[TOOL] Precipitation model future failed: {exc}")
         except TimeoutError:
-            logger.warning("[TOOL] Not all precipitation models completed in time — using partial results")
-        
+            logger.warning(
+                "[TOOL] Not all precipitation models completed in time — using partial results"
+            )
+
         if not model_results:
-            return json.dumps({
-                "error": "Sampling failed for all available precipitation items",
-                "location": {"latitude": latitude, "longitude": longitude},
-            })
-        
+            return json.dumps(
+                {
+                    "error": "Sampling failed for all available precipitation items",
+                    "location": {"latitude": latitude, "longitude": longitude},
+                }
+            )
+
         # Compute ensemble summary
-        mean_values = [r['mean_precipitation_mm_per_day'] for r in model_results]
-        max_values = [r['max_precipitation_mm_per_day'] for r in model_results if r.get('max_precipitation_mm_per_day') is not None]
-        
+        mean_values = [r["mean_precipitation_mm_per_day"] for r in model_results]
+        max_values = [
+            r["max_precipitation_mm_per_day"]
+            for r in model_results
+            if r.get("max_precipitation_mm_per_day") is not None
+        ]
+
         output = {
             "location": {"latitude": latitude, "longitude": longitude},
             "scenario": scenario,
@@ -837,26 +1008,32 @@ def get_precipitation_projection(latitude: float, longitude: float, scenario: st
             "note": "Annual statistics computed across all days in the projected year",
             "precipitation": {
                 "annual_mean_mm_per_day": round(sum(mean_values) / len(mean_values), 2),
-                "annual_total_mm_estimate": round(sum(mean_values) / len(mean_values) * 365, 1),
+                "annual_total_mm_estimate": round(
+                    sum(mean_values) / len(mean_values) * 365, 1
+                ),
                 "peak_daily_mm": round(max(max_values), 2) if max_values else None,
                 "models_sampled": len(model_results),
                 "model_details": model_results,
-            }
+            },
         }
-        
-        logger.info(f"[TOOL] Precipitation projection: mean={output['precipitation']['annual_mean_mm_per_day']} mm/day, peak={output['precipitation'].get('peak_daily_mm')} mm/day")
+
+        logger.info(
+            f"[TOOL] Precipitation projection: mean={output['precipitation']['annual_mean_mm_per_day']} mm/day, peak={output['precipitation'].get('peak_daily_mm')} mm/day"
+        )
         return json.dumps(output)
-        
+
     except Exception as e:
         logger.error(f"[TOOL] Precipitation projection failed: {e}")
         return json.dumps({"error": str(e)})
 
 
-def get_wind_projection(latitude: float, longitude: float, scenario: str = "ssp585", year: int = 2030) -> str:
+def get_wind_projection(
+    latitude: float, longitude: float, scenario: str = "ssp585", year: int = 2030
+) -> str:
     """Get projected near-surface wind speed for a location from NASA NEX-GDDP-CMIP6 climate models.
     Returns wind speed in m/s.
     Use this when the user asks about future wind conditions, storms, wind energy, or extreme wind events.
-    
+
     :param latitude: Latitude of the location to analyze
     :param longitude: Longitude of the location to analyze
     :param scenario: SSP scenario - 'ssp245' (moderate) or 'ssp585' (worst-case). Default 'ssp585'
@@ -864,19 +1041,31 @@ def get_wind_projection(latitude: float, longitude: float, scenario: str = "ssp5
     :return: JSON string with projected wind speed values and model metadata
     """
     try:
-        logger.info(f"[TOOL] get_wind_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]")
+        logger.info(
+            f"[TOOL] get_wind_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]"
+        )
 
         if _WEATHER_DATA_SOURCE == "open_meteo":
-            om = _query_open_meteo(['sfcWind'], latitude, longitude, year)
-            wd = om.get('sfcWind', {})
-            if 'error' in wd:
-                return json.dumps({"error": wd["error"], "location": {"latitude": latitude, "longitude": longitude}})
+            om = _query_open_meteo(["sfcWind"], latitude, longitude, year)
+            wd = om.get("sfcWind", {})
+            if "error" in wd:
+                return json.dumps(
+                    {
+                        "error": wd["error"],
+                        "location": {"latitude": latitude, "longitude": longitude},
+                    }
+                )
             mean_wind = wd["display_mean"]
-            if mean_wind < 3:   wind_class = "Calm"
-            elif mean_wind < 6: wind_class = "Light breeze"
-            elif mean_wind < 10: wind_class = "Moderate wind"
-            elif mean_wind < 17: wind_class = "Strong wind"
-            else:               wind_class = "Severe / storm-force"
+            if mean_wind < 3:
+                wind_class = "Calm"
+            elif mean_wind < 6:
+                wind_class = "Light breeze"
+            elif mean_wind < 10:
+                wind_class = "Moderate wind"
+            elif mean_wind < 17:
+                wind_class = "Strong wind"
+            else:
+                wind_class = "Severe / storm-force"
             out = {
                 "location": {"latitude": latitude, "longitude": longitude},
                 "scenario": scenario,
@@ -892,41 +1081,57 @@ def get_wind_projection(latitude: float, longitude: float, scenario: str = "ssp5
             }
             return json.dumps(out)
 
-        items = _search_cmip6_items(latitude, longitude, 'sfcWind', scenario, year, limit=5)
-        
+        items = _search_cmip6_items(
+            latitude, longitude, "sfcWind", scenario, year, limit=5
+        )
+
         if not items:
-            return json.dumps({
-                "error": "No CMIP6 wind data found for this location/scenario",
-                "location": {"latitude": latitude, "longitude": longitude},
-                "scenario": scenario, "year": year,
-            })
-        
+            return json.dumps(
+                {
+                    "error": "No CMIP6 wind data found for this location/scenario",
+                    "location": {"latitude": latitude, "longitude": longitude},
+                    "scenario": scenario,
+                    "year": year,
+                }
+            )
+
         # Sample multiple models in PARALLEL
         model_results = []
         sample_tasks = []
         for item in items[:2]:
-            assets = item.get('assets', {})
-            href = assets.get('sfcWind', {}).get('href', '') if isinstance(assets.get('sfcWind'), dict) else ''
+            assets = item.get("assets", {})
+            href = (
+                assets.get("sfcWind", {}).get("href", "")
+                if isinstance(assets.get("sfcWind"), dict)
+                else ""
+            )
             if not href:
                 continue
-            item_id = item.get('id', '')
-            parts = item_id.split('.')
-            model_name = parts[0] if parts else 'Unknown'
+            item_id = item.get("id", "")
+            parts = item_id.split(".")
+            model_name = parts[0] if parts else "Unknown"
             sample_tasks.append((model_name, href))
-        
+
         def _sample_wind_model(model_name: str, href: str):
-            sample = _sample_netcdf(href, 'sfcWind', latitude, longitude, aggregate="annual")
-            if 'error' not in sample:
+            sample = _sample_netcdf(
+                href, "sfcWind", latitude, longitude, aggregate="annual"
+            )
+            if "error" not in sample:
                 return {
                     "model": model_name,
-                    "mean_wind_speed_m_s": sample.get('display_mean', sample.get('display_value')),
-                    "max_wind_speed_m_s": sample.get('display_max'),
-                    "min_wind_speed_m_s": sample.get('display_min'),
-                    "unit": sample['display_unit'],
+                    "mean_wind_speed_m_s": sample.get(
+                        "display_mean", sample.get("display_value")
+                    ),
+                    "max_wind_speed_m_s": sample.get("display_max"),
+                    "min_wind_speed_m_s": sample.get("display_min"),
+                    "unit": sample["display_unit"],
                 }
             return None
-        
-        futures = {_netcdf_pool.submit(_sample_wind_model, name, href): name for name, href in sample_tasks}
+
+        futures = {
+            _netcdf_pool.submit(_sample_wind_model, name, href): name
+            for name, href in sample_tasks
+        }
         try:
             for future in as_completed(futures, timeout=150):
                 try:
@@ -936,17 +1141,25 @@ def get_wind_projection(latitude: float, longitude: float, scenario: str = "ssp5
                 except Exception as exc:
                     logger.warning(f"[TOOL] Wind model future failed: {exc}")
         except TimeoutError:
-            logger.warning("[TOOL] Not all wind models completed in time — using partial results")
-        
+            logger.warning(
+                "[TOOL] Not all wind models completed in time — using partial results"
+            )
+
         if not model_results:
-            return json.dumps({
-                "error": "Sampling failed for all available wind items",
-                "location": {"latitude": latitude, "longitude": longitude},
-            })
-        
-        mean_values = [r['mean_wind_speed_m_s'] for r in model_results]
-        max_values = [r['max_wind_speed_m_s'] for r in model_results if r.get('max_wind_speed_m_s') is not None]
-        
+            return json.dumps(
+                {
+                    "error": "Sampling failed for all available wind items",
+                    "location": {"latitude": latitude, "longitude": longitude},
+                }
+            )
+
+        mean_values = [r["mean_wind_speed_m_s"] for r in model_results]
+        max_values = [
+            r["max_wind_speed_m_s"]
+            for r in model_results
+            if r.get("max_wind_speed_m_s") is not None
+        ]
+
         # Classify wind severity based on annual mean
         mean_wind = sum(mean_values) / len(mean_values)
         if mean_wind < 3:
@@ -959,7 +1172,7 @@ def get_wind_projection(latitude: float, longitude: float, scenario: str = "ssp5
             wind_class = "Strong wind"
         else:
             wind_class = "Severe / storm-force"
-        
+
         output = {
             "location": {"latitude": latitude, "longitude": longitude},
             "scenario": scenario,
@@ -973,22 +1186,24 @@ def get_wind_projection(latitude: float, longitude: float, scenario: str = "ssp5
                 "classification": wind_class,
                 "models_sampled": len(model_results),
                 "model_details": model_results,
-            }
+            },
         }
-        
+
         logger.info(f"[TOOL] Wind projection: {mean_wind:.1f} m/s ({wind_class})")
         return json.dumps(output)
-        
+
     except Exception as e:
         logger.error(f"[TOOL] Wind projection failed: {e}")
         return json.dumps({"error": str(e)})
 
 
-def get_humidity_projection(latitude: float, longitude: float, scenario: str = "ssp585", year: int = 2030) -> str:
+def get_humidity_projection(
+    latitude: float, longitude: float, scenario: str = "ssp585", year: int = 2030
+) -> str:
     """Get projected humidity data for a location from NASA NEX-GDDP-CMIP6 climate models.
     Returns near-surface relative humidity (%) and specific humidity (g/kg).
     Use this when the user asks about future humidity, heat index, moisture, or atmospheric conditions.
-    
+
     :param latitude: Latitude of the location to analyze
     :param longitude: Longitude of the location to analyze
     :param scenario: SSP scenario - 'ssp245' (moderate) or 'ssp585' (worst-case). Default 'ssp585'
@@ -996,11 +1211,13 @@ def get_humidity_projection(latitude: float, longitude: float, scenario: str = "
     :return: JSON string with projected humidity values and model metadata
     """
     try:
-        logger.info(f"[TOOL] get_humidity_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]")
+        logger.info(
+            f"[TOOL] get_humidity_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]"
+        )
 
         if _WEATHER_DATA_SOURCE == "open_meteo":
-            om = _query_open_meteo(['hurs'], latitude, longitude, year)
-            hr = om.get('hurs', {})
+            om = _query_open_meteo(["hurs"], latitude, longitude, year)
+            hr = om.get("hurs", {})
             out: Dict[str, Any] = {
                 "location": {"latitude": latitude, "longitude": longitude},
                 "scenario": scenario,
@@ -1009,40 +1226,56 @@ def get_humidity_projection(latitude: float, longitude: float, scenario: str = "
                 "note": "SSP scenario selection is not supported by Open-Meteo. Specific humidity (huss) is not available from Open-Meteo.",
                 "humidity": {},
             }
-            if 'error' not in hr:
-                out["humidity"]["relative_humidity"] = {"value": hr["display_value"], "unit": hr["display_unit"], "description": hr["variable_name"]}
+            if "error" not in hr:
+                out["humidity"]["relative_humidity"] = {
+                    "value": hr["display_value"],
+                    "unit": hr["display_unit"],
+                    "description": hr["variable_name"],
+                }
             else:
                 out["error"] = hr["error"]
             return json.dumps(out)
 
         results = {}
         models_used = set()
-        
+
         # Parallel sampling of both humidity variables
         def _sample_humidity_var(var):
             """Sample one humidity variable — runs in worker thread."""
-            items = _search_cmip6_items(latitude, longitude, var, scenario, year, limit=3)
+            items = _search_cmip6_items(
+                latitude, longitude, var, scenario, year, limit=3
+            )
             if not items:
                 return var, {"error": f"No data found for {var}"}, None
             for item in items:
-                assets = item.get('assets', {})
-                href = assets.get(var, {}).get('href', '') if isinstance(assets.get(var), dict) else ''
+                assets = item.get("assets", {})
+                href = (
+                    assets.get(var, {}).get("href", "")
+                    if isinstance(assets.get(var), dict)
+                    else ""
+                )
                 if not href:
                     continue
                 sample = _sample_netcdf(href, var, latitude, longitude)
-                if 'error' not in sample:
+                if "error" not in sample:
                     var_info = CLIMATE_VAR_INFO[var]
-                    item_id = item.get('id', '')
-                    parts = item_id.split('.')
+                    item_id = item.get("id", "")
+                    parts = item_id.split(".")
                     model = parts[0] if parts else None
-                    return var, {
-                        "value": sample['display_value'],
-                        "unit": sample['display_unit'],
-                        "description": var_info['name'],
-                    }, model
+                    return (
+                        var,
+                        {
+                            "value": sample["display_value"],
+                            "unit": sample["display_unit"],
+                            "description": var_info["name"],
+                        },
+                        model,
+                    )
             return var, {"error": f"Sampling failed for {var}"}, None
-        
-        futures = {_netcdf_pool.submit(_sample_humidity_var, v): v for v in ['hurs', 'huss']}
+
+        futures = {
+            _netcdf_pool.submit(_sample_humidity_var, v): v for v in ["hurs", "huss"]
+        }
         try:
             for future in as_completed(futures, timeout=150):
                 try:
@@ -1053,8 +1286,10 @@ def get_humidity_projection(latitude: float, longitude: float, scenario: str = "
                 except Exception as exc:
                     logger.warning(f"[TOOL] Humidity variable future failed: {exc}")
         except TimeoutError:
-            logger.warning("[TOOL] Not all humidity variables completed in time — using partial results")
-        
+            logger.warning(
+                "[TOOL] Not all humidity variables completed in time — using partial results"
+            )
+
         output = {
             "location": {"latitude": latitude, "longitude": longitude},
             "scenario": scenario,
@@ -1062,31 +1297,35 @@ def get_humidity_projection(latitude: float, longitude: float, scenario: str = "
             "data_source": "NASA NEX-GDDP-CMIP6",
             "grid_resolution": "0.25° × 0.25°",
             "models_sampled": list(models_used),
-            "humidity": {}
+            "humidity": {},
         }
-        
-        if 'hurs' in results and 'error' not in results.get('hurs', {}):
-            output["humidity"]["relative_humidity"] = results['hurs']
-        if 'huss' in results and 'error' not in results.get('huss', {}):
-            output["humidity"]["specific_humidity"] = results['huss']
-        
+
+        if "hurs" in results and "error" not in results.get("hurs", {}):
+            output["humidity"]["relative_humidity"] = results["hurs"]
+        if "huss" in results and "error" not in results.get("huss", {}):
+            output["humidity"]["specific_humidity"] = results["huss"]
+
         if not output["humidity"]:
             output["error"] = "Could not retrieve humidity data"
-        
-        logger.info(f"[TOOL] Humidity projection: {json.dumps(output.get('humidity', {}))}")
+
+        logger.info(
+            f"[TOOL] Humidity projection: {json.dumps(output.get('humidity', {}))}"
+        )
         return json.dumps(output)
-        
+
     except Exception as e:
         logger.error(f"[TOOL] Humidity projection failed: {e}")
         return json.dumps({"error": str(e)})
 
 
-def get_climate_overview(latitude: float, longitude: float, scenario: str = "ssp585", year: int = 2030) -> str:
+def get_climate_overview(
+    latitude: float, longitude: float, scenario: str = "ssp585", year: int = 2030
+) -> str:
     """Get a comprehensive climate overview for a location by sampling multiple variables at once.
     Returns temperature (max, min, mean), precipitation, wind speed, and humidity projections.
-    Use this when the user asks for a general climate outlook, overall climate conditions, or 
+    Use this when the user asks for a general climate outlook, overall climate conditions, or
     wants to understand the full climate picture for a location.
-    
+
     :param latitude: Latitude of the location to analyze
     :param longitude: Longitude of the location to analyze
     :param scenario: SSP scenario - 'ssp245' (moderate) or 'ssp585' (worst-case). Default 'ssp585'
@@ -1094,82 +1333,122 @@ def get_climate_overview(latitude: float, longitude: float, scenario: str = "ssp
     :return: JSON string with multi-variable climate overview
     """
     try:
-        logger.info(f"[TOOL] get_climate_overview at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]")
+        logger.info(
+            f"[TOOL] get_climate_overview at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]"
+        )
 
         if _WEATHER_DATA_SOURCE == "open_meteo":
-            om_vars = ['tasmax', 'tasmin', 'tas', 'pr', 'sfcWind', 'hurs']
+            om_vars = ["tasmax", "tasmin", "tas", "pr", "sfcWind", "hurs"]
             om = _query_open_meteo(om_vars, latitude, longitude, year)
             overview_om: Dict[str, Any] = {}
             for v in om_vars:
-                if v in om and 'error' not in om[v]:
-                    entry: Dict[str, Any] = {"value": om[v]["display_value"], "unit": om[v]["display_unit"], "description": om[v]["variable_name"]}
+                if v in om and "error" not in om[v]:
+                    entry: Dict[str, Any] = {
+                        "value": om[v]["display_value"],
+                        "unit": om[v]["display_unit"],
+                        "description": om[v]["variable_name"],
+                    }
                     if "display_max" in om[v]:
                         entry["peak"] = om[v]["display_max"]
                     overview_om[v] = entry
             summary_parts = []
-            if 'tasmax' in overview_om: summary_parts.append(f"Max Temp: {overview_om['tasmax']['value']}°F")
-            if 'tasmin' in overview_om: summary_parts.append(f"Min Temp: {overview_om['tasmin']['value']}°F")
-            if 'tas'    in overview_om: summary_parts.append(f"Mean Temp: {overview_om['tas']['value']}°F")
-            if 'pr'     in overview_om: summary_parts.append(f"Precip: {overview_om['pr']['value']} mm/day")
-            if 'sfcWind' in overview_om: summary_parts.append(f"Wind: {overview_om['sfcWind']['value']} m/s")
-            if 'hurs'   in overview_om: summary_parts.append(f"Humidity: {overview_om['hurs']['value']}%")
-            return json.dumps({
-                "location": {"latitude": latitude, "longitude": longitude},
-                "scenario": scenario,
-                "scenario_description": "SSP2-4.5 (moderate)" if scenario == "ssp245" else "SSP5-8.5 (worst-case)" if scenario == "ssp585" else scenario,
-                "year": year,
-                "data_source": "Open-Meteo HighResMIP (CMIP6)",
-                "note": "SSP scenario selection is not supported by Open-Meteo; HighResMIP models are used.",
-                "climate_summary": " | ".join(summary_parts) if summary_parts else "No data sampled",
-                "variables": overview_om,
-            })
+            if "tasmax" in overview_om:
+                summary_parts.append(f"Max Temp: {overview_om['tasmax']['value']}°F")
+            if "tasmin" in overview_om:
+                summary_parts.append(f"Min Temp: {overview_om['tasmin']['value']}°F")
+            if "tas" in overview_om:
+                summary_parts.append(f"Mean Temp: {overview_om['tas']['value']}°F")
+            if "pr" in overview_om:
+                summary_parts.append(f"Precip: {overview_om['pr']['value']} mm/day")
+            if "sfcWind" in overview_om:
+                summary_parts.append(f"Wind: {overview_om['sfcWind']['value']} m/s")
+            if "hurs" in overview_om:
+                summary_parts.append(f"Humidity: {overview_om['hurs']['value']}%")
+            return json.dumps(
+                {
+                    "location": {"latitude": latitude, "longitude": longitude},
+                    "scenario": scenario,
+                    "scenario_description": (
+                        "SSP2-4.5 (moderate)"
+                        if scenario == "ssp245"
+                        else (
+                            "SSP5-8.5 (worst-case)"
+                            if scenario == "ssp585"
+                            else scenario
+                        )
+                    ),
+                    "year": year,
+                    "data_source": "Open-Meteo HighResMIP (CMIP6)",
+                    "note": "SSP scenario selection is not supported by Open-Meteo; HighResMIP models are used.",
+                    "climate_summary": (
+                        " | ".join(summary_parts)
+                        if summary_parts
+                        else "No data sampled"
+                    ),
+                    "variables": overview_om,
+                }
+            )
 
-        overview_vars = ['tasmax', 'tasmin', 'tas', 'pr', 'sfcWind', 'hurs']
+        overview_vars = ["tasmax", "tasmin", "tas", "pr", "sfcWind", "hurs"]
         overview = {}
         models_used = set()
         errors = []
-        
+
         # Pre-fetch STAC items once — they're global (all variables in one item),
         # so a single search warms the cache for all 6 variable workers.
-        _search_cmip6_items(latitude, longitude, overview_vars[0], scenario, year, limit=1)
-        
+        _search_cmip6_items(
+            latitude, longitude, overview_vars[0], scenario, year, limit=1
+        )
+
         # Parallel sampling of all 6 variables via ThreadPoolExecutor
         def _sample_overview_var(var):
             """Sample one overview variable — runs in a worker thread."""
-            items = _search_cmip6_items(latitude, longitude, var, scenario, year, limit=1)
+            items = _search_cmip6_items(
+                latitude, longitude, var, scenario, year, limit=1
+            )
             if not items:
                 return var, None, f"No data for {var}", None
             for item in items:
-                assets = item.get('assets', {})
-                href = assets.get(var, {}).get('href', '') if isinstance(assets.get(var), dict) else ''
+                assets = item.get("assets", {})
+                href = (
+                    assets.get(var, {}).get("href", "")
+                    if isinstance(assets.get(var), dict)
+                    else ""
+                )
                 if not href:
                     continue
-                agg = "annual" if var in ('pr', 'sfcWind') else "last"
+                agg = "annual" if var in ("pr", "sfcWind") else "last"
                 sample = _sample_netcdf(href, var, latitude, longitude, aggregate=agg)
-                if 'error' not in sample:
+                if "error" not in sample:
                     var_info = CLIMATE_VAR_INFO[var]
                     result = {
-                        "value": sample.get('display_mean', sample.get('display_value')),
-                        "unit": sample['display_unit'],
-                        "description": var_info['name'],
+                        "value": sample.get(
+                            "display_mean", sample.get("display_value")
+                        ),
+                        "unit": sample["display_unit"],
+                        "description": var_info["name"],
                     }
-                    if agg == "annual" and 'display_max' in sample:
-                        result["peak"] = sample['display_max']
-                    item_id = item.get('id', '')
-                    parts = item_id.split('.')
+                    if agg == "annual" and "display_max" in sample:
+                        result["peak"] = sample["display_max"]
+                    item_id = item.get("id", "")
+                    parts = item_id.split(".")
                     model = parts[0] if parts else None
                     return var, result, None, model
                 else:
                     return var, None, f"{var}: {sample['error']}", None
             return var, None, f"No href for {var}", None
-        
-        futures = {_netcdf_pool.submit(_sample_overview_var, v): v for v in overview_vars}
+
+        futures = {
+            _netcdf_pool.submit(_sample_overview_var, v): v for v in overview_vars
+        }
         for future in as_completed(futures, timeout=150):
             try:
                 var, result, error, model = future.result(timeout=120)
             except Exception as exc:
-                logger.warning(f"[TOOL] Overview variable future timed out or failed: {exc}")
-                errors.append(f"Variable sampling timed out")
+                logger.warning(
+                    f"[TOOL] Overview variable future timed out or failed: {exc}"
+                )
+                errors.append("Variable sampling timed out")
                 continue
             if result:
                 overview[var] = result
@@ -1177,79 +1456,96 @@ def get_climate_overview(latitude: float, longitude: float, scenario: str = "ssp
                 errors.append(error)
             if model:
                 models_used.add(model)
-        
+
         # Build readable summary
         summary_parts = []
-        if 'tasmax' in overview:
+        if "tasmax" in overview:
             summary_parts.append(f"Max Temp: {overview['tasmax']['value']}°F")
-        if 'tasmin' in overview:
+        if "tasmin" in overview:
             summary_parts.append(f"Min Temp: {overview['tasmin']['value']}°F")
-        if 'tas' in overview:
+        if "tas" in overview:
             summary_parts.append(f"Mean Temp: {overview['tas']['value']}°F")
-        if 'pr' in overview:
+        if "pr" in overview:
             summary_parts.append(f"Precip: {overview['pr']['value']} mm/day")
-        if 'sfcWind' in overview:
+        if "sfcWind" in overview:
             summary_parts.append(f"Wind: {overview['sfcWind']['value']} m/s")
-        if 'hurs' in overview:
+        if "hurs" in overview:
             summary_parts.append(f"Humidity: {overview['hurs']['value']}%")
-        
+
         output = {
             "location": {"latitude": latitude, "longitude": longitude},
             "scenario": scenario,
-            "scenario_description": "SSP2-4.5 (moderate)" if scenario == "ssp245" else "SSP5-8.5 (worst-case)" if scenario == "ssp585" else scenario,
+            "scenario_description": (
+                "SSP2-4.5 (moderate)"
+                if scenario == "ssp245"
+                else "SSP5-8.5 (worst-case)" if scenario == "ssp585" else scenario
+            ),
             "year": year,
             "data_source": "NASA NEX-GDDP-CMIP6",
             "grid_resolution": "0.25° × 0.25°",
             "models_sampled": list(models_used),
-            "climate_summary": " | ".join(summary_parts) if summary_parts else "No data sampled",
+            "climate_summary": (
+                " | ".join(summary_parts) if summary_parts else "No data sampled"
+            ),
             "variables": overview,
-            "note": "These are climate PROJECTIONS from CMIP6 models, not observations."
+            "note": "These are climate PROJECTIONS from CMIP6 models, not observations.",
         }
-        
+
         if errors:
             output["warnings"] = errors
-        
-        logger.info(f"[TOOL] Climate overview: {len(overview)} variables sampled for {scenario}/{year}")
+
+        logger.info(
+            f"[TOOL] Climate overview: {len(overview)} variables sampled for {scenario}/{year}"
+        )
         return json.dumps(output)
-        
+
     except Exception as e:
         logger.error(f"[TOOL] Climate overview failed: {e}")
         return json.dumps({"error": str(e)})
 
 
-def compare_climate_scenarios(latitude: float, longitude: float, year: int = 2030) -> str:
+def compare_climate_scenarios(
+    latitude: float, longitude: float, year: int = 2030
+) -> str:
     """Compare climate projections between SSP2-4.5 (moderate emissions) and SSP5-8.5 (worst-case emissions)
     scenarios for a location. Shows temperature and precipitation differences between scenarios.
     Use this when the user asks about comparing emission scenarios, best vs worst case, or climate uncertainty.
-    
+
     :param latitude: Latitude of the location to analyze
     :param longitude: Longitude of the location to analyze
     :param year: Projection year (2015-2100). Default 2030
     :return: JSON string comparing key climate variables across both SSP scenarios
     """
     try:
-        logger.info(f"[TOOL] compare_climate_scenarios at ({latitude:.4f}, {longitude:.4f}), {year} [source={_WEATHER_DATA_SOURCE}]")
+        logger.info(
+            f"[TOOL] compare_climate_scenarios at ({latitude:.4f}, {longitude:.4f}), {year} [source={_WEATHER_DATA_SOURCE}]"
+        )
 
         if _WEATHER_DATA_SOURCE == "open_meteo":
-            om = _query_open_meteo(['tasmax', 'pr'], latitude, longitude, year)
+            om = _query_open_meteo(["tasmax", "pr"], latitude, longitude, year)
             comparison_om: Dict[str, Any] = {}
-            for v in ['tasmax', 'pr']:
+            for v in ["tasmax", "pr"]:
                 d = om.get(v, {})
-                if 'error' not in d:
-                    comparison_om[v] = {"value": d["display_value"], "unit": d["display_unit"]}
-            return json.dumps({
-                "location": {"latitude": latitude, "longitude": longitude},
-                "year": year,
-                "data_source": "Open-Meteo HighResMIP (CMIP6)",
-                "note": "Open-Meteo does not support SSP scenario comparison; a single HighResMIP projection is shown.",
-                "comparison": comparison_om,
-                "scenario_difference": {},
-            })
+                if "error" not in d:
+                    comparison_om[v] = {
+                        "value": d["display_value"],
+                        "unit": d["display_unit"],
+                    }
+            return json.dumps(
+                {
+                    "location": {"latitude": latitude, "longitude": longitude},
+                    "year": year,
+                    "data_source": "Open-Meteo HighResMIP (CMIP6)",
+                    "note": "Open-Meteo does not support SSP scenario comparison; a single HighResMIP projection is shown.",
+                    "comparison": comparison_om,
+                    "scenario_difference": {},
+                }
+            )
 
-        compare_vars = ['tasmax', 'pr']
-        scenarios = ['ssp245', 'ssp585']
+        compare_vars = ["tasmax", "pr"]
+        scenarios = ["ssp245", "ssp585"]
         comparison = {var: {} for var in compare_vars}
-        
+
         # ----------------------------------------------------------------
         # PRE-FETCH: Warm STAC cache for both scenarios BEFORE launching
         # parallel NetCDF workers.  _search_cmip6_items caches by
@@ -1260,7 +1556,7 @@ def compare_climate_scenarios(latitude: float, longitude: float, year: int = 203
         # ----------------------------------------------------------------
         for sc in scenarios:
             _search_cmip6_items(latitude, longitude, compare_vars[0], sc, year, limit=1)
-        
+
         # Parallel sampling: 2 vars x 2 scenarios = 4 concurrent tasks
         def _sample_comparison(var, sc):
             """Sample one (variable, scenario) pair — runs in worker thread."""
@@ -1268,19 +1564,29 @@ def compare_climate_scenarios(latitude: float, longitude: float, year: int = 203
             if not items:
                 return var, sc, {"error": "No data"}
             for item in items:
-                assets = item.get('assets', {})
-                href = assets.get(var, {}).get('href', '') if isinstance(assets.get(var), dict) else ''
+                assets = item.get("assets", {})
+                href = (
+                    assets.get(var, {}).get("href", "")
+                    if isinstance(assets.get(var), dict)
+                    else ""
+                )
                 if not href:
                     continue
-                agg = "annual" if var in ('pr', 'sfcWind') else "last"
+                agg = "annual" if var in ("pr", "sfcWind") else "last"
                 sample = _sample_netcdf(href, var, latitude, longitude, aggregate=agg)
-                if 'error' not in sample:
-                    return var, sc, {
-                        "value": sample.get('display_mean', sample.get('display_value')),
-                        "unit": sample['display_unit'],
-                    }
+                if "error" not in sample:
+                    return (
+                        var,
+                        sc,
+                        {
+                            "value": sample.get(
+                                "display_mean", sample.get("display_value")
+                            ),
+                            "unit": sample["display_unit"],
+                        },
+                    )
             return var, sc, {"error": "Sampling failed"}
-        
+
         futures = []
         for var in compare_vars:
             for sc in scenarios:
@@ -1293,20 +1599,22 @@ def compare_climate_scenarios(latitude: float, longitude: float, year: int = 203
                 except Exception as exc:
                     logger.warning(f"[TOOL] Scenario comparison future failed: {exc}")
         except TimeoutError:
-            logger.warning("[TOOL] Not all scenario comparisons completed in time — using partial results")
-        
+            logger.warning(
+                "[TOOL] Not all scenario comparisons completed in time — using partial results"
+            )
+
         # Calculate deltas
         deltas = {}
         for var in compare_vars:
-            ssp245_val = comparison.get(var, {}).get('ssp245', {}).get('value')
-            ssp585_val = comparison.get(var, {}).get('ssp585', {}).get('value')
+            ssp245_val = comparison.get(var, {}).get("ssp245", {}).get("value")
+            ssp585_val = comparison.get(var, {}).get("ssp585", {}).get("value")
             if ssp245_val is not None and ssp585_val is not None:
                 deltas[var] = {
                     "difference": round(ssp585_val - ssp245_val, 2),
-                    "unit": CLIMATE_VAR_INFO[var]['display_unit'],
-                    "description": f"SSP5-8.5 minus SSP2-4.5",
+                    "unit": CLIMATE_VAR_INFO[var]["display_unit"],
+                    "description": "SSP5-8.5 minus SSP2-4.5",
                 }
-        
+
         output = {
             "location": {"latitude": latitude, "longitude": longitude},
             "year": year,
@@ -1317,22 +1625,24 @@ def compare_climate_scenarios(latitude: float, longitude: float, year: int = 203
             },
             "comparison": comparison,
             "scenario_difference": deltas,
-            "note": "Positive difference = worse conditions under high emissions"
+            "note": "Positive difference = worse conditions under high emissions",
         }
-        
+
         logger.info(f"[TOOL] Scenario comparison complete for {year}")
         return json.dumps(output)
-        
+
     except Exception as e:
         logger.error(f"[TOOL] Scenario comparison failed: {e}")
         return json.dumps({"error": str(e)})
 
 
-def get_radiation_projection(latitude: float, longitude: float, scenario: str = "ssp585", year: int = 2030) -> str:
+def get_radiation_projection(
+    latitude: float, longitude: float, scenario: str = "ssp585", year: int = 2030
+) -> str:
     """Get projected solar and longwave radiation data for a location from NASA NEX-GDDP-CMIP6 models.
     Returns downwelling shortwave (solar) and longwave radiation in W/m².
     Use this when the user asks about solar energy potential, radiation budget, or energy balance.
-    
+
     :param latitude: Latitude of the location to analyze
     :param longitude: Longitude of the location to analyze
     :param scenario: SSP scenario - 'ssp245' (moderate) or 'ssp585' (worst-case). Default 'ssp585'
@@ -1340,11 +1650,13 @@ def get_radiation_projection(latitude: float, longitude: float, scenario: str = 
     :return: JSON string with projected radiation values and model metadata
     """
     try:
-        logger.info(f"[TOOL] get_radiation_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]")
+        logger.info(
+            f"[TOOL] get_radiation_projection at ({latitude:.4f}, {longitude:.4f}), {scenario}, {year} [source={_WEATHER_DATA_SOURCE}]"
+        )
 
         if _WEATHER_DATA_SOURCE == "open_meteo":
-            om = _query_open_meteo(['rsds'], latitude, longitude, year)
-            rs = om.get('rsds', {})
+            om = _query_open_meteo(["rsds"], latitude, longitude, year)
+            rs = om.get("rsds", {})
             out: Dict[str, Any] = {
                 "location": {"latitude": latitude, "longitude": longitude},
                 "scenario": scenario,
@@ -1353,8 +1665,12 @@ def get_radiation_projection(latitude: float, longitude: float, scenario: str = 
                 "note": "SSP scenario selection is not supported by Open-Meteo. Longwave radiation (rlds) is not available from Open-Meteo.",
                 "radiation": {},
             }
-            if 'error' not in rs:
-                out["radiation"]["shortwave_solar"] = {"value": rs["display_value"], "unit": rs["display_unit"], "description": rs["variable_name"]}
+            if "error" not in rs:
+                out["radiation"]["shortwave_solar"] = {
+                    "value": rs["display_value"],
+                    "unit": rs["display_unit"],
+                    "description": rs["variable_name"],
+                }
             else:
                 out["error"] = rs["error"]
             return json.dumps(out)
@@ -1365,28 +1681,40 @@ def get_radiation_projection(latitude: float, longitude: float, scenario: str = 
         # Parallel sampling of both radiation variables
         def _sample_radiation_var(var):
             """Sample one radiation variable — runs in worker thread."""
-            items = _search_cmip6_items(latitude, longitude, var, scenario, year, limit=3)
+            items = _search_cmip6_items(
+                latitude, longitude, var, scenario, year, limit=3
+            )
             if not items:
                 return var, {"error": f"No data found for {var}"}, None
             for item in items:
-                assets = item.get('assets', {})
-                href = assets.get(var, {}).get('href', '') if isinstance(assets.get(var), dict) else ''
+                assets = item.get("assets", {})
+                href = (
+                    assets.get(var, {}).get("href", "")
+                    if isinstance(assets.get(var), dict)
+                    else ""
+                )
                 if not href:
                     continue
                 sample = _sample_netcdf(href, var, latitude, longitude)
-                if 'error' not in sample:
+                if "error" not in sample:
                     var_info = CLIMATE_VAR_INFO[var]
-                    item_id = item.get('id', '')
-                    parts = item_id.split('.')
+                    item_id = item.get("id", "")
+                    parts = item_id.split(".")
                     model = parts[0] if parts else None
-                    return var, {
-                        "value": sample['display_value'],
-                        "unit": sample['display_unit'],
-                        "description": var_info['name'],
-                    }, model
+                    return (
+                        var,
+                        {
+                            "value": sample["display_value"],
+                            "unit": sample["display_unit"],
+                            "description": var_info["name"],
+                        },
+                        model,
+                    )
             return var, {"error": f"Sampling failed for {var}"}, None
-        
-        futures = {_netcdf_pool.submit(_sample_radiation_var, v): v for v in ['rsds', 'rlds']}
+
+        futures = {
+            _netcdf_pool.submit(_sample_radiation_var, v): v for v in ["rsds", "rlds"]
+        }
         try:
             for future in as_completed(futures, timeout=150):
                 try:
@@ -1397,8 +1725,10 @@ def get_radiation_projection(latitude: float, longitude: float, scenario: str = 
                 except Exception as exc:
                     logger.warning(f"[TOOL] Radiation variable future failed: {exc}")
         except TimeoutError:
-            logger.warning("[TOOL] Not all radiation variables completed in time — using partial results")
-        
+            logger.warning(
+                "[TOOL] Not all radiation variables completed in time — using partial results"
+            )
+
         output = {
             "location": {"latitude": latitude, "longitude": longitude},
             "scenario": scenario,
@@ -1406,20 +1736,22 @@ def get_radiation_projection(latitude: float, longitude: float, scenario: str = 
             "data_source": "NASA NEX-GDDP-CMIP6",
             "grid_resolution": "0.25° × 0.25°",
             "models_sampled": list(models_used),
-            "radiation": {}
+            "radiation": {},
         }
-        
-        if 'rsds' in results and 'error' not in results.get('rsds', {}):
-            output["radiation"]["shortwave_solar"] = results['rsds']
-        if 'rlds' in results and 'error' not in results.get('rlds', {}):
-            output["radiation"]["longwave"] = results['rlds']
-        
+
+        if "rsds" in results and "error" not in results.get("rsds", {}):
+            output["radiation"]["shortwave_solar"] = results["rsds"]
+        if "rlds" in results and "error" not in results.get("rlds", {}):
+            output["radiation"]["longwave"] = results["rlds"]
+
         if not output["radiation"]:
             output["error"] = "Could not retrieve radiation data"
-        
-        logger.info(f"[TOOL] Radiation projection: {json.dumps(output.get('radiation', {}))}")
+
+        logger.info(
+            f"[TOOL] Radiation projection: {json.dumps(output.get('radiation', {}))}"
+        )
         return json.dumps(output)
-        
+
     except Exception as e:
         logger.error(f"[TOOL] Radiation projection failed: {e}")
         return json.dumps({"error": str(e)})
@@ -1427,7 +1759,7 @@ def get_radiation_projection(latitude: float, longitude: float, scenario: str = 
 
 def create_extreme_weather_functions() -> Set[Callable]:
     """Create the set of extreme weather/climate analysis functions for FunctionTool.
-    
+
     Returns a Set[Callable] that can be passed to FunctionTool().
     Each function uses docstring-based parameter descriptions.
     """

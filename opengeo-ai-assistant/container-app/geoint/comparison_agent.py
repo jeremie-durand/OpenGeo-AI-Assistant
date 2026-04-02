@@ -9,10 +9,10 @@ Flow per query:
   3. LLM synthesises a natural-language response from the tool output
 """
 
-import logging
 import json
-from typing import Dict, Any, Optional
+import logging
 from datetime import datetime
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,7 @@ Keep responses factual and concise.
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _parse_json_safe(text: str) -> Any:
     text = text.strip()
     for marker in ("```json", "```"):
@@ -67,6 +68,7 @@ def _parse_json_safe(text: str) -> Any:
         return json.loads(text)
     except Exception:
         import re
+
         m = re.search(r"\{.*\}", text, re.DOTALL)
         if m:
             try:
@@ -93,6 +95,7 @@ async def _llm_text(llm, messages, max_tokens=512, temperature=0.2):
 # ComparisonAgent
 # ---------------------------------------------------------------------------
 
+
 class ComparisonAgent:
     """Provider-agnostic temporal comparison agent."""
 
@@ -110,14 +113,17 @@ class ComparisonAgent:
         if self._initialized:
             return
         import asyncio
+
         for attempt in range(3):
             try:
                 await self._do_initialize()
                 return
             except Exception as e:
                 if attempt < 2:
-                    wait = 2 ** attempt
-                    logger.warning(f"ComparisonAgent init attempt {attempt + 1} failed: {e} — retrying in {wait}s")
+                    wait = 2**attempt
+                    logger.warning(
+                        f"ComparisonAgent init attempt {attempt + 1} failed: {e} — retrying in {wait}s"
+                    )
                     await asyncio.sleep(wait)
                 else:
                     logger.error(f"ComparisonAgent init failed after 3 attempts: {e}")
@@ -125,10 +131,13 @@ class ComparisonAgent:
 
     async def _do_initialize(self):
         from llm_client import get_llm_client
+
         compat = get_llm_client()
         self._llm = compat._llm
         self._initialized = True
-        logger.info(f"ComparisonAgent initialised (provider={self._llm.provider}, model={self._llm.model})")
+        logger.info(
+            f"ComparisonAgent initialised (provider={self._llm.provider}, model={self._llm.model})"
+        )
 
     # ------------------------------------------------------------------
     # Step 1 — parse the user query with the LLM
@@ -191,8 +200,15 @@ Rules:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _run_comparison_tool(location: str, before_period: str, after_period: str, analysis_type: str) -> Dict[str, Any]:
-        from geoint.comparison_tools import compare_temporal_imagery, reset_comparison_capture, get_last_comparison_result
+    def _run_comparison_tool(
+        location: str, before_period: str, after_period: str, analysis_type: str
+    ) -> Dict[str, Any]:
+        from geoint.comparison_tools import (
+            compare_temporal_imagery,
+            get_last_comparison_result,
+            reset_comparison_capture,
+        )
+
         reset_comparison_capture()
         raw = compare_temporal_imagery(
             location=location,
@@ -233,23 +249,42 @@ Rules:
             )
 
             if self._llm.provider == "anthropic":
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": vision_prompt},
-                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": clean}},
-                    ],
-                }]
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": vision_prompt},
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": clean,
+                                },
+                            },
+                        ],
+                    }
+                ]
             else:
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": vision_prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{clean}", "detail": "high"}},
-                    ],
-                }]
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": vision_prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{clean}",
+                                    "detail": "high",
+                                },
+                            },
+                        ],
+                    }
+                ]
 
-            result = await _llm_text(self._llm, messages, max_tokens=600, temperature=0.3)
+            result = await _llm_text(
+                self._llm, messages, max_tokens=600, temperature=0.3
+            )
             logger.info(f"Comparison vision analysis: {len(result)} chars")
             return result
         except Exception as e:
@@ -268,7 +303,11 @@ Rules:
         visual_analysis: Optional[str],
     ) -> str:
         result_summary = json.dumps(tool_result, indent=2)[:2000]
-        visual_section = f"\n\n[Visual Analysis of Current Map View]\n{visual_analysis}" if visual_analysis else ""
+        visual_section = (
+            f"\n\n[Visual Analysis of Current Map View]\n{visual_analysis}"
+            if visual_analysis
+            else ""
+        )
 
         prompt = f"""{COMPARISON_AGENT_INSTRUCTIONS}
 
@@ -309,7 +348,13 @@ If the tool returned no data or an error, explain what happened and suggest alte
         session_id: Optional[str] = None,
         screenshot_base64: Optional[str] = None,
     ) -> Dict[str, Any]:
-        if not user_query or user_query.strip().lower() in ("", "hi", "hello", "comparison", "start"):
+        if not user_query or user_query.strip().lower() in (
+            "",
+            "hi",
+            "hello",
+            "comparison",
+            "start",
+        ):
             return {
                 "status": "prompt",
                 "message": (
@@ -329,6 +374,7 @@ If the tool returned no data or an error, explain what happened and suggest alte
         visual_analysis = None
         if screenshot_base64 and latitude is not None and longitude is not None:
             import asyncio
+
             try:
                 visual_analysis = await asyncio.wait_for(
                     self._analyze_screenshot(screenshot_base64, latitude, longitude),
@@ -341,6 +387,7 @@ If the tool returned no data or an error, explain what happened and suggest alte
 
         # Step 3 — run comparison tool (sync, in executor to avoid blocking)
         import asyncio
+
         loop = asyncio.get_event_loop()
         try:
             tool_result = await loop.run_in_executor(
@@ -356,7 +403,9 @@ If the tool returned no data or an error, explain what happened and suggest alte
             tool_result = {"status": "error", "error": str(e)}
 
         # Step 4 — synthesise response
-        analysis_text = await self._synthesise_response(user_query, params, tool_result, visual_analysis)
+        analysis_text = await self._synthesise_response(
+            user_query, params, tool_result, visual_analysis
+        )
 
         result: Dict[str, Any] = {
             "status": "success",
@@ -368,14 +417,16 @@ If the tool returned no data or an error, explain what happened and suggest alte
 
         # Merge tile URLs / spatial data from tool result
         if tool_result.get("status") == "success":
-            result.update({
-                "location": tool_result.get("location"),
-                "bbox": tool_result.get("bbox"),
-                "center": tool_result.get("center"),
-                "before": tool_result.get("before"),
-                "after": tool_result.get("after"),
-                "collection": tool_result.get("collection"),
-            })
+            result.update(
+                {
+                    "location": tool_result.get("location"),
+                    "bbox": tool_result.get("bbox"),
+                    "center": tool_result.get("center"),
+                    "before": tool_result.get("before"),
+                    "after": tool_result.get("after"),
+                    "collection": tool_result.get("collection"),
+                }
+            )
 
         return result
 

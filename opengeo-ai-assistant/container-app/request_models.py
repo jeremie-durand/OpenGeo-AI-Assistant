@@ -5,10 +5,10 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from stac_pydantic.api import Search
 
-
 # ---------------------------------------------------------------------------
 # Shared base
 # ---------------------------------------------------------------------------
+
 
 class GeointRequest(BaseModel):
     """Base for all geoint endpoints that require coordinates."""
@@ -25,7 +25,11 @@ class GeointRequest(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _normalize_user_query(cls, data: Any) -> Any:
-        if isinstance(data, dict) and "user_context" in data and not data.get("user_query"):
+        if (
+            isinstance(data, dict)
+            and "user_context" in data
+            and not data.get("user_query")
+        ):
             data["user_query"] = data.pop("user_context")
         return data
 
@@ -33,6 +37,7 @@ class GeointRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Core API endpoints
 # ---------------------------------------------------------------------------
+
 
 class QueryRequest(BaseModel):
     """POST /api/query — main natural-language satellite query."""
@@ -104,7 +109,11 @@ class SessionResetRequest(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _normalize(cls, data: Any) -> Any:
-        if isinstance(data, dict) and not data.get("session_id") and data.get("conversation_id"):
+        if (
+            isinstance(data, dict)
+            and not data.get("session_id")
+            and data.get("conversation_id")
+        ):
             data["session_id"] = data["conversation_id"]
         return data
 
@@ -119,6 +128,7 @@ class ComparisonQueryRequest(BaseModel):
 # GEOINT endpoints
 # ---------------------------------------------------------------------------
 
+
 class MobilityRequest(GeointRequest):
     """POST /api/geoint/mobility — route/terrain mobility analysis."""
 
@@ -130,7 +140,9 @@ class MobilityRequest(GeointRequest):
         has_b = self.latitude_b is not None or self.longitude_b is not None
         both_b = self.latitude_b is not None and self.longitude_b is not None
         if has_b and not both_b:
-            raise ValueError("latitude_b and longitude_b must both be provided together")
+            raise ValueError(
+                "latitude_b and longitude_b must both be provided together"
+            )
         return self
 
 
@@ -197,7 +209,11 @@ class ComparisonRequest(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _normalize_user_query(cls, data: Any) -> Any:
-        if isinstance(data, dict) and "user_context" in data and not data.get("user_query"):
+        if (
+            isinstance(data, dict)
+            and "user_context" in data
+            and not data.get("user_query")
+        ):
             data["user_query"] = data.pop("user_context")
         return data
 

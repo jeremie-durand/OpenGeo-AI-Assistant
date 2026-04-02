@@ -11,14 +11,14 @@ Key Features:
 - Returns structured analysis results
 """
 
-from typing import Dict, Any, Optional, List, Literal
+import base64
 import logging
 import os
-import base64
-from io import BytesIO
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Literal, Optional
+
 import aiohttp
 import planetary_computer
-from datetime import datetime, timedelta
 from pystac_client import Client
 
 logger = logging.getLogger(__name__)
@@ -32,10 +32,11 @@ class VisionAnalyzer:
     Shared GPT-5 Vision analyzer for satellite imagery analysis.
     Can be used by any GEOINT module to add visual analysis capability.
     """
-    
+
     def __init__(self):
         """Initialize the vision analyzer."""
         from semantic_translator import get_llm_client
+
         self.deployment_name = os.getenv("LLM_MODEL", "gpt-4o")
         self.client = get_llm_client(model=self.deployment_name, vision=True)
         self.stac_endpoint = os.getenv("STAC_API_URL", "http://localhost:8081")
@@ -45,8 +46,10 @@ class VisionAnalyzer:
         self._imagery_cache = {}
         self._cache_ttl = 300  # 5 minutes TTL (same as query cache)
 
-        logger.info(f" VisionAnalyzer initialized with model: {self.deployment_name} (timeout: 180s, cache enabled)")
-    
+        logger.info(
+            f" VisionAnalyzer initialized with model: {self.deployment_name} (timeout: 180s, cache enabled)"
+        )
+
     async def analyze_location_with_vision(
         self,
         latitude: float,
@@ -54,11 +57,11 @@ class VisionAnalyzer:
         module_type: ModuleType,
         radius_miles: float = 5.0,
         user_query: Optional[str] = None,
-        additional_context: Optional[Dict[str, Any]] = None
+        additional_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Analyze a location using GPT-5 Vision on satellite imagery.
-        
+
         Args:
             latitude: Center point latitude
             longitude: Center point longitude
@@ -66,7 +69,7 @@ class VisionAnalyzer:
             radius_miles: Analysis radius in miles (default 5)
             user_query: Optional specific user question
             additional_context: Optional additional context from module-specific analysis
-            
+
         Returns:
             Dict containing:
             - visual_analysis: str - Natural language description from GPT-5
@@ -75,30 +78,32 @@ class VisionAnalyzer:
             - confidence: float - Analysis confidence score
         """
         try:
-            logger.info(f" Starting vision analysis for {module_type} at ({latitude}, {longitude})")
-            
+            logger.info(
+                f" Starting vision analysis for {module_type} at ({latitude}, {longitude})"
+            )
+
             # Calculate bounding box
             radius_deg = radius_miles / 69.0
             bbox = [
                 longitude - radius_deg,
                 latitude - radius_deg,
                 longitude + radius_deg,
-                latitude + radius_deg
+                latitude + radius_deg,
             ]
-            
+
             # Fetch satellite imagery
             image_data, image_metadata = await self._fetch_satellite_image(
                 bbox, latitude, longitude
             )
-            
+
             if not image_data:
                 return {
                     "visual_analysis": "Unable to retrieve satellite imagery for this location. The area may be obscured by clouds or outside available coverage.",
                     "features_identified": [],
                     "imagery_metadata": {},
-                    "confidence": 0.0
+                    "confidence": 0.0,
                 }
-            
+
             # Analyze with GPT-5 Vision using module-specific prompt
             analysis_result = await self._analyze_image_with_vision(
                 image_data=image_data,
@@ -108,57 +113,57 @@ class VisionAnalyzer:
                 module_type=module_type,
                 user_query=user_query,
                 additional_context=additional_context,
-                image_metadata=image_metadata
+                image_metadata=image_metadata,
             )
-            
+
             logger.info(f" Vision analysis completed for {module_type}")
-            
+
             return analysis_result
-            
+
         except Exception as e:
             logger.error(f" Vision analysis failed: {e}")
             return {
                 "visual_analysis": f"Vision analysis failed: {str(e)}",
                 "features_identified": [],
                 "imagery_metadata": {},
-                "confidence": 0.0
+                "confidence": 0.0,
             }
-    
+
     async def _fetch_satellite_image(
-        self,
-        bbox: List[float],
-        center_lat: float,
-        center_lon: float
+        self, bbox: List[float], center_lat: float, center_lon: float
     ) -> tuple[Optional[bytes], Dict[str, Any]]:
         """
         Fetch RGB satellite imagery from Sentinel-2 via Planetary Computer.
         Includes caching to avoid re-fetching the same imagery.
-        
+
         Returns:
             Tuple of (image_bytes, metadata_dict)
         """
         try:
             # OPTIMIZATION: Check cache first (rounded to 2 decimals for ~1km resolution)
             cache_key = (round(center_lat, 2), round(center_lon, 2))
-            
+
             if cache_key in self._imagery_cache:
-                cached_data, cached_metadata, cached_time = self._imagery_cache[cache_key]
+                cached_data, cached_metadata, cached_time = self._imagery_cache[
+                    cache_key
+                ]
                 age = (datetime.now() - cached_time).total_seconds()
-                
+
                 if age < self._cache_ttl:
                     logger.info(f" Using cached imagery (age: {int(age)}s)")
                     return cached_data, cached_metadata
                 else:
-                    logger.info(f"[TIME] Cache expired (age: {int(age)}s), fetching fresh imagery")
+                    logger.info(
+                        f"[TIME] Cache expired (age: {int(age)}s), fetching fresh imagery"
+                    )
                     del self._imagery_cache[cache_key]
-            
+
             logger.info(" Fetching Sentinel-2 imagery...")
-            
+
             catalog = Client.open(
-                self.stac_endpoint,
-                modifier=planetary_computer.sign_inplace
+                self.stac_endpoint, modifier=planetary_computer.sign_inplace
             )
-            
+
             # Search for recent imagery with minimal cloud cover
             # OPTIMIZATION: Reduced search window from 60 to 30 days for faster queries
             # OPTIMIZATION: Limit to top 20 items to avoid processing hundreds of tiles
@@ -167,11 +172,11 @@ class VisionAnalyzer:
                 bbox=bbox,
                 datetime=f"{(datetime.now() - timedelta(days=30)).isoformat()}Z/{datetime.now().isoformat()}Z",
                 query={"eo:cloud_cover": {"lt": 20}},
-                limit=20  # Limit search results for faster response
+                limit=20,  # Limit search results for faster response
             )
-            
+
             items = list(search.items())
-            
+
             if not items:
                 logger.warning(" No recent Sentinel-2 imagery found in 30-day window")
                 # Try fallback with 60-day window and relaxed cloud cover
@@ -181,64 +186,83 @@ class VisionAnalyzer:
                     bbox=bbox,
                     datetime=f"{(datetime.now() - timedelta(days=60)).isoformat()}Z/{datetime.now().isoformat()}Z",
                     query={"eo:cloud_cover": {"lt": 30}},
-                    limit=10  # Even stricter limit for fallback
+                    limit=10,  # Even stricter limit for fallback
                 )
                 items = list(search.items())
-                
+
                 if not items:
-                    logger.error(" No Sentinel-2 imagery found even with relaxed criteria")
+                    logger.error(
+                        " No Sentinel-2 imagery found even with relaxed criteria"
+                    )
                     return None, {}
-            
+
             # Get most recent item
             item = sorted(items, key=lambda x: x.datetime, reverse=True)[0]
-            
+
             logger.info(f" Found imagery from {item.datetime}")
-            logger.info(f"   Cloud cover: {item.properties.get('eo:cloud_cover', 'unknown')}%")
-            
+            logger.info(
+                f"   Cloud cover: {item.properties.get('eo:cloud_cover', 'unknown')}%"
+            )
+
             # Get RGB composite tile (512x512 pixels)
             tile_url = f"https://planetarycomputer.microsoft.com/api/data/v1/item/preview.png?collection=sentinel-2-l2a&item={item.id}&assets=visual&width=512&height=512"
             signed_tile_url = planetary_computer.sign_url(tile_url)
-            
+
             # Fetch the image with timeout
-            logger.info(f"⬇ Downloading imagery tile...")
+            logger.info("⬇ Downloading imagery tile...")
             async with aiohttp.ClientSession() as session:
                 # OPTIMIZATION: 45-second timeout for image download (was unlimited)
-                async with session.get(signed_tile_url, timeout=aiohttp.ClientTimeout(total=45)) as response:
+                async with session.get(
+                    signed_tile_url, timeout=aiohttp.ClientTimeout(total=45)
+                ) as response:
                     if response.status == 200:
                         image_bytes = await response.read()
-                        
+
                         metadata = {
                             "source": "Sentinel-2 L2A",
                             "date": item.datetime.isoformat(),
-                            "cloud_cover": item.properties.get('eo:cloud_cover', 'unknown'),
+                            "cloud_cover": item.properties.get(
+                                "eo:cloud_cover", "unknown"
+                            ),
                             "item_id": item.id,
-                            "resolution": "10m RGB"
+                            "resolution": "10m RGB",
                         }
-                        
-                        logger.info(f" Successfully fetched {len(image_bytes)} bytes of imagery")
-                        
+
+                        logger.info(
+                            f" Successfully fetched {len(image_bytes)} bytes of imagery"
+                        )
+
                         # OPTIMIZATION: Cache the imagery for future requests
                         cache_key = (round(center_lat, 2), round(center_lon, 2))
-                        self._imagery_cache[cache_key] = (image_bytes, metadata, datetime.now())
-                        
+                        self._imagery_cache[cache_key] = (
+                            image_bytes,
+                            metadata,
+                            datetime.now(),
+                        )
+
                         # OPTIMIZATION: Limit cache size to prevent memory issues (keep 50 most recent)
                         if len(self._imagery_cache) > 50:
-                            oldest_key = min(self._imagery_cache.keys(), 
-                                            key=lambda k: self._imagery_cache[k][2])
+                            oldest_key = min(
+                                self._imagery_cache.keys(),
+                                key=lambda k: self._imagery_cache[k][2],
+                            )
                             del self._imagery_cache[oldest_key]
-                            logger.debug(f" Cache evicted oldest entry (cache size: {len(self._imagery_cache)})")
-                        
+                            logger.debug(
+                                f" Cache evicted oldest entry (cache size: {len(self._imagery_cache)})"
+                            )
+
                         return image_bytes, metadata
                     else:
                         logger.error(f" Failed to fetch tile: HTTP {response.status}")
                         return None, {}
-            
+
         except Exception as e:
             logger.error(f"Error fetching satellite image: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             return None, {}
-    
+
     async def _analyze_image_with_vision(
         self,
         image_data: bytes,
@@ -248,23 +272,25 @@ class VisionAnalyzer:
         module_type: ModuleType,
         user_query: Optional[str],
         additional_context: Optional[Dict[str, Any]],
-        image_metadata: Dict[str, Any]
+        image_metadata: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Analyze satellite image using GPT-5 Vision with module-specific prompts.
         """
         import time
-        
+
         try:
             logger.info(f" Analyzing image with GPT-5 Vision for {module_type}...")
-            
+
             # Encode image to base64
             logger.info(" Encoding image to base64...")
             start_encode = time.time()
-            base64_image = base64.b64encode(image_data).decode('utf-8')
+            base64_image = base64.b64encode(image_data).decode("utf-8")
             encode_time = time.time() - start_encode
-            logger.info(f" Image encoded in {encode_time:.2f}s ({len(base64_image)} chars)")
-            
+            logger.info(
+                f" Image encoded in {encode_time:.2f}s ({len(base64_image)} chars)"
+            )
+
             # Build module-specific prompts
             logger.info(" Building prompts...")
             start_prompt = time.time()
@@ -275,11 +301,11 @@ class VisionAnalyzer:
                 radius_miles=radius_miles,
                 user_query=user_query,
                 additional_context=additional_context,
-                image_metadata=image_metadata
+                image_metadata=image_metadata,
             )
             prompt_time = time.time() - start_prompt
             logger.info(f" Prompts built in {prompt_time:.2f}s")
-            
+
             # Call GPT-5 Vision
             logger.info(" Calling GPT-5 Vision API (this may take 30-120 seconds)...")
             start_api = time.time()
@@ -295,27 +321,29 @@ class VisionAnalyzer:
                                 "type": "image_url",
                                 "image_url": {
                                     "url": f"data:image/png;base64,{base64_image}"
-                                }
-                            }
-                        ]
-                    }
+                                },
+                            },
+                        ],
+                    },
                 ],
                 max_completion_tokens=1500,
-                temperature=1.0  # GPT-5 requires default temperature=1.0
+                temperature=1.0,  # GPT-5 requires default temperature=1.0
             )
             api_time = time.time() - start_api
             logger.info(f" GPT-5 Vision API completed in {api_time:.2f}s")
-            
+
             analysis_text = response.choices[0].message.content
-            
+
             # Extract features based on module type
             features_identified = self._extract_features(analysis_text, module_type)
-            
+
             total_time = encode_time + prompt_time + api_time
             logger.info(f" GPT-5 analysis completed ({len(analysis_text)} characters)")
             logger.info(f"   Features identified: {', '.join(features_identified[:5])}")
-            logger.info(f"[TIME]  Total time: {total_time:.2f}s (encode: {encode_time:.1f}s, prompt: {prompt_time:.1f}s, API: {api_time:.1f}s)")
-            
+            logger.info(
+                f"[TIME]  Total time: {total_time:.2f}s (encode: {encode_time:.1f}s, prompt: {prompt_time:.1f}s, API: {api_time:.1f}s)"
+            )
+
             return {
                 "visual_analysis": analysis_text,
                 "features_identified": features_identified,
@@ -324,16 +352,17 @@ class VisionAnalyzer:
                 "location": {
                     "latitude": latitude,
                     "longitude": longitude,
-                    "radius_miles": radius_miles
-                }
+                    "radius_miles": radius_miles,
+                },
             }
-            
+
         except Exception as e:
             logger.error(f"Error analyzing image with GPT-5: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             raise
-    
+
     def _build_prompts(
         self,
         module_type: ModuleType,
@@ -342,15 +371,15 @@ class VisionAnalyzer:
         radius_miles: float,
         user_query: Optional[str],
         additional_context: Optional[Dict[str, Any]],
-        image_metadata: Dict[str, Any]
+        image_metadata: Dict[str, Any],
     ) -> tuple[str, str]:
         """
         Build module-specific system and user prompts for GPT-5 Vision.
-        
+
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
-        
+
         # Base image description
         base_context = f"""Analyze this satellite image centered at coordinates ({latitude}, {longitude}) covering approximately {radius_miles} miles radius.
 
@@ -359,7 +388,7 @@ Image metadata:
 - Date: {image_metadata.get('date', 'Unknown')}
 - Resolution: {image_metadata.get('resolution', 'Unknown')}
 """
-        
+
         if module_type == "terrain":
             system_prompt = """You are a geospatial intelligence analyst specializing in satellite imagery interpretation for terrain analysis. 
 
@@ -375,12 +404,12 @@ Focus on:
 - Any notable features or landmarks
 
 Provide a clear, structured analysis that would be useful for intelligence purposes."""
-            
+
             user_prompt = base_context
             if user_query:
                 user_prompt += f"\nUser's specific question: {user_query}"
             user_prompt += "\n\nProvide a detailed terrain analysis in a structured format with clear sections."
-        
+
         elif module_type == "mobility":
             system_prompt = """You are a military terrain analyst specializing in mobility and trafficability assessment from satellite imagery.
 
@@ -397,9 +426,9 @@ Focus on:
 - Mobility corridors (clear paths for vehicle movement)
 
 Provide a tactical assessment focused on GO / SLOW-GO / NO-GO areas based on visual analysis."""
-            
+
             user_prompt = base_context
-            
+
             # Add context from algorithmic analysis if available
             if additional_context:
                 user_prompt += "\n\nAlgorithmic terrain data analysis results:\n"
@@ -411,12 +440,12 @@ Provide a tactical assessment focused on GO / SLOW-GO / NO-GO areas based on vis
                     user_prompt += "- Dense vegetation detected via NDVI analysis\n"
                 if additional_context.get("active_fires"):
                     user_prompt += "- Active fires detected in the area\n"
-            
+
             if user_query:
                 user_prompt += f"\nUser's specific question: {user_query}"
-            
+
             user_prompt += "\n\nProvide a mobility assessment focusing on vehicle trafficability and movement corridors."
-        
+
         elif module_type == "building_damage":
             system_prompt = """You are a damage assessment analyst specializing in building and infrastructure damage evaluation from satellite imagery.
 
@@ -433,80 +462,137 @@ Focus on:
 - Damage severity levels (No damage, Minor, Major, Destroyed)
 
 Provide a structured damage assessment with specific observations about building conditions."""
-            
+
             user_prompt = base_context
-            
+
             # Add context from CNN analysis if available (future)
             if additional_context and additional_context.get("cnn_analysis"):
                 user_prompt += "\n\nAutomated damage detection results:\n"
                 user_prompt += f"- {additional_context.get('cnn_analysis', '')}\n"
-            
+
             if user_query:
                 user_prompt += f"\nUser's specific question: {user_query}"
-            
+
             user_prompt += "\n\nProvide a building damage assessment with severity classifications and specific observations."
-        
+
         else:
             # Generic fallback
             system_prompt = "You are a satellite imagery analyst. Analyze the provided image and describe what you observe."
             user_prompt = base_context
-        
+
         return system_prompt, user_prompt
-    
-    def _extract_features(self, analysis_text: str, module_type: ModuleType) -> List[str]:
+
+    def _extract_features(
+        self, analysis_text: str, module_type: ModuleType
+    ) -> List[str]:
         """
         Extract key features mentioned in the analysis based on module type.
         """
         features = []
         text_lower = analysis_text.lower()
-        
+
         # Module-specific keywords
         if module_type == "terrain":
             keywords = [
-                "water", "river", "lake", "pond", "ocean", "sea", "stream",
-                "forest", "trees", "vegetation", "grassland", "agriculture",
-                "road", "highway", "building", "urban", "city", "town",
-                "mountain", "hill", "valley", "plain", "terrain",
-                "bridge", "infrastructure", "development", "residential",
-                "commercial", "industrial", "wetland", "marsh", "coastal"
+                "water",
+                "river",
+                "lake",
+                "pond",
+                "ocean",
+                "sea",
+                "stream",
+                "forest",
+                "trees",
+                "vegetation",
+                "grassland",
+                "agriculture",
+                "road",
+                "highway",
+                "building",
+                "urban",
+                "city",
+                "town",
+                "mountain",
+                "hill",
+                "valley",
+                "plain",
+                "terrain",
+                "bridge",
+                "infrastructure",
+                "development",
+                "residential",
+                "commercial",
+                "industrial",
+                "wetland",
+                "marsh",
+                "coastal",
             ]
-        
+
         elif module_type == "mobility":
             keywords = [
-                "water obstacle", "river", "lake", "wetland",
-                "dense vegetation", "forest", "jungle",
-                "road network", "highway", "path", "trail",
-                "urban area", "buildings", "city",
-                "open terrain", "flat area", "cleared area",
-                "steep slope", "hill", "mountain",
-                "mobility corridor", "movement route",
-                "barrier", "obstacle", "impassable"
+                "water obstacle",
+                "river",
+                "lake",
+                "wetland",
+                "dense vegetation",
+                "forest",
+                "jungle",
+                "road network",
+                "highway",
+                "path",
+                "trail",
+                "urban area",
+                "buildings",
+                "city",
+                "open terrain",
+                "flat area",
+                "cleared area",
+                "steep slope",
+                "hill",
+                "mountain",
+                "mobility corridor",
+                "movement route",
+                "barrier",
+                "obstacle",
+                "impassable",
             ]
-        
+
         elif module_type == "building_damage":
             keywords = [
-                "damaged building", "collapsed structure", "intact building",
-                "debris", "rubble", "destruction",
-                "fire damage", "burn scar", "charred",
-                "flood damage", "water damage",
-                "roof damage", "structural damage",
-                "minor damage", "major damage", "destroyed",
-                "displacement", "foundation damage"
+                "damaged building",
+                "collapsed structure",
+                "intact building",
+                "debris",
+                "rubble",
+                "destruction",
+                "fire damage",
+                "burn scar",
+                "charred",
+                "flood damage",
+                "water damage",
+                "roof damage",
+                "structural damage",
+                "minor damage",
+                "major damage",
+                "destroyed",
+                "displacement",
+                "foundation damage",
             ]
-        
+
         else:
             keywords = []
-        
+
         # Extract matching features
         for keyword in keywords:
             if keyword in text_lower:
                 features.append(keyword.title())
-        
+
         return list(set(features))  # Remove duplicates
 
 
 # Singleton instance for reuse
 _vision_analyzer_instance = None
+
 
 def get_vision_analyzer() -> VisionAnalyzer:
     """

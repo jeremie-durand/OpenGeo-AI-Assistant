@@ -21,7 +21,7 @@ import os
 import sys
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 try:
@@ -33,6 +33,7 @@ except ImportError:
 try:
     from rich.console import Console
     from rich.table import Table
+
     console = Console()
     HAS_RICH = True
 except ImportError:
@@ -42,38 +43,45 @@ except ImportError:
 TEST_LOCATIONS = {
     "greece_coastal": {
         "name": "Thebes, Greece (original NDVI failure)",
-        "lat": 38.3332, "lng": 23.6599,
-        "notes": "HLS NDVI was cloud-masked here"
+        "lat": 38.3332,
+        "lng": 23.6599,
+        "notes": "HLS NDVI was cloud-masked here",
     },
     "dc_urban": {
         "name": "Washington DC (urban)",
-        "lat": 38.8977, "lng": -77.0365,
-        "notes": "Dense urban area, good for building damage"
+        "lat": 38.8977,
+        "lng": -77.0365,
+        "notes": "Dense urban area, good for building damage",
     },
     "amazon_forest": {
         "name": "Amazon (dense vegetation)",
-        "lat": -3.4653, "lng": -62.2159,
-        "notes": "Dense canopy, good for NDVI/vegetation"
+        "lat": -3.4653,
+        "lng": -62.2159,
+        "notes": "Dense canopy, good for NDVI/vegetation",
     },
     "sahara_desert": {
         "name": "Sahara Desert (arid)",
-        "lat": 25.0, "lng": 10.0,
-        "notes": "Low vegetation, clear skies, good for terrain"
+        "lat": 25.0,
+        "lng": 10.0,
+        "notes": "Low vegetation, clear skies, good for terrain",
     },
     "equator_prime_meridian": {
         "name": "Gulf of Guinea (lat=0, lng=0)",
-        "lat": 0.0, "lng": 0.0,
-        "notes": "Edge case: tests truthiness bugs with zero coords"
+        "lat": 0.0,
+        "lng": 0.0,
+        "notes": "Edge case: tests truthiness bugs with zero coords",
     },
     "alps_mountain": {
         "name": "Swiss Alps (elevation)",
-        "lat": 46.5588, "lng": 7.9800,
-        "notes": "High elevation, good for terrain/mobility"
+        "lat": 46.5588,
+        "lng": 7.9800,
+        "notes": "High elevation, good for terrain/mobility",
     },
     "new_orleans_coastal": {
         "name": "New Orleans (flood risk)",
-        "lat": 29.9511, "lng": -90.0715,
-        "notes": "Low elevation, near water — good for extreme weather"
+        "lat": 29.9511,
+        "lng": -90.0715,
+        "notes": "Low elevation, near water — good for extreme weather",
     },
 }
 
@@ -119,34 +127,69 @@ async def test_endpoint(
             preview = str(result_text)[:120].replace("\n", " ")
 
             # Check for known failure patterns
-            if any(err in str(result_text).lower() for err in [
-                "no stac items", "no data loaded", "sampling returned no values",
-                "pixel masked", "no valid data"
-            ]):
-                return TestResult(module, location_name, "WARN", resp.status_code,
-                                  preview, duration, "Response indicates no data at pin")
-            return TestResult(module, location_name, "PASS", resp.status_code,
-                              preview, duration)
+            if any(
+                err in str(result_text).lower()
+                for err in [
+                    "no stac items",
+                    "no data loaded",
+                    "sampling returned no values",
+                    "pixel masked",
+                    "no valid data",
+                ]
+            ):
+                return TestResult(
+                    module,
+                    location_name,
+                    "WARN",
+                    resp.status_code,
+                    preview,
+                    duration,
+                    "Response indicates no data at pin",
+                )
+            return TestResult(
+                module, location_name, "PASS", resp.status_code, preview, duration
+            )
         elif resp.status_code == 400:
             detail = resp.json().get("detail", resp.text[:100])
-            return TestResult(module, location_name, "FAIL", resp.status_code,
-                              "", (time.monotonic() - start) * 1000,
-                              f"400: {detail}")
+            return TestResult(
+                module,
+                location_name,
+                "FAIL",
+                resp.status_code,
+                "",
+                (time.monotonic() - start) * 1000,
+                f"400: {detail}",
+            )
         else:
-            return TestResult(module, location_name, "FAIL", resp.status_code,
-                              "", (time.monotonic() - start) * 1000,
-                              f"HTTP {resp.status_code}: {resp.text[:100]}")
+            return TestResult(
+                module,
+                location_name,
+                "FAIL",
+                resp.status_code,
+                "",
+                (time.monotonic() - start) * 1000,
+                f"HTTP {resp.status_code}: {resp.text[:100]}",
+            )
 
     except httpx.TimeoutException:
         duration = (time.monotonic() - start) * 1000
-        return TestResult(module, location_name, "WARN", None, "", duration,
-                          f"Timeout after {timeout}s (not necessarily a bug)")
+        return TestResult(
+            module,
+            location_name,
+            "WARN",
+            None,
+            "",
+            duration,
+            f"Timeout after {timeout}s (not necessarily a bug)",
+        )
     except Exception as e:
         duration = (time.monotonic() - start) * 1000
         return TestResult(module, location_name, "FAIL", None, "", duration, str(e))
 
 
-async def run_tests(backend_url: str, locations: list[str], modules: list[str], auth_token: str = ""):
+async def run_tests(
+    backend_url: str, locations: list[str], modules: list[str], auth_token: str = ""
+):
     """Run pin-drop tests across all modules and locations."""
     results: list[TestResult] = []
     headers = {"Content-Type": "application/json"}
@@ -178,7 +221,9 @@ async def run_tests(backend_url: str, locations: list[str], modules: list[str], 
 
                 if module == "terrain":
                     result = await test_endpoint(
-                        client, module, "/api/geoint/terrain/chat",
+                        client,
+                        module,
+                        "/api/geoint/terrain/chat",
                         {
                             "session_id": session_id,
                             "message": "What is the elevation and slope at this location?",
@@ -191,7 +236,9 @@ async def run_tests(backend_url: str, locations: list[str], modules: list[str], 
 
                 elif module == "vision":
                     result = await test_endpoint(
-                        client, module, "/api/geoint/vision/chat",
+                        client,
+                        module,
+                        "/api/geoint/vision/chat",
                         {
                             "session_id": session_id,
                             "message": "What is the NDVI value at this pin location?",
@@ -208,7 +255,9 @@ async def run_tests(backend_url: str, locations: list[str], modules: list[str], 
                 elif module == "mobility":
                     # Single-point mobility assessment
                     result = await test_endpoint(
-                        client, module, "/api/geoint/mobility",
+                        client,
+                        module,
+                        "/api/geoint/mobility",
                         {
                             "latitude": lat,
                             "longitude": lng,
@@ -219,7 +268,9 @@ async def run_tests(backend_url: str, locations: list[str], modules: list[str], 
 
                 elif module == "building_damage":
                     result = await test_endpoint(
-                        client, module, "/api/geoint/building-damage",
+                        client,
+                        module,
+                        "/api/geoint/building-damage",
                         {
                             "latitude": lat,
                             "longitude": lng,
@@ -230,7 +281,9 @@ async def run_tests(backend_url: str, locations: list[str], modules: list[str], 
 
                 elif module == "extreme_weather":
                     result = await test_endpoint(
-                        client, module, "/api/geoint/extreme-weather",
+                        client,
+                        module,
+                        "/api/geoint/extreme-weather",
                         {
                             "session_id": session_id,
                             "message": "What are the climate projections for temperature at this location?",
@@ -242,7 +295,9 @@ async def run_tests(backend_url: str, locations: list[str], modules: list[str], 
 
                 elif module == "comparison":
                     result = await test_endpoint(
-                        client, module, "/api/geoint/comparison",
+                        client,
+                        module,
+                        "/api/geoint/comparison",
                         {
                             "session_id": session_id,
                             "user_query": f"Compare vegetation change at coordinates ({lat}, {lng}) between January 2024 and January 2025",
@@ -253,13 +308,26 @@ async def run_tests(backend_url: str, locations: list[str], modules: list[str], 
                     )
 
                 else:
-                    result = TestResult(module, loc["name"], "SKIP", error=f"Unknown module: {module}")
+                    result = TestResult(
+                        module, loc["name"], "SKIP", error=f"Unknown module: {module}"
+                    )
 
                 results.append(result)
-                status_icon = {"PASS": "OK", "FAIL": "FAIL", "WARN": "WARN", "SKIP": "SKIP"}[result.status]
-                duration_str = f"{result.duration_ms:.0f}ms" if result.duration_ms else ""
+                status_icon = {
+                    "PASS": "OK",
+                    "FAIL": "FAIL",
+                    "WARN": "WARN",
+                    "SKIP": "SKIP",
+                }[result.status]
+                duration_str = (
+                    f"{result.duration_ms:.0f}ms" if result.duration_ms else ""
+                )
                 error_str = f" - {result.error}" if result.error else ""
-                preview_str = f" - {result.response_preview[:60]}" if result.response_preview else ""
+                preview_str = (
+                    f" - {result.response_preview[:60]}"
+                    if result.response_preview
+                    else ""
+                )
                 print(f"[{status_icon}] {duration_str}{error_str}{preview_str}")
 
     return results
@@ -281,7 +349,12 @@ def print_summary(results: list[TestResult]):
         table.add_column("Notes", style="dim", max_width=40)
 
         for r in results:
-            status_style = {"PASS": "green", "FAIL": "red", "WARN": "yellow", "SKIP": "dim"}.get(r.status, "white")
+            status_style = {
+                "PASS": "green",
+                "FAIL": "red",
+                "WARN": "yellow",
+                "SKIP": "dim",
+            }.get(r.status, "white")
             notes = r.error or r.response_preview[:40]
             table.add_row(
                 r.module,
@@ -295,7 +368,9 @@ def print_summary(results: list[TestResult]):
     else:
         for r in results:
             notes = r.error or r.response_preview[:50]
-            print(f"  {r.status:4s} | {r.module:18s} | {r.location:25s} | {r.http_status or '':3} | {r.duration_ms:7.0f}ms | {notes}")
+            print(
+                f"  {r.status:4s} | {r.module:18s} | {r.location:25s} | {r.http_status or '':3} | {r.duration_ms:7.0f}ms | {notes}"
+            )
 
     # Totals
     pass_count = sum(1 for r in results if r.status == "PASS")
@@ -304,7 +379,9 @@ def print_summary(results: list[TestResult]):
     skip_count = sum(1 for r in results if r.status == "SKIP")
     total = len(results)
 
-    print(f"\nTotal: {total} | PASS: {pass_count} | WARN: {warn_count} | FAIL: {fail_count} | SKIP: {skip_count}")
+    print(
+        f"\nTotal: {total} | PASS: {pass_count} | WARN: {warn_count} | FAIL: {fail_count} | SKIP: {skip_count}"
+    )
 
     if fail_count > 0:
         print("\nFAILURES:")
@@ -316,27 +393,53 @@ def print_summary(results: list[TestResult]):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Test GEOINT pin-drop sampling across all modules")
+    parser = argparse.ArgumentParser(
+        description="Test GEOINT pin-drop sampling across all modules"
+    )
     parser.add_argument("--backend", default=DEFAULT_BACKEND, help="Backend URL")
-    parser.add_argument("--token", default="", help="Bearer token for auth (from /.auth/me id_token)")
     parser.add_argument(
-        "--locations", nargs="*",
+        "--token", default="", help="Bearer token for auth (from /.auth/me id_token)"
+    )
+    parser.add_argument(
+        "--locations",
+        nargs="*",
         default=["dc_urban", "equator_prime_meridian"],
         choices=list(TEST_LOCATIONS.keys()),
-        help="Locations to test (default: dc_urban + equator edge case)"
+        help="Locations to test (default: dc_urban + equator edge case)",
     )
     parser.add_argument(
-        "--modules", nargs="*",
+        "--modules",
+        nargs="*",
         default=["terrain", "vision", "extreme_weather"],
-        choices=["terrain", "vision", "mobility", "building_damage", "extreme_weather", "comparison"],
-        help="Modules to test (default: terrain, vision, extreme_weather)"
+        choices=[
+            "terrain",
+            "vision",
+            "mobility",
+            "building_damage",
+            "extreme_weather",
+            "comparison",
+        ],
+        help="Modules to test (default: terrain, vision, extreme_weather)",
     )
-    parser.add_argument("--all-locations", action="store_true", help="Test ALL locations")
+    parser.add_argument(
+        "--all-locations", action="store_true", help="Test ALL locations"
+    )
     parser.add_argument("--all-modules", action="store_true", help="Test ALL modules")
     args = parser.parse_args()
 
     locations = list(TEST_LOCATIONS.keys()) if args.all_locations else args.locations
-    modules = ["terrain", "vision", "mobility", "building_damage", "extreme_weather", "comparison"] if args.all_modules else args.modules
+    modules = (
+        [
+            "terrain",
+            "vision",
+            "mobility",
+            "building_damage",
+            "extreme_weather",
+            "comparison",
+        ]
+        if args.all_modules
+        else args.modules
+    )
 
     print(f"Backend: {args.backend}")
     print(f"Locations: {', '.join(locations)}")

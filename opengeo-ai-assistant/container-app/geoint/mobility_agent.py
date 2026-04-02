@@ -10,11 +10,11 @@ This agent:
 4. Synthesizes results into coherent mobility assessments
 """
 
+import json
 import logging
 import os
-import json
-from typing import Dict, Any, Optional, List
 from datetime import datetime
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,9 @@ Keep responses concise with real data values from tools.
 class MobilityAgentSession:
     """Represents a conversation session with the mobility agent."""
 
-    def __init__(self, session_id: str, latitude: float, longitude: float, thread_id: str):
+    def __init__(
+        self, session_id: str, latitude: float, longitude: float, thread_id: str
+    ):
         self.session_id = session_id
         self.latitude = latitude
         self.longitude = longitude
@@ -125,6 +127,7 @@ class GeointMobilityAgent:
             return
 
         import asyncio as _aio
+
         max_attempts = 3
         for attempt in range(max_attempts):
             try:
@@ -132,11 +135,15 @@ class GeointMobilityAgent:
                 return
             except Exception as e:
                 if attempt < max_attempts - 1:
-                    wait = 2 ** attempt
-                    logger.warning(f"GeointMobilityAgent init attempt {attempt + 1} failed: {e} — retrying in {wait}s")
+                    wait = 2**attempt
+                    logger.warning(
+                        f"GeointMobilityAgent init attempt {attempt + 1} failed: {e} — retrying in {wait}s"
+                    )
                     await _aio.sleep(wait)
                 else:
-                    logger.error(f"GeointMobilityAgent init failed after {max_attempts} attempts: {e}")
+                    logger.error(
+                        f"GeointMobilityAgent init failed after {max_attempts} attempts: {e}"
+                    )
                     raise
 
     async def _do_initialize(self):
@@ -148,9 +155,11 @@ class GeointMobilityAgent:
         logger.info(f"GeointMobilityAgent using model: {model}")
 
         from semantic_translator import get_llm_client
+
         self._agents_client = get_llm_client(model=model, vision=True)
 
         from geoint.mobility_tools import create_mobility_functions
+
         mobility_functions = create_mobility_functions()
         self._agents_client.register_tools(mobility_functions)
 
@@ -162,9 +171,13 @@ class GeointMobilityAgent:
         )
         self._agent_id = agent.id
         self._initialized = True
-        logger.info(f"GeointMobilityAgent initialized: agent_id={agent.id}, model={model}")
+        logger.info(
+            f"GeointMobilityAgent initialized: agent_id={agent.id}, model={model}"
+        )
 
-    async def _get_or_create_session(self, session_id: str, latitude: float, longitude: float) -> MobilityAgentSession:
+    async def _get_or_create_session(
+        self, session_id: str, latitude: float, longitude: float
+    ) -> MobilityAgentSession:
         """Get existing session or create a new one with a new thread."""
         if session_id in self.sessions:
             session = self.sessions[session_id]
@@ -174,21 +187,26 @@ class GeointMobilityAgent:
         thread = await self._agents_client.threads.create()
         session = MobilityAgentSession(session_id, latitude, longitude, thread.id)
         self.sessions[session_id] = session
-        logger.info(f"Created new mobility session: {session_id} -> thread: {thread.id}")
+        logger.info(
+            f"Created new mobility session: {session_id} -> thread: {thread.id}"
+        )
         return session
 
     def cleanup_old_sessions(self, max_age_minutes: int = 60):
         now = datetime.utcnow()
         expired = [
-            sid for sid, s in self.sessions.items()
+            sid
+            for sid, s in self.sessions.items()
             if (now - s.last_activity).total_seconds() > max_age_minutes * 60
         ]
         for sid in expired:
             del self.sessions[sid]
 
-    async def _analyze_screenshot_direct(self, screenshot_base64: str, latitude: float, longitude: float) -> Optional[str]:
+    async def _analyze_screenshot_direct(
+        self, screenshot_base64: str, latitude: float, longitude: float
+    ) -> Optional[str]:
         """Analyze a screenshot using GPT-5 Vision — infrastructure detection only.
-        
+
         With raster data now covering terrain, water, fire, vegetation, land cover,
         elevation, and weather, vision is used ONLY to detect man-made infrastructure
         (roads, bridges, buildings, airstrips) that raster data cannot identify.
@@ -196,26 +214,38 @@ class GeointMobilityAgent:
         """
         try:
             from semantic_translator import get_llm_client
+
             client = get_llm_client(model=os.getenv("LLM_MODEL", "gpt-5"), vision=True)
             clean_base64 = screenshot_base64
-            if screenshot_base64.startswith('data:image'):
-                clean_base64 = screenshot_base64.split(',', 1)[1]
+            if screenshot_base64.startswith("data:image"):
+                clean_base64 = screenshot_base64.split(",", 1)[1]
             vision_prompt = {
                 "system": "You identify infrastructure in satellite imagery. Respond in JSON only.",
                 "user": [
-                    {"type": "text", "text": (
-                        f"Location: ({latitude:.4f}, {longitude:.4f}). "
-                        "List visible man-made infrastructure ONLY: roads, bridges, buildings, "
-                        "airstrips, rail lines, dams. Respond as JSON: "
-                        '{"roads": bool, "bridges": bool, "buildings": bool, '
-                        '"airstrips": bool, "other_infrastructure": ["..."], '
-                        '"summary": "one sentence"}'
-                    )},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{clean_base64}", "detail": "low"}}
-                ]
+                    {
+                        "type": "text",
+                        "text": (
+                            f"Location: ({latitude:.4f}, {longitude:.4f}). "
+                            "List visible man-made infrastructure ONLY: roads, bridges, buildings, "
+                            "airstrips, rail lines, dams. Respond as JSON: "
+                            '{"roads": bool, "bridges": bool, "buildings": bool, '
+                            '"airstrips": bool, "other_infrastructure": ["..."], '
+                            '"summary": "one sentence"}'
+                        ),
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{clean_base64}",
+                            "detail": "low",
+                        },
+                    },
+                ],
             }
             analysis = await client.vision_analyze(prompt=vision_prompt, max_tokens=300)
-            logger.info(f"Mobility vision (infrastructure) complete: {len(analysis)} chars")
+            logger.info(
+                f"Mobility vision (infrastructure) complete: {len(analysis)} chars"
+            )
             return analysis
         except Exception as e:
             logger.error(f"Vision analysis failed: {e}")
@@ -237,6 +267,7 @@ class GeointMobilityAgent:
         Drop-in replacement for the old analyze_mobility interface.
         """
         import uuid
+
         await self._ensure_initialized()
 
         if not session_id:
@@ -246,6 +277,7 @@ class GeointMobilityAgent:
 
         # ── Run reverse geocode + vision IN PARALLEL to cut ~10-15s ──
         import asyncio
+
         from semantic_translator import geocoding_plugin
 
         async def _reverse_geocode(lat: float, lon: float) -> str:
@@ -266,12 +298,18 @@ class GeointMobilityAgent:
 
         async def _vision_analysis() -> Optional[str]:
             """Run vision analysis with timeout gate."""
-            if not (include_vision_analysis and screenshot_base64 and len(screenshot_base64) > 5000):
+            if not (
+                include_vision_analysis
+                and screenshot_base64
+                and len(screenshot_base64) > 5000
+            ):
                 return None
             try:
                 result = await asyncio.wait_for(
-                    self._analyze_screenshot_direct(screenshot_base64, latitude, longitude),
-                    timeout=15.0  # Hard cap — don't waste >15s on vision
+                    self._analyze_screenshot_direct(
+                        screenshot_base64, latitude, longitude
+                    ),
+                    timeout=15.0,  # Hard cap — don't waste >15s on vision
                 )
                 if result and len(result.strip()) > 0:
                     return result
@@ -290,10 +328,21 @@ class GeointMobilityAgent:
 
         # Execute all in parallel — saves 5-15s vs sequential
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        location_name = results[0] if isinstance(results[0], str) else f"Location ({latitude:.4f}, {longitude:.4f})"
+        location_name = (
+            results[0]
+            if isinstance(results[0], str)
+            else f"Location ({latitude:.4f}, {longitude:.4f})"
+        )
         visual_analysis = results[1] if isinstance(results[1], str) else None
-        location_name_b = (results[2] if len(results) > 2 and isinstance(results[2], str)
-                           else f"Location ({latitude_b:.4f}, {longitude_b:.4f})" if has_two_points else None)
+        location_name_b = (
+            results[2]
+            if len(results) > 2 and isinstance(results[2], str)
+            else (
+                f"Location ({latitude_b:.4f}, {longitude_b:.4f})"
+                if has_two_points
+                else None
+            )
+        )
 
         # ── Build context message ──
         context_message = f"""[Location Context]
@@ -305,7 +354,7 @@ class GeointMobilityAgent:
 - Point B (Destination): {location_name_b} ({latitude_b:.6f}, {longitude_b:.6f})
 - Analysis mode: Two-point traverse (A -> B)"""
         else:
-            context_message += f"""
+            context_message += """
 - Analysis radius: 5 miles"""
 
         context_message += f"""
@@ -315,7 +364,7 @@ class GeointMobilityAgent:
             context_message += f"\n\n[Infrastructure Detection from Satellite Imagery]\n{visual_analysis}"
 
         query = user_context or (
-            f"Analyze terrain traversability from Point A to Point B. Provide a structured situation report with hazards, route assessment, and recommendations."
+            "Analyze terrain traversability from Point A to Point B. Provide a structured situation report with hazards, route assessment, and recommendations."
             if latitude_b is not None and longitude_b is not None
             else "Analyze terrain mobility at this location in all four directions. Provide a structured situation report with hazards, assessments, and recommendations."
         )
@@ -343,16 +392,25 @@ class GeointMobilityAgent:
                 f"Base your response ONLY on tool results."
             )
 
-        _retryable_patterns = ["404", "Resource not found", "invalid_engine_error",
-                               "Failed to resolve model", "InternalServerError",
-                               "Unable to get resource", "DeploymentNotFound", "server_error"]
+        _retryable_patterns = [
+            "404",
+            "Resource not found",
+            "invalid_engine_error",
+            "Failed to resolve model",
+            "InternalServerError",
+            "Unable to get resource",
+            "DeploymentNotFound",
+            "server_error",
+        ]
 
         max_retries = 3
         for attempt in range(max_retries):
             try:
                 # Re-create thread if we had to re-initialize (stale session)
                 if attempt > 0:
-                    session = await self._get_or_create_session(f"{session_id}_retry{attempt}", latitude, longitude)
+                    session = await self._get_or_create_session(
+                        f"{session_id}_retry{attempt}", latitude, longitude
+                    )
 
                 await self._agents_client.messages.create(
                     thread_id=session.thread_id,
@@ -371,7 +429,9 @@ class GeointMobilityAgent:
                     is_retryable = any(p in err_str for p in _retryable_patterns)
                     logger.error(f"Mobility agent run failed: {error_info}")
                     if is_retryable and attempt < max_retries - 1:
-                        logger.warning(f"Mobility run failed (retryable), attempt {attempt + 1}: {error_info}")
+                        logger.warning(
+                            f"Mobility run failed (retryable), attempt {attempt + 1}: {error_info}"
+                        )
                         self._initialized = False
                         self._agent_id = None
                         self._agents_client = None
@@ -382,7 +442,7 @@ class GeointMobilityAgent:
                         "agent": "geoint_mobility",
                         "response": f"Mobility analysis error: {error_info}",
                         "error": str(error_info),
-                        "session_id": session_id
+                        "session_id": session_id,
                     }
 
                 messages_iterable = self._agents_client.messages.list(
@@ -401,18 +461,25 @@ class GeointMobilityAgent:
 
                 try:
                     run_steps_iterable = self._agents_client.run_steps.list(
-                        thread_id=session.thread_id, run_id=run.id)
+                        thread_id=session.thread_id, run_id=run.id
+                    )
                     async for step in run_steps_iterable:
-                        if hasattr(step, 'step_details') and hasattr(step.step_details, 'tool_calls'):
+                        if hasattr(step, "step_details") and hasattr(
+                            step.step_details, "tool_calls"
+                        ):
                             for tc in step.step_details.tool_calls:
-                                if hasattr(tc, 'function'):
+                                if hasattr(tc, "function"):
                                     tool_calls.append({"tool": tc.function.name})
-                                    logger.info(f"Mobility agent called tool: {tc.function.name}")
+                                    logger.info(
+                                        f"Mobility agent called tool: {tc.function.name}"
+                                    )
                 except Exception as e:
                     logger.warning(f"Failed to retrieve run steps: {e}")
 
                 if not tool_calls:
-                    logger.warning("Mobility agent responded WITHOUT calling any tools — response may be generic knowledge")
+                    logger.warning(
+                        "Mobility agent responded WITHOUT calling any tools — response may be generic knowledge"
+                    )
 
                 session.message_count += 2
                 session.last_activity = datetime.utcnow()
@@ -424,17 +491,23 @@ class GeointMobilityAgent:
                     "tool_calls": tool_calls,
                     "session_id": session_id,
                     "location": {"latitude": latitude, "longitude": longitude},
-                    "destination": {"latitude": latitude_b, "longitude": longitude_b} if latitude_b is not None and longitude_b is not None else None,
+                    "destination": (
+                        {"latitude": latitude_b, "longitude": longitude_b}
+                        if latitude_b is not None and longitude_b is not None
+                        else None
+                    ),
                     "radius_miles": 5,
                     "timestamp": datetime.utcnow().isoformat(),
-                    "data_sources": [tc["tool"] for tc in tool_calls]
+                    "data_sources": [tc["tool"] for tc in tool_calls],
                 }
 
             except Exception as e:
                 error_str = str(e)
                 is_retryable = any(p in error_str for p in _retryable_patterns)
                 if is_retryable and attempt < max_retries - 1:
-                    logger.warning(f"Mobility agent error (retryable), re-initializing... (attempt {attempt + 1}): {e}")
+                    logger.warning(
+                        f"Mobility agent error (retryable), re-initializing... (attempt {attempt + 1}): {e}"
+                    )
                     self._initialized = False
                     self._agent_id = None
                     self._agents_client = None
@@ -443,33 +516,43 @@ class GeointMobilityAgent:
                         await self._ensure_initialized()
                         continue  # Retry with fresh agent
                     except Exception as reinit_err:
-                        logger.error(f"Mobility agent re-initialization failed: {reinit_err}")
+                        logger.error(
+                            f"Mobility agent re-initialization failed: {reinit_err}"
+                        )
                         return {
                             "agent": "geoint_mobility",
                             "response": f"Error: Agent service unavailable - {str(reinit_err)}",
                             "error": str(reinit_err),
-                            "session_id": session_id
+                            "session_id": session_id,
                         }
 
                 logger.error(f"Mobility agent error: {e}")
                 import traceback
+
                 logger.error(traceback.format_exc())
                 return {
                     "agent": "geoint_mobility",
                     "response": f"Mobility analysis error: {str(e)}",
                     "error": str(e),
-                    "session_id": session_id
+                    "session_id": session_id,
                 }
 
-    async def chat(self, session_id: str, user_message: str, latitude: float, longitude: float,
-                   screenshot_base64: Optional[str] = None) -> Dict[str, Any]:
+    async def chat(
+        self,
+        session_id: str,
+        user_message: str,
+        latitude: float,
+        longitude: float,
+        screenshot_base64: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Multi-turn chat interface (same pattern as terrain agent)."""
         return await self.analyze_mobility(
-            latitude=latitude, longitude=longitude,
+            latitude=latitude,
+            longitude=longitude,
             user_context=user_message,
             include_vision_analysis=bool(screenshot_base64),
             screenshot_base64=screenshot_base64,
-            session_id=session_id
+            session_id=session_id,
         )
 
     async def cleanup(self):

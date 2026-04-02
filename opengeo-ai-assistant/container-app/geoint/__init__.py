@@ -32,19 +32,22 @@ without loading mobility analysis dependencies.
 """
 
 from .agents import (
-    terrain_analysis_agent,
-    mobility_analysis_agent,
+    animation_generation_agent,
     building_damage_agent,
     comparison_analysis_agent,
-    animation_generation_agent,
-    geoint_orchestrator
+    geoint_orchestrator,
+    mobility_analysis_agent,
+    terrain_analysis_agent,
 )
-
-# New agent with memory and tools
-from .terrain_agent import TerrainAgent, get_terrain_agent
 
 # Comparison agent for temporal before/after analysis
 from .comparison_agent import ComparisonAgent, get_comparison_agent
+
+# Router Agent for intelligent query classification
+from .router_agent import RouterAgent, get_router_agent
+
+# New agent with memory and tools
+from .terrain_agent import TerrainAgent, get_terrain_agent
 
 # Legacy class exports for backward compatibility
 # NOTE: These are lazy-imported within their respective agent functions
@@ -54,21 +57,18 @@ from .comparison_agent import ComparisonAgent, get_comparison_agent
 #   from geoint.terrain_analysis_agent import TerrainAnalysisAgent
 #   from geoint.building_damage_agent import BuildingDamageAgent
 
-# Router Agent for intelligent query classification
-from .router_agent import RouterAgent, get_router_agent
 
 __all__ = [
     # Agent functions (preferred)
-    'terrain_analysis_agent',
-    'mobility_analysis_agent',
-    'building_damage_agent',
-    'comparison_analysis_agent',
-    'animation_generation_agent',
-    'geoint_orchestrator',
+    "terrain_analysis_agent",
+    "mobility_analysis_agent",
+    "building_damage_agent",
+    "comparison_analysis_agent",
+    "animation_generation_agent",
+    "geoint_orchestrator",
     # New agents with memory
-    'TerrainAgent',
-    'get_terrain_agent',
-    'RouterAgent',
-    'get_router_agent',
+    "TerrainAgent",
+    "get_terrain_agent",
+    "RouterAgent",
+    "get_router_agent",
 ]
-

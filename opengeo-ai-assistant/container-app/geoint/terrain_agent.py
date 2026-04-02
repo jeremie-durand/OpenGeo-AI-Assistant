@@ -11,10 +11,10 @@ Flow per query:
   5. Conversation history is kept in-process per session
 """
 
-import logging
 import json
-from typing import Dict, Any, Optional, List
+import logging
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -90,14 +90,15 @@ def _get_tool_registry() -> Dict[str, Any]:
     global _TOOL_REGISTRY
     if not _TOOL_REGISTRY:
         from geoint.terrain_tools import (
-            get_elevation_analysis,
-            get_slope_analysis,
-            get_aspect_analysis,
-            find_flat_areas,
+            analyze_environmental_sensitivity,
             analyze_flood_risk,
             analyze_water_proximity,
-            analyze_environmental_sensitivity,
+            find_flat_areas,
+            get_aspect_analysis,
+            get_elevation_analysis,
+            get_slope_analysis,
         )
+
         _TOOL_REGISTRY = {
             "get_elevation_analysis": get_elevation_analysis,
             "get_slope_analysis": get_slope_analysis,
@@ -114,6 +115,7 @@ def _get_tool_registry() -> Dict[str, Any]:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _parse_json_safe(text: str) -> Any:
     text = text.strip()
     for marker in ("```json", "```"):
@@ -124,6 +126,7 @@ def _parse_json_safe(text: str) -> Any:
         return json.loads(text)
     except Exception:
         import re
+
         m = re.search(r"\{.*\}", text, re.DOTALL)
         if m:
             try:
@@ -156,6 +159,7 @@ async def _llm_text(llm, messages, max_tokens=512, temperature=0.2):
 # Session
 # ---------------------------------------------------------------------------
 
+
 class TerrainAgentSession:
     def __init__(self, session_id: str, latitude: float, longitude: float):
         self.session_id = session_id
@@ -177,6 +181,7 @@ class TerrainAgentSession:
 # TerrainAgent
 # ---------------------------------------------------------------------------
 
+
 class TerrainAgent:
     """Provider-agnostic terrain analysis agent with persistent conversation."""
 
@@ -194,14 +199,17 @@ class TerrainAgent:
         if self._initialized:
             return
         import asyncio
+
         for attempt in range(3):
             try:
                 await self._do_initialize()
                 return
             except Exception as e:
                 if attempt < 2:
-                    wait = 2 ** attempt
-                    logger.warning(f"TerrainAgent init attempt {attempt + 1} failed: {e} — retrying in {wait}s")
+                    wait = 2**attempt
+                    logger.warning(
+                        f"TerrainAgent init attempt {attempt + 1} failed: {e} — retrying in {wait}s"
+                    )
                     await asyncio.sleep(wait)
                 else:
                     logger.error(f"TerrainAgent init failed after 3 attempts: {e}")
@@ -209,10 +217,13 @@ class TerrainAgent:
 
     async def _do_initialize(self):
         from llm_client import get_llm_client
+
         compat = get_llm_client()
         self._llm = compat._llm
         self._initialized = True
-        logger.info(f"TerrainAgent initialised (provider={self._llm.provider}, model={self._llm.model})")
+        logger.info(
+            f"TerrainAgent initialised (provider={self._llm.provider}, model={self._llm.model})"
+        )
 
     # ------------------------------------------------------------------
     # Step 1 — select which tools to call
@@ -265,7 +276,9 @@ Return ONLY valid JSON array, e.g.: ["get_elevation_analysis", "get_slope_analys
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _call_tool(tool_name: str, latitude: float, longitude: float, radius_km: float) -> Dict[str, Any]:
+    def _call_tool(
+        tool_name: str, latitude: float, longitude: float, radius_km: float
+    ) -> Dict[str, Any]:
         registry = _get_tool_registry()
         fn = registry.get(tool_name)
         if not fn:
@@ -305,23 +318,42 @@ Return ONLY valid JSON array, e.g.: ["get_elevation_analysis", "get_slope_analys
             )
 
             if self._llm.provider == "anthropic":
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": vision_prompt},
-                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": clean}},
-                    ],
-                }]
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": vision_prompt},
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": clean,
+                                },
+                            },
+                        ],
+                    }
+                ]
             else:
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": vision_prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{clean}", "detail": "high"}},
-                    ],
-                }]
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": vision_prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{clean}",
+                                    "detail": "high",
+                                },
+                            },
+                        ],
+                    }
+                ]
 
-            result = await _llm_text(self._llm, messages, max_tokens=600, temperature=0.3)
+            result = await _llm_text(
+                self._llm, messages, max_tokens=600, temperature=0.3
+            )
             logger.info(f"Terrain vision analysis: {len(result)} chars")
             return result
         except Exception as e:
@@ -385,7 +417,8 @@ Return ONLY valid JSON array, e.g.: ["get_elevation_analysis", "get_slope_analys
     def cleanup_old_sessions(self, max_age_minutes: int = 60):
         now = datetime.utcnow()
         expired = [
-            sid for sid, s in self.sessions.items()
+            sid
+            for sid, s in self.sessions.items()
             if (now - s.last_activity).total_seconds() > max_age_minutes * 60
         ]
         for sid in expired:
@@ -416,6 +449,7 @@ Return ONLY valid JSON array, e.g.: ["get_elevation_analysis", "get_slope_analys
             fallback = f"Location ({latitude:.4f}, {longitude:.4f})"
             try:
                 from semantic_translator import geocoding_plugin
+
                 rg = await geocoding_plugin.reverse_geocode(latitude, longitude)
                 data = json.loads(rg)
                 if not data.get("error"):
@@ -442,8 +476,12 @@ Return ONLY valid JSON array, e.g.: ["get_elevation_analysis", "get_slope_analys
                 logger.warning(f"Terrain vision error: {e}")
             return None
 
-        location_name, visual_analysis = await asyncio.gather(_reverse_geocode(), _vision())
-        logger.info(f"TerrainAgent: location={location_name}, vision={len(visual_analysis) if visual_analysis else 0} chars")
+        location_name, visual_analysis = await asyncio.gather(
+            _reverse_geocode(), _vision()
+        )
+        logger.info(
+            f"TerrainAgent: location={location_name}, vision={len(visual_analysis) if visual_analysis else 0} chars"
+        )
 
         # ---- Build context message ----
         context_message = (
@@ -453,7 +491,9 @@ Return ONLY valid JSON array, e.g.: ["get_elevation_analysis", "get_slope_analys
             f"- Analysis radius: {radius_km} km\n"
         )
         if visual_analysis:
-            context_message += f"\n[Visual Analysis of Current Map View]\n{visual_analysis}\n"
+            context_message += (
+                f"\n[Visual Analysis of Current Map View]\n{visual_analysis}\n"
+            )
         context_message += f"\n[User Question]\n{user_message}"
 
         # ---- Select and run tools ----
@@ -482,7 +522,9 @@ Return ONLY valid JSON array, e.g.: ["get_elevation_analysis", "get_slope_analys
                 tool_results[tool_name] = {"error": str(e)}
 
         # ---- Synthesise response ----
-        response_text = await self._synthesise_response(session, context_message, tool_results)
+        response_text = await self._synthesise_response(
+            session, context_message, tool_results
+        )
 
         # Update conversation history
         session.history.append({"role": "user", "content": context_message})

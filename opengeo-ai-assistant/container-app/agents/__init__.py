@@ -22,7 +22,12 @@ Tools available in EnhancedVisionAgent:
 13. compare_temporal - Temporal change detection
 """
 
-from .enhanced_vision_agent import EnhancedVisionAgent, VisionAgent, get_vision_agent, get_enhanced_vision_agent
+from .enhanced_vision_agent import (
+    EnhancedVisionAgent,
+    VisionAgent,
+    get_enhanced_vision_agent,
+    get_vision_agent,
+)
 
 __all__ = [
     "EnhancedVisionAgent",

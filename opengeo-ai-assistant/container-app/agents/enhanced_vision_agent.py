@@ -13,10 +13,9 @@ This agent:
 import logging
 import os
 import re
-import json
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +35,10 @@ COLLECTION_RASTER_MAP: List[Tuple[str, str, str]] = [
     # -- SST / Ocean Temperature --
     ("noaa-cdr-sea-surface-temperature", "sst", "Sea Surface Temperature"),
     ("sst", "sst", "Sea Surface Temperature"),
-
     # -- Land Surface Temperature (MODIS 11, 21) --
     ("modis-11a1", "sst", "Land Surface Temperature"),
     ("modis-11a2", "sst", "Land Surface Temperature"),
     ("modis-21a2", "sst", "Land Surface Temperature"),
-
     # -- Elevation / DEM --
     ("cop-dem-glo-30", "elevation", "Elevation"),
     ("cop-dem-glo-90", "elevation", "Elevation"),
@@ -56,17 +53,14 @@ COLLECTION_RASTER_MAP: List[Tuple[str, str, str]] = [
     ("3dep-lidar-classification", "lidar", "LiDAR Classification"),
     ("3dep-lidar-pointsourceid", "lidar", "LiDAR Point Source"),
     ("3dep-lidar-returns", "lidar", "LiDAR Returns"),
-
     # -- Fire / Burn --
     ("modis-14a1", "fire", "Active Fire"),
     ("modis-14a2", "fire", "Active Fire"),
     ("modis-64a1", "fire", "Burned Area"),
     ("mtbs", "fire", "Burn Severity"),
-
     # -- Snow / Ice --
     ("modis-10a1", "snow", "Snow Cover"),
     ("modis-10a2", "snow", "Snow Cover"),
-
     # -- Vegetation / NDVI / LAI / GPP / NPP / ET --
     ("modis-13a1", "vegetation", "NDVI (500m)"),
     ("modis-13q1", "vegetation", "NDVI (250m)"),
@@ -76,7 +70,6 @@ COLLECTION_RASTER_MAP: List[Tuple[str, str, str]] = [
     ("modis-17a2h", "vegetation", "GPP"),
     ("modis-17a2hgf", "vegetation", "GPP (gap-filled)"),
     ("modis-17a3hgf", "vegetation", "NPP"),
-
     # -- Optical / Multispectral (NDVI-capable) --
     ("sentinel-2", "ndvi", "Optical Imagery"),
     ("hls2-l30", "ndvi", "HLS Landsat"),
@@ -85,23 +78,18 @@ COLLECTION_RASTER_MAP: List[Tuple[str, str, str]] = [
     ("landsat-c2-l1", "ndvi", "Landsat Collection 2 L1"),
     ("naip", "ndvi", "NAIP Aerial"),
     ("aster", "ndvi", "ASTER Multispectral"),
-
     # -- Surface Reflectance / BRDF --
     ("modis-43a4", "reflectance", "BRDF/NBAR"),
     ("modis-09a1", "reflectance", "Surface Reflectance (8-day)"),
     ("modis-09q1", "reflectance", "Surface Reflectance (250m)"),
-
     # -- SAR / Radar --
     ("sentinel-1-grd", "sar", "SAR GRD"),
     ("sentinel-1-rtc", "sar", "SAR RTC"),
     ("alos-palsar", "sar", "ALOS PALSAR"),
-
     # -- Water --
     ("jrc-gsw", "water", "Water Occurrence"),
-
     # -- Biomass --
     ("chloris-biomass", "biomass", "Above-ground Biomass"),
-
     # -- Land Cover (classification — no numeric sampling, use domain tool) --
     ("esa-worldcover", "landcover", "Land Cover"),
     ("esa-cci-lc", "landcover", "Land Cover (ESA CCI)"),
@@ -119,18 +107,14 @@ COLLECTION_RASTER_MAP: List[Tuple[str, str, str]] = [
     ("usgs-lcmap-conus", "landcover", "Land Cover (LCMAP)"),
     ("usgs-lcmap-hawaii", "landcover", "Land Cover (Hawaii)"),
     ("alos-fnf-mosaic", "landcover", "Forest/Non-Forest"),
-
     # -- Climate Projections (NetCDF — not COG, limited raster sampling) --
     ("nasa-nex-gddp-cmip6", "climate", "Climate Projection (CMIP6)"),
     ("nex-gddp", "climate", "Climate Projection (NEX-GDDP)"),
-
     # -- Precipitation --
     ("noaa-mrms-qpe", "auto", "Precipitation"),
-
     # -- Climate Normals --
     ("noaa-climate-normals", "auto", "Climate Normals"),
     ("noaa-nclimgrid", "auto", "Climate Grid"),
-
     # -- Thematic (non-raster or specialized) --
     ("hrea", "auto", "Electricity Access"),
     ("hgb", "auto", "Gap Habitat"),
@@ -295,9 +279,11 @@ VISION_AGENT_INSTRUCTIONS = """You are a Geospatial Intelligence (GEOINT) Vision
 # SESSION DATACLASS
 # ============================================================================
 
+
 @dataclass
 class VisionSession:
     """Represents a conversation session with the vision agent."""
+
     session_id: str
     thread_id: Optional[str] = None  # Agent Service thread ID
     screenshot_base64: Optional[str] = None
@@ -322,6 +308,7 @@ class VisionSession:
 # ENHANCED VISION AGENT (Agent Service)
 # ============================================================================
 
+
 class EnhancedVisionAgent:
     """
     Local-first vision analysis agent using a configurable LLM client (OpenAI/Anthropic).
@@ -344,10 +331,13 @@ class EnhancedVisionAgent:
         if self._initialized:
             return
         from llm_client import get_llm_client
+
         compat = get_llm_client()
         self._llm = compat._llm  # raw LLMClient (has .provider, .model, .chat())
         self._initialized = True
-        logger.info(f"EnhancedVisionAgent initialised (provider={self._llm.provider}, model={self._llm.model})")
+        logger.info(
+            f"EnhancedVisionAgent initialised (provider={self._llm.provider}, model={self._llm.model})"
+        )
 
     def _get_or_create_session(self, session_id: str) -> VisionSession:
         """Get existing session or create a new one."""
@@ -376,8 +366,16 @@ class EnhancedVisionAgent:
     # LLM helpers
     # ------------------------------------------------------------------
 
-    async def _llm_text(self, messages: List[Dict], max_tokens: int = 1200, temperature: float = 0.4, **kwargs) -> str:
-        response = await self._llm.chat(messages, max_tokens=max_tokens, temperature=temperature, **kwargs)
+    async def _llm_text(
+        self,
+        messages: List[Dict],
+        max_tokens: int = 1200,
+        temperature: float = 0.4,
+        **kwargs,
+    ) -> str:
+        response = await self._llm.chat(
+            messages, max_tokens=max_tokens, temperature=temperature, **kwargs
+        )
         if isinstance(response, dict):
             blocks = response.get("content", [])
             if blocks and isinstance(blocks, list):
@@ -407,7 +405,9 @@ class EnhancedVisionAgent:
         if lat is not None and lng is not None:
             context_lines.append(f"Map center: ({lat:.4f}, {lng:.4f})")
         if session.loaded_collections:
-            context_lines.append(f"Data layers loaded: {', '.join(session.loaded_collections)}")
+            context_lines.append(
+                f"Data layers loaded: {', '.join(session.loaded_collections)}"
+            )
         if raster_result:
             context_lines.append(f"\n[Raster/Point Data]\n{raster_result}")
         context_str = "\n".join(context_lines) if context_lines else ""
@@ -438,9 +438,14 @@ class EnhancedVisionAgent:
                     "role": "user",
                     "content": [
                         {"type": "text", "text": user_query},
-                        {"type": "image", "source": {
-                            "type": "base64", "media_type": "image/jpeg", "data": clean
-                        }},
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": clean,
+                            },
+                        },
                     ],
                 }
                 messages = history + [user_msg]
@@ -452,9 +457,13 @@ class EnhancedVisionAgent:
                     "role": "user",
                     "content": [
                         {"type": "text", "text": user_query},
-                        {"type": "image_url", "image_url": {
-                            "url": f"data:image/jpeg;base64,{clean}", "detail": "high"
-                        }},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{clean}",
+                                "detail": "high",
+                            },
+                        },
                     ],
                 }
                 messages = [sys_msg] + history + [user_msg]
@@ -465,7 +474,9 @@ class EnhancedVisionAgent:
                 user_msg = {"role": "user", "content": user_query}
                 messages = history + [user_msg]
                 return await self._llm_text(
-                    messages, max_tokens=1200, temperature=0.4,
+                    messages,
+                    max_tokens=1200,
+                    temperature=0.4,
                     system=system_prompt,
                 )
             else:
@@ -488,7 +499,7 @@ class EnhancedVisionAgent:
         tile_urls: Optional[List[str]] = None,
         stac_items: Optional[List[Dict[str, Any]]] = None,
         conversation_history: Optional[List[Dict]] = None,
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """Analyze a user query using vision + raster tools."""
         try:
@@ -509,9 +520,12 @@ class EnhancedVisionAgent:
 
             # Set module-level context for sync raster tools
             from agents.vision_tools import (
-                set_session_context, clear_tool_calls, get_tool_calls,
-                sample_raster_value, analyze_raster,
+                clear_tool_calls,
+                get_tool_calls,
+                sample_raster_value,
+                set_session_context,
             )
+
             set_session_context(
                 screenshot_base64=session.screenshot_base64,
                 map_bounds=session.map_bounds,
@@ -533,7 +547,9 @@ class EnhancedVisionAgent:
                         data_type = det[0]
                 try:
                     loop = asyncio.get_event_loop()
-                    raster_result = await loop.run_in_executor(None, sample_raster_value, data_type)
+                    raster_result = await loop.run_in_executor(
+                        None, sample_raster_value, data_type
+                    )
                     if raster_result and len(raster_result) < 30:
                         raster_result = None  # too short = likely "no data" message
                 except Exception as e:
@@ -562,6 +578,7 @@ class EnhancedVisionAgent:
         except Exception as e:
             logger.error(f"[FAIL] EnhancedVisionAgent.analyze error: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             return {
                 "response": "Vision analysis failed due to an internal error.",
@@ -611,7 +628,9 @@ class EnhancedVisionAgent:
         # Build context
         context_parts = []
         if session.loaded_collections:
-            context_parts.append(f"Loaded satellite data: {', '.join(session.loaded_collections)}")
+            context_parts.append(
+                f"Loaded satellite data: {', '.join(session.loaded_collections)}"
+            )
         if session.map_bounds:
             b = session.map_bounds
             pin_lat = b.get("pin_lat") or b.get("center_lat")
@@ -645,7 +664,9 @@ class EnhancedVisionAgent:
                 "Do NOT suggest using external GIS software or Python — this platform can sample data directly."
             )
 
-        context_str = "\n".join(context_parts) if context_parts else "No additional context."
+        context_str = (
+            "\n".join(context_parts) if context_parts else "No additional context."
+        )
 
         if pre_sampled_value and is_value_q:
             system_prompt = (
@@ -669,13 +690,15 @@ class EnhancedVisionAgent:
 
         # Attach screenshot if available
         if session.screenshot_base64:
-            user_content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/png;base64,{session.screenshot_base64}",
-                    "detail": "high",
-                },
-            })
+            user_content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{session.screenshot_base64}",
+                        "detail": "high",
+                    },
+                }
+            )
 
         payload = {
             "model": deployment,
@@ -700,13 +723,17 @@ class EnhancedVisionAgent:
                 ) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
-                        logger.error(f"Fallback API error {resp.status}: {error_text[:300]}")
+                        logger.error(
+                            f"Fallback API error {resp.status}: {error_text[:300]}"
+                        )
                         return None
 
                     result = await resp.json()
                     analysis_text = result["choices"][0]["message"]["content"]
 
-                    logger.info(f"[OK] Fallback vision analysis succeeded ({len(analysis_text)} chars)")
+                    logger.info(
+                        f"[OK] Fallback vision analysis succeeded ({len(analysis_text)} chars)"
+                    )
 
                     # Update session
                     session.last_analysis = analysis_text
@@ -735,7 +762,8 @@ class EnhancedVisionAgent:
         """Remove sessions older than max_age_minutes."""
         now = datetime.utcnow()
         expired = [
-            sid for sid, session in self.sessions.items()
+            sid
+            for sid, session in self.sessions.items()
             if (now - session.updated_at).total_seconds() > max_age_minutes * 60
         ]
         for sid in expired:

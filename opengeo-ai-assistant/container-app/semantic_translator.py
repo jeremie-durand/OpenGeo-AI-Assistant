@@ -6,14 +6,14 @@ import json
 import logging
 import math
 import os
-from typing import Dict, List, Any, Optional, Union
-from datetime import datetime, timedelta
-from pathlib import Path
-import aiohttp
 import re
 import time
-import hashlib
 import traceback
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+import aiohttp
 
 # Import the consolidated location resolver
 from location_resolver import EnhancedLocationResolver
@@ -22,41 +22,46 @@ from location_resolver import EnhancedLocationResolver
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
 # ============================================================================
 # [SEARCH] PIPELINE LOGGING HELPER - Structured logging for debugging queries
 # ============================================================================
-def log_pipeline_step(session_id: str, step_name: str, stage: str, data: dict, elapsed_ms: float = None):
+def log_pipeline_step(
+    session_id: str, step_name: str, stage: str, data: dict, elapsed_ms: float = None
+):
     """
     Log a pipeline step with structured format for easy filtering and debugging.
-    
+
     Args:
         session_id: Unique identifier for this query session
         step_name: Name of the agent/step (e.g., "INTENT", "COLLECTION", "LOCATION")
         stage: Either "INPUT" or "OUTPUT"
         data: Dictionary of relevant data to log
         elapsed_ms: Optional elapsed time in milliseconds
-    
+
     Example output:
         [PIPELINE:abc123] INTENT INPUT: {"query": "Show HLS of Albania"}
         [PIPELINE:abc123] INTENT OUTPUT: {"intent_type": "stac_search", "confidence": 0.95} (45ms)
     """
     prefix = f"[PIPELINE:{session_id}]"
     timing = f" ({elapsed_ms:.0f}ms)" if elapsed_ms else ""
-    
+
     # Truncate large data for readability
     data_str = json.dumps(data, default=str)
     if len(data_str) > 500:
         data_str = data_str[:500] + "..."
-    
+
     logger.info(f"{prefix} {step_name} {stage}: {data_str}{timing}")
 
 
 # Import the TileSelector for intelligent limit calculation
 try:
     from tile_selector import TileSelector
+
     TILE_SELECTOR_AVAILABLE = True
 except ImportError:
     TILE_SELECTOR_AVAILABLE = False
+
 
 class GeocodingPlugin:
     """Semantic geocoding plugin backed by OpenStreetMap Nominatim.
@@ -91,23 +96,36 @@ class GeocodingPlugin:
             import aiohttp
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                async with session.get(
+                    url,
+                    params=params,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as response:
                     if response.status != 200:
                         text = await response.text()
-                        logger.error(f"[MAP] Nominatim geocode error {response.status}: {text}")
-                        return json.dumps({
-                            "error": f"Geocoding service error: {response.status}",
-                            "location_name": location_name,
-                        })
+                        logger.error(
+                            f"[MAP] Nominatim geocode error {response.status}: {text}"
+                        )
+                        return json.dumps(
+                            {
+                                "error": f"Geocoding service error: {response.status}",
+                                "location_name": location_name,
+                            }
+                        )
 
                     data = await response.json()
                     if not data:
-                        logger.warning(f"[MAP] Nominatim: No results for '{location_name}'")
-                        return json.dumps({
-                            "error": "Location not found",
-                            "location_name": location_name,
-                            "suggestion": "Try a more specific location name or check spelling",
-                        })
+                        logger.warning(
+                            f"[MAP] Nominatim: No results for '{location_name}'"
+                        )
+                        return json.dumps(
+                            {
+                                "error": "Location not found",
+                                "location_name": location_name,
+                                "suggestion": "Try a more specific location name or check spelling",
+                            }
+                        )
 
                     result = data[0]
                     bbox_raw = result.get("boundingbox")
@@ -130,7 +148,9 @@ class GeocodingPlugin:
                     country = (result.get("address") or {}).get("country", "Unknown")
                     location_type = result.get("type", "region")
 
-                    logger.info(f"[MAP] Nominatim geocode: '{location_name}' -> {address}, bbox={bbox}")
+                    logger.info(
+                        f"[MAP] Nominatim geocode: '{location_name}' -> {address}, bbox={bbox}"
+                    )
                     return json.dumps(
                         {
                             "name": address,
@@ -143,7 +163,9 @@ class GeocodingPlugin:
                     )
         except asyncio.TimeoutError:
             logger.error(f"[MAP] Nominatim timeout for '{location_name}'")
-            return json.dumps({"error": "Geocoding request timed out", "location_name": location_name})
+            return json.dumps(
+                {"error": "Geocoding request timed out", "location_name": location_name}
+            )
         except Exception as e:
             logger.error(f"[MAP] Nominatim exception for '{location_name}': {e}")
             return json.dumps({"error": str(e), "location_name": location_name})
@@ -163,23 +185,36 @@ class GeocodingPlugin:
             import aiohttp
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                async with session.get(
+                    url,
+                    params=params,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as response:
                     if response.status != 200:
                         text = await response.text()
-                        logger.error(f"[MAP] Nominatim reverse error {response.status}: {text}")
-                        return json.dumps({
-                            "error": f"Reverse geocoding service error: {response.status}",
-                            "coordinates": [latitude, longitude],
-                        })
+                        logger.error(
+                            f"[MAP] Nominatim reverse error {response.status}: {text}"
+                        )
+                        return json.dumps(
+                            {
+                                "error": f"Reverse geocoding service error: {response.status}",
+                                "coordinates": [latitude, longitude],
+                            }
+                        )
 
                     data = await response.json()
                     address = data.get("display_name", "Unknown location")
                     addr_details = data.get("address", {})
 
                     country = addr_details.get("country", "")
-                    region = addr_details.get("state", "") or addr_details.get("region", "")
+                    region = addr_details.get("state", "") or addr_details.get(
+                        "region", ""
+                    )
 
-                    logger.info(f"[MAP] Nominatim reverse geocode: ({latitude}, {longitude}) -> {address}")
+                    logger.info(
+                        f"[MAP] Nominatim reverse geocode: ({latitude}, {longitude}) -> {address}"
+                    )
                     return json.dumps(
                         {
                             "name": address,
@@ -190,11 +225,21 @@ class GeocodingPlugin:
                         }
                     )
         except asyncio.TimeoutError:
-            logger.error(f"[MAP] Nominatim reverse timeout for ({latitude}, {longitude})")
-            return json.dumps({"error": "Reverse geocoding request timed out", "coordinates": [latitude, longitude]})
+            logger.error(
+                f"[MAP] Nominatim reverse timeout for ({latitude}, {longitude})"
+            )
+            return json.dumps(
+                {
+                    "error": "Reverse geocoding request timed out",
+                    "coordinates": [latitude, longitude],
+                }
+            )
         except Exception as e:
-            logger.error(f"[MAP] Nominatim reverse exception for ({latitude}, {longitude}): {e}")
+            logger.error(
+                f"[MAP] Nominatim reverse exception for ({latitude}, {longitude}): {e}"
+            )
             return json.dumps({"error": str(e), "coordinates": [latitude, longitude]})
+
 
 # Create global instance for use by the kernel
 geocoding_plugin = GeocodingPlugin()
@@ -202,7 +247,7 @@ geocoding_plugin = GeocodingPlugin()
 
 class SemanticQueryTranslator:
     """Enhanced query translator using Semantic Kernel with GPT-5 for intelligent entity extraction and contextual Earth science analysis"""
-    
+
     # ============================================================================
     # PERFORMANCE OPTIMIZATION: Intent-based keyword mapping
     # ============================================================================
@@ -210,7 +255,6 @@ class SemanticQueryTranslator:
         # Specific optical dataset keywords (explicit names only)
         "multispectral": ["sentinel-2-l2a"],
         "aerial": ["naip"],
-        
         # Elevation/Terrain keywords
         "elevation": ["cop-dem-glo-30"],
         "dem": ["cop-dem-glo-30"],
@@ -227,7 +271,6 @@ class SemanticQueryTranslator:
         "lidar": ["3dep-lidar-hag"],
         "hag": ["3dep-lidar-hag"],
         "height above ground": ["3dep-lidar-hag"],
-        
         # Vegetation keywords -> Single collection per intent
         "vegetation": ["sentinel-2-l2a"],
         "vegetation indices": ["modis-13Q1-061"],
@@ -247,7 +290,6 @@ class SemanticQueryTranslator:
         "cdl": ["usda-cdl"],
         "usda": ["usda-cdl"],
         "cropland data layer": ["usda-cdl"],
-        
         # Water keywords -> Single collection per intent
         "water": ["sentinel-2-l2a"],
         "flood": ["sentinel-1-rtc"],
@@ -260,7 +302,6 @@ class SemanticQueryTranslator:
         "snow": ["modis-10A1-061"],
         "snow cover": ["modis-10A1-061"],
         "modis snow": ["modis-10A1-061"],
-        
         # Fire/Thermal keywords -> Both products accessible
         # 14A2 (8-day) = default for better tile availability
         # 14A1 (daily) = for "daily" keyword or recent fire detection
@@ -286,7 +327,6 @@ class SemanticQueryTranslator:
         "burned area": ["modis-64A1-061"],
         "mtbs": ["mtbs"],
         "monitoring trends burn severity": ["mtbs"],
-        
         # Land cover keywords -> Single collection
         "land cover": ["io-lulc-9-class"],
         "lulc": ["io-lulc-9-class"],
@@ -295,7 +335,6 @@ class SemanticQueryTranslator:
         "development": ["io-lulc-9-class"],
         "buildings": ["ms-buildings"],
         "building footprints": ["ms-buildings"],
-        
         # SAR/Radar keywords
         "sar": ["sentinel-1-rtc"],
         "radar": ["sentinel-1-rtc"],
@@ -306,7 +345,6 @@ class SemanticQueryTranslator:
         "backscatter": ["sentinel-1-rtc"],
         "palsar": ["alos-palsar-mosaic"],
         "alos palsar": ["alos-palsar-mosaic"],
-        
         # MODIS Reflectance/Surface Products
         "brdf": ["modis-43A4-061"],
         "nbar": ["modis-43A4-061"],
@@ -314,13 +352,11 @@ class SemanticQueryTranslator:
         "nadir brdf": ["modis-43A4-061"],
         "nadir reflectance": ["modis-43A4-061"],
         "adjusted reflectance": ["modis-43A4-061"],
-        
         # Generic satellite request keywords
         "satellite images": ["sentinel-2-l2a"],
         "satellite image": ["sentinel-2-l2a"],
         "satellite photo": ["sentinel-2-l2a"],
         "satellite data": ["sentinel-2-l2a"],
-        
         # Specific collection name keywords
         "sentinel-2": ["sentinel-2-l2a"],
         "sentinel 2": ["sentinel-2-l2a"],
@@ -343,7 +379,7 @@ class SemanticQueryTranslator:
         "l30": ["hls2-l30"],
         "harmonized landsat sentinel": ["hls2-l30", "hls2-s30"],
         "naip": ["naip"],
-        # MODIS: Use specific product keywords instead of generic "modis" 
+        # MODIS: Use specific product keywords instead of generic "modis"
         # Generic "modis" is handled by select_collections() with full context
         "modis fire": ["modis-14A1-061", "modis-14A2-061"],
         "modis thermal": ["modis-14A1-061", "modis-14A2-061"],
@@ -356,7 +392,6 @@ class SemanticQueryTranslator:
         "modis brdf": ["modis-43A4-061"],
         "modis nadir": ["modis-43A4-061"],
         "copernicus": ["cop-dem-glo-30"],
-        
         # Climate Projections (NEX-GDDP-CMIP6)
         "nex-gddp": ["nasa-nex-gddp-cmip6"],
         "nex gddp": ["nasa-nex-gddp-cmip6"],
@@ -377,125 +412,147 @@ class SemanticQueryTranslator:
         "nasa-nex-gddp-cmip6": ["nasa-nex-gddp-cmip6"],
         "nasa nex-gddp-cmip6": ["nasa-nex-gddp-cmip6"],
     }
-    
+
     def __init__(self):
         # Read LLM configuration from environment variables
-        self.llm_base_url = os.getenv('LLM_BASE_URL', '')
-        self.llm_api_key = os.getenv('LLM_API_KEY', '')
+        self.llm_base_url = os.getenv("LLM_BASE_URL", "")
+        self.llm_api_key = os.getenv("LLM_API_KEY", "")
         self.llm_credential = None
-        self.model_name = os.getenv('LLM_MODEL', 'gpt-4o')
-        
+        self.model_name = os.getenv("LLM_MODEL", "gpt-4o")
+
         # STAC API endpoints
         self.stac_endpoints = {
             "planetary_computer": "https://planetarycomputer.microsoft.com/api/stac/v1/search",
-            "veda": "https://openveda.cloud/api/stac/search"
+            "veda": "https://openveda.cloud/api/stac/search",
         }
-        
+
         # Kernel will be initialized lazily on first use
         self.kernel = None
         self._kernel_initialized = False
-        
+
         # Initialize consolidated location resolver
         self.location_resolver = EnhancedLocationResolver()
-        
+
         # Initialize location cache (kept for compatibility)
         self.location_cache = LocationCache()
-        
+
         # [BRAIN] CONVERSATION CONTEXT MANAGEMENT
         self.conversation_contexts = {}  # conversation_id -> context data
-        
+
         # 🆔 SESSION TRACKING for log correlation
         self.current_session_id = None
-        
+
         # [BOT] Model override for runtime model switching
         self._model_override = None
-        
+
         logger.info("[OK] Using consolidated EnhancedLocationResolver (Nominatim)")
-        
+
         # Initialize STAC query checker (disabled for streamlined version)
         self.query_checker = None  # Disabled for streamlined version
-        
-        # Comprehensive collection mappings 
+
+        # Comprehensive collection mappings
         self.collection_mappings = {
             # Disaster response collections
             "disaster": {
                 "hurricane": {
                     "primary": ["sentinel-1-grd", "sentinel-2-l2a"],
                     "secondary": ["landsat-c2-l2", "naip", "hls2-s30"],
-                    "thermal": []
+                    "thermal": [],
                 },
                 "wildfire": {
-                    "primary": ["modis-14A1-061", "modis-14A2-061"],  # Validated working collections
-                    "secondary": ["modis-64A1-061", "sentinel-2-l2a", "landsat-c2-l2"],  # Burned area + optical
-                    "thermal": ["modis-14A1-061", "modis-14A2-061"]  # All thermal anomaly collections
+                    "primary": [
+                        "modis-14A1-061",
+                        "modis-14A2-061",
+                    ],  # Validated working collections
+                    "secondary": [
+                        "modis-64A1-061",
+                        "sentinel-2-l2a",
+                        "landsat-c2-l2",
+                    ],  # Burned area + optical
+                    "thermal": [
+                        "modis-14A1-061",
+                        "modis-14A2-061",
+                    ],  # All thermal anomaly collections
                 },
                 "flood": {
                     "primary": ["sentinel-1-grd"],
                     "secondary": ["sentinel-2-l2a", "hls2-s30"],
-                    "thermal": []
+                    "thermal": [],
                 },
                 "earthquake": {
                     "primary": ["sentinel-1-grd", "cop-dem-glo-30"],
                     "secondary": ["sentinel-2-l2a", "nasadem"],
-                    "thermal": []
-                }
+                    "thermal": [],
+                },
             },
-            
             # Agricultural and vegetation analysis
             "agriculture": {
-                "crop_monitoring": ["modis-13Q1-061", "hls2-l30", "hls2-s30", "sentinel-2-l2a"],
+                "crop_monitoring": [
+                    "modis-13Q1-061",
+                    "hls2-l30",
+                    "hls2-s30",
+                    "sentinel-2-l2a",
+                ],
                 "crop_classification": ["usda-cdl", "sentinel-2-l2a", "landsat-c2-l2"],
                 "irrigation": ["sentinel-1-grd", "sentinel-2-l2a"],
-                "yield_estimation": ["modis-13Q1-061", "landsat-c2-l2"]
+                "yield_estimation": ["modis-13Q1-061", "landsat-c2-l2"],
             },
-            
             # Climate and weather analysis
             "climate": {
                 "weather_patterns": ["era5-pds", "daymet-daily-na"],
                 "precipitation": ["gpm-imerg-hhr", "era5-pds"],
                 "temperature": ["era5-pds", "daymet-daily-na"],
                 "thermal_infrared": ["landsat-c2-l2", "modis-14A1-061"],
-                "snow_cover": ["modis-10A1-061"]
+                "snow_cover": ["modis-10A1-061"],
             },
-            
             # Environmental monitoring
             "environment": {
                 "land_cover": ["esa-worldcover", "io-lulc-annual-v02", "usda-cdl"],
                 "deforestation": ["sentinel-2-l2a", "landsat-c2-l2", "modis-13Q1-061"],
                 "water_quality": ["sentinel-2-l2a", "landsat-c2-l2"],
-                "air_quality": ["tropomi-no2"]
+                "air_quality": ["tropomi-no2"],
             },
-            
             # Ocean and marine
             "ocean": {
                 "sea_surface_temperature": [],
                 "ocean_color": [],
-                "coastal_monitoring": ["sentinel-2-l2a", "naip", "landsat-c2-l2"]
+                "coastal_monitoring": ["sentinel-2-l2a", "naip", "landsat-c2-l2"],
             },
-            
             # Urban and infrastructure
             "urban": {
                 "city_development": ["naip", "sentinel-2-l2a", "landsat-c2-l2"],
                 "infrastructure": ["sentinel-1-grd", "naip", "sentinel-2-l2a"],
-                "population_mapping": ["naip", "sentinel-2-l2a"]
+                "population_mapping": ["naip", "sentinel-2-l2a"],
             },
-            
             # Terrain and topography
             "terrain": {
-                "elevation": ["cop-dem-glo-30", "cop-dem-glo-90", "3dep-seamless", "3dep-lidar-dtm", "nasadem"],
+                "elevation": [
+                    "cop-dem-glo-30",
+                    "cop-dem-glo-90",
+                    "3dep-seamless",
+                    "3dep-lidar-dtm",
+                    "nasadem",
+                ],
                 "slope_analysis": ["cop-dem-glo-30", "3dep-seamless", "nasadem"],
                 "watershed": ["cop-dem-glo-30", "cop-dem-glo-90", "3dep-seamless"],
-                "lidar": ["3dep-lidar-dtm", "3dep-lidar-dsm", "3dep-lidar-classification", "3dep-lidar-hag"],
+                "lidar": [
+                    "3dep-lidar-dtm",
+                    "3dep-lidar-dsm",
+                    "3dep-lidar-classification",
+                    "3dep-lidar-hag",
+                ],
                 "bare_earth": ["3dep-lidar-dtm", "3dep-lidar-dtm-native"],
-                "surface_elevation": ["3dep-lidar-dsm", "cop-dem-glo-30"]
-            }
+                "surface_elevation": ["3dep-lidar-dsm", "cop-dem-glo-30"],
+            },
         }
-        
+
         # For backwards compatibility, keep disaster_collections as a reference
         self.disaster_collections = self.collection_mappings["disaster"]
-        
-        logger.info("[OK] SemanticQueryTranslator created with comprehensive collection mappings and enhanced Earth science capabilities")
-    
+
+        logger.info(
+            "[OK] SemanticQueryTranslator created with comprehensive collection mappings and enhanced Earth science capabilities"
+        )
+
     # [BRAIN] CONVERSATION CONTEXT MANAGEMENT METHODS
     def get_conversation_context(self, conversation_id: str) -> Dict[str, Any]:
         """Get conversation context for a session"""
@@ -511,89 +568,107 @@ class SemanticQueryTranslator:
                 "last_bbox": None,
                 "context_topics": [],
                 "session_start": datetime.now(),
-                "has_rendered_map": False
+                "has_rendered_map": False,
             }
         return self.conversation_contexts[conversation_id]
-    
-    def update_conversation_context(self, conversation_id: str, query: str, response_data: Dict[str, Any]) -> None:
+
+    def update_conversation_context(
+        self, conversation_id: str, query: str, response_data: Dict[str, Any]
+    ) -> None:
         """Update conversation context with new query and response"""
         context = self.get_conversation_context(conversation_id)
-        
+
         context["query_count"] += 1
-        
+
         # Store the actual user query and assistant response for chat history
         user_message = query
         assistant_response = response_data.get("message", "")
-        
-        context["queries"].append({
-            "query": query,
-            "timestamp": datetime.now(),
-            "query_number": context["query_count"]
-        })
-        
-        context["responses"].append({
-            "response": response_data,
-            "timestamp": datetime.now(),
-            "query_number": context["query_count"]
-        })
-        
+
+        context["queries"].append(
+            {
+                "query": query,
+                "timestamp": datetime.now(),
+                "query_number": context["query_count"],
+            }
+        )
+
+        context["responses"].append(
+            {
+                "response": response_data,
+                "timestamp": datetime.now(),
+                "query_number": context["query_count"],
+            }
+        )
+
         # Store chat history for context-aware responses
         context.setdefault("chat_history", [])
-        context["chat_history"].append({
-            "role": "user", 
-            "content": user_message,
-            "timestamp": datetime.now()
-        })
-        context["chat_history"].append({
-            "role": "assistant", 
-            "content": assistant_response,
-            "timestamp": datetime.now()
-        })
-        
+        context["chat_history"].append(
+            {"role": "user", "content": user_message, "timestamp": datetime.now()}
+        )
+        context["chat_history"].append(
+            {
+                "role": "assistant",
+                "content": assistant_response,
+                "timestamp": datetime.now(),
+            }
+        )
+
         # Keep only the last 10 exchanges (20 messages) to manage memory
         if len(context["chat_history"]) > 20:
             context["chat_history"] = context["chat_history"][-20:]
-        
+
         # Update map-related context if response contains map data
         if response_data.get("data", {}).get("features"):
             context["has_rendered_map"] = True
             context["last_map_data"] = response_data.get("data")
             context["last_bbox"] = response_data.get("data", {}).get("bbox")
-            
+
             # Extract collections used
             features = response_data.get("data", {}).get("features", [])
-            collections = list(set(f.get("collection", "") for f in features if f.get("collection")))
+            collections = list(
+                set(f.get("collection", "") for f in features if f.get("collection"))
+            )
             context["last_collections"] = collections
-        
+
         # Track location context
-        location_focus = response_data.get("location_focus") or self._extract_location_from_query(query)
+        location_focus = response_data.get(
+            "location_focus"
+        ) or self._extract_location_from_query(query)
         if location_focus:
             context["last_location"] = location_focus
-        
+
         # Track contextual topics
         query_type = response_data.get("query_type", "")
         if query_type not in context["context_topics"]:
             context["context_topics"].append(query_type)
-        
-        logger.info(f"[BRAIN] Updated conversation context for {conversation_id}: {context['query_count']} queries, {len(context.get('chat_history', []))} messages in history")
 
-    def get_recent_chat_history(self, conversation_id: str, max_exchanges: int = 3) -> str:
+        logger.info(
+            f"[BRAIN] Updated conversation context for {conversation_id}: {context['query_count']} queries, {len(context.get('chat_history', []))} messages in history"
+        )
+
+    def get_recent_chat_history(
+        self, conversation_id: str, max_exchanges: int = 3
+    ) -> str:
         """Get recent chat history formatted for context"""
         context = self.get_conversation_context(conversation_id)
         chat_history = context.get("chat_history", [])
-        
+
         if not chat_history:
             return ""
-        
+
         # Get the last N exchanges (N*2 messages since each exchange has user + assistant)
-        recent_messages = chat_history[-(max_exchanges * 2):]
-        
+        recent_messages = chat_history[-(max_exchanges * 2) :]
+
         formatted_history = []
         for message in recent_messages:
             role = "User" if message["role"] == "user" else "Assistant"
-            content = message["content"][:200] + "..." if len(message["content"]) > 200 else message["content"]
+            content = (
+                message["content"][:200] + "..."
+                if len(message["content"]) > 200
+                else message["content"]
+            )
             formatted_history.append(f"{role}: {content}")
-        
+
         return "\n".join(formatted_history)
 
     def reset_conversation_context(self, conversation_id: str) -> None:
@@ -603,20 +678,22 @@ class SemanticQueryTranslator:
 
     def set_model(self, model_name: str) -> None:
         """Set model override for runtime model switching.
-        
+
         This allows the frontend to select between models
         without reinitializing the entire translator.
-        
+
         Args:
             model_name: The deployment name of the model to use (e.g., 'gpt-5')
         """
         if model_name and model_name != self._model_override:
-            logger.info(f"[BOT] Model override set: {self._model_override or self.model_name} -> {model_name}")
+            logger.info(
+                f"[BOT] Model override set: {self._model_override or self.model_name} -> {model_name}"
+            )
             self._model_override = model_name
             # Reset kernel to reinitialize with new model
             self.kernel = None
             self._kernel_initialized = False
-    
+
     def get_active_model(self) -> str:
         """Get the currently active model name (override or default)."""
         return self._model_override or self.model_name
@@ -624,82 +701,98 @@ class SemanticQueryTranslator:
     def is_follow_up_query(self, conversation_id: str, query: str) -> bool:
         """Determine if this is a follow-up query - automatically true for any query after the first"""
         context = self.get_conversation_context(conversation_id)
-        
+
         # First query is never a follow-up
         if context["query_count"] == 0:
             return False
-        
+
         # All subsequent queries are follow-ups unless session is refreshed
         is_follow_up = True
-        
-        logger.info(f"[SEARCH] Follow-up analysis for '{query}': query_count={context['query_count']}, is_follow_up={is_follow_up}")
-        
+
+        logger.info(
+            f"[SEARCH] Follow-up analysis for '{query}': query_count={context['query_count']}, is_follow_up={is_follow_up}"
+        )
+
         return is_follow_up
-    
+
     def determine_stac_source(self, query: str, entities: Dict[str, Any]) -> str:
         """Determine whether to use Planetary Computer or VEDA STAC API based on query characteristics"""
         # TEMPORARILY DISABLED: VEDA routing - use Planetary Computer for all queries
         # This ensures consistent behavior while testing Quick Start queries
-        logger.info(f"[SAT] VEDA disabled - routing all queries to Planetary Computer STAC: {query}")
+        logger.info(
+            f"[SAT] VEDA disabled - routing all queries to Planetary Computer STAC: {query}"
+        )
         return "planetary_computer"
-        
+
         # === ORIGINAL VEDA ROUTING LOGIC (DISABLED) ===
         # query_lower = query.lower()
-        # 
+        #
         # # Use VEDA collection profiles for intelligent routing
         # if is_veda_query(query):
         #     matched_collections = get_veda_collections_for_query(query)
         #     if matched_collections:
         #         logger.info(f"[TEST] Query routed to VEDA STAC: {query} -> Collections: {matched_collections}")
         #         return "veda"
-        # 
+        #
         # # Additional VEDA indicators not in profiles
         # additional_veda_indicators = [
         #     "specialized research", "nasa research", "climate model", "scientific study",
         #     "historical analysis", "static dataset", "research data"
         # ]
-        # 
+        #
         # if any(indicator in query_lower for indicator in additional_veda_indicators):
         #     logger.info(f"[TEST] Research-based routing to VEDA STAC: {query}")
         #     return "veda"
-        # 
+        #
         # # Check for real-time/operational indicators that suggest Planetary Computer
         # pc_indicators = [
         #     "recent", "latest", "current", "real-time", "today", "yesterday",
         #     "sentinel", "landsat", "monitoring", "live", "operational",
         #     "time series", "temporal analysis", "change detection"
         # ]
-        # 
+        #
         # if any(indicator in query_lower for indicator in pc_indicators):
         #     logger.info(f"[SAT] Operational-based routing to Planetary Computer STAC: {query}")
         #     return "planetary_computer"
-        # 
+        #
         # # Default to reliable Planetary Computer for general queries
         # logger.info(f"[SAT] Default routing to Planetary Computer STAC: {query}")
         # return "planetary_computer"
-    
+
     def get_veda_collections_for_query(self, query: str) -> List[str]:
         """Get specific VEDA collections that match the query"""
         return get_veda_collections_for_query(query)
-    
-    def build_veda_stac_query(self, entities: Dict[str, Any], bbox: Optional[List[float]]) -> Dict[str, Any]:
+
+    def build_veda_stac_query(
+        self, entities: Dict[str, Any], bbox: Optional[List[float]]
+    ) -> Dict[str, Any]:
         """Build STAC query specifically for VEDA collections (no datetime filters)"""
         query_text = entities.get("original_query", "").lower()
-        
+
         # Get VEDA collections based on query
         veda_collections = self.get_veda_collections_for_query(query_text)
-        
+
         # If no specific collections found, try to map to VEDA categories
         # BUT check for specific datasets first to avoid incorrect mapping
         if not veda_collections:
             # Check for specific datasets that should use Planetary Computer, not VEDA
-            if any(term in query_text for term in ["jrc", "surface water", "global surface water"]):
+            if any(
+                term in query_text
+                for term in ["jrc", "surface water", "global surface water"]
+            ):
                 # JRC Global Surface Water is on Planetary Computer, not VEDA
-                logger.info(f"[WAVE] JRC detected - should use Planetary Computer, not VEDA")
+                logger.info(
+                    "[WAVE] JRC detected - should use Planetary Computer, not VEDA"
+                )
                 return None  # Will fall through to PC handler
-            elif any(term in query_text for term in ["sea surface temperature", "sst", "ocean temperature"]):
+            elif any(
+                term in query_text
+                for term in ["sea surface temperature", "sst", "ocean temperature"]
+            ):
                 # Sea Surface Temperature is on Planetary Computer (noaa-cdr-sea-surface-temperature-whoi)
-                logger.info(f"[TEMP] SST detected - should use Planetary Computer, not VEDA")
+                logger.info(
+                    "[TEMP] SST detected - should use Planetary Computer, not VEDA"
+                )
                 return None  # Will fall through to PC handler
             elif any(term in query_text for term in ["fire", "burn", "wildfire"]):
                 veda_collections = ["barc-thomasfire"]
@@ -709,60 +802,73 @@ class SemanticQueryTranslator:
                 veda_collections = ["blizzard-era5-2m-temp", "blizzard-era5-10m-wind"]
             elif any(term in query_text for term in ["blizzard", "storm"]):
                 veda_collections = ["blizzard-count", "blizzard-alley"]
-        
+
         # Build VEDA query (no datetime - they're static datasets)
         stac_query = {
-            "collections": veda_collections[:3] if veda_collections else ["bangladesh-landcover-2001-2020"],
-            "limit": 10  # VEDA has fewer items per collection
+            "collections": (
+                veda_collections[:3]
+                if veda_collections
+                else ["bangladesh-landcover-2001-2020"]
+            ),
+            "limit": 10,  # VEDA has fewer items per collection
         }
-        
+
         # Add bbox if available
         if bbox:
             stac_query["bbox"] = bbox
-        
+
         logger.info(f"[CHART] Built VEDA STAC query: {stac_query}")
         return stac_query
-    
+
     def _extract_location_from_query(self, query: str) -> Optional[str]:
         """Extract location from query text (basic implementation)"""
         # Simple location extraction - could be enhanced with NER
         query_lower = query.lower()
-        
+
         # Look for common location patterns
         location_patterns = [
-            r'\bin\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:area|region|city|county|state|country))?(?:\s|$|\?|\.)',
-            r'\bof\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:area|region|city|county|state|country))?(?:\s|$|\?|\.)',
-            r'^([A-Z][a-zA-Z\s]+?)(?:\s+(?:area|region|city|county|state|country))?(?:\s|$|\?|\.)'
+            r"\bin\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:area|region|city|county|state|country))?(?:\s|$|\?|\.)",
+            r"\bof\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:area|region|city|county|state|country))?(?:\s|$|\?|\.)",
+            r"^([A-Z][a-zA-Z\s]+?)(?:\s+(?:area|region|city|county|state|country))?(?:\s|$|\?|\.)",
         ]
-        
+
         import re
+
         for pattern in location_patterns:
             match = re.search(pattern, query)
             if match:
                 location = match.group(1).strip()
-                if len(location) > 2 and location not in ['Show', 'Tell', 'What', 'How', 'Why']:
+                if len(location) > 2 and location not in [
+                    "Show",
+                    "Tell",
+                    "What",
+                    "How",
+                    "Why",
+                ]:
                     return location
-        
+
         return None
 
-    async def classify_query_intent_unified(self, query: str, conversation_id: str = None) -> Dict[str, Any]:
+    async def classify_query_intent_unified(
+        self, query: str, conversation_id: str = None
+    ) -> Dict[str, Any]:
         """
         [TARGET] UNIFIED INTENT CLASSIFIER (Replaces Agent 0 + Agent 0.5)
-        
+
         Single GPT-5 call that determines query intent and routing.
-        
+
         Intent Types (4):
         - vision: Analyze CURRENTLY VISIBLE imagery (no new data loading)
         - stac: Load NEW satellite imagery only (no analysis)
         - hybrid: Load NEW imagery AND analyze it (sequential: load -> analyze)
         - contextual: Information/education only (no map interaction)
-        
+
         Benefits over separate calls:
         - 50% faster (one GPT call vs two)
         - 50% cheaper (half the API costs)
         - Better context (GPT sees full picture)
         - No conflicts (single source of truth)
-        
+
         Returns:
             Dict with unified classification:
             {
@@ -781,10 +887,10 @@ class SemanticQueryTranslator:
             if conversation_id:
                 context = self.get_conversation_context(conversation_id)
                 recent_history = self.get_recent_chat_history(conversation_id)
-                
+
                 if recent_history:
-                    last_location = context.get('last_location', 'None')
-                    has_map = "Yes" if context.get('has_rendered_map') else "No"
+                    last_location = context.get("last_location", "None")
+                    has_map = "Yes" if context.get("has_rendered_map") else "No"
                     context_info = f"""
 **CONVERSATION CONTEXT:**
 Recent chat history:
@@ -958,47 +1064,58 @@ Response: {{"intent_type": "contextual", "needs_satellite_data": false, "needs_v
 Query: "Show me the damage from Hurricane Sandy in NYC"
 Response: {{"intent_type": "stac", "needs_satellite_data": true, "needs_vision_analysis": false, "needs_contextual_info": false, "confidence": 0.93, "reasoning": "Contains 'show me' keyword - user wants to visualize/load imagery"}}
 """
-            
+
             # Use fast model for intent classification (lightweight task)
+            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import (
+                OpenAIChatPromptExecutionSettings,
+            )
             from semantic_kernel.functions.kernel_arguments import KernelArguments
-            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import OpenAIChatPromptExecutionSettings
+
             _cls_settings = OpenAIChatPromptExecutionSettings(
                 service_id="chat-completion-4o",  # Fast model (gpt-4o-mini)
                 temperature=0.3,
-                max_completion_tokens=200
+                max_completion_tokens=200,
             )
             _cls_args = KernelArguments(settings=_cls_settings)
-            
+
             result = await self.kernel.invoke_prompt(
                 prompt=prompt,
                 function_name="classify_query_unified",
                 plugin_name="classification",
-                arguments=_cls_args
+                arguments=_cls_args,
             )
-            
+
             content = self._extract_clean_content_from_sk_result(result).strip()
-            
+
             # Clean JSON markers
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0].strip()
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0].strip()
-            
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
             # Parse JSON response
             classification = json.loads(content)
-            
+
             # Add query to classification for downstream use
-            classification['query'] = query
-            
-            logger.info(f"[TARGET] UNIFIED INTENT CLASSIFIER: {classification['intent_type']}")
-            logger.info(f"   Satellite data needed: {classification.get('needs_satellite_data')}")
-            logger.info(f"   Vision analysis needed: {classification.get('needs_vision_analysis')}")
-            logger.info(f"   Contextual info needed: {classification.get('needs_contextual_info')}")
+            classification["query"] = query
+
+            logger.info(
+                f"[TARGET] UNIFIED INTENT CLASSIFIER: {classification['intent_type']}"
+            )
+            logger.info(
+                f"   Satellite data needed: {classification.get('needs_satellite_data')}"
+            )
+            logger.info(
+                f"   Vision analysis needed: {classification.get('needs_vision_analysis')}"
+            )
+            logger.info(
+                f"   Contextual info needed: {classification.get('needs_contextual_info')}"
+            )
             logger.info(f"   Confidence: {classification.get('confidence', 0)}")
             logger.info(f"   Reasoning: {classification.get('reasoning', 'N/A')}")
-            
+
             return classification
-                
+
         except json.JSONDecodeError as e:
             logger.error(f"[FAIL] Unified intent classifier JSON parsing failed: {e}")
             logger.error(f"Raw content: {content[:500]}")
@@ -1008,11 +1125,13 @@ Response: {{"intent_type": "stac", "needs_satellite_data": true, "needs_vision_a
             logger.error(f"[FAIL] Unified intent classifier failed: {e}", exc_info=True)
             # Fallback to old method
             return await self.classify_query_intent_fallback(query, conversation_id)
-    
-    async def classify_query_intent_fallback(self, query: str, conversation_id: str = None) -> Dict[str, Any]:
+
+    async def classify_query_intent_fallback(
+        self, query: str, conversation_id: str = None
+    ) -> Dict[str, Any]:
         """
         Fallback intent classifier when unified method fails.
-        
+
         Uses simpler classification without module detection.
         """
         try:
@@ -1021,10 +1140,10 @@ Response: {{"intent_type": "stac", "needs_satellite_data": true, "needs_vision_a
             if conversation_id:
                 context = self.get_conversation_context(conversation_id)
                 recent_history = self.get_recent_chat_history(conversation_id)
-                
+
                 if recent_history:
-                    last_location = context.get('last_location', 'None')
-                    has_map = "Yes" if context.get('has_rendered_map') else "No"
+                    last_location = context.get("last_location", "None")
+                    has_map = "Yes" if context.get("has_rendered_map") else "No"
                     context_info = f"""
 **CONVERSATION CONTEXT:**
 Recent chat history:
@@ -1056,60 +1175,69 @@ Return only: map_only_request, chat_only_request, or hybrid_request
 
 Query: "{query}"
 """
-            
+
             # Use fast model for fallback classification (lightweight task)
+            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import (
+                OpenAIChatPromptExecutionSettings,
+            )
             from semantic_kernel.functions.kernel_arguments import KernelArguments
-            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import OpenAIChatPromptExecutionSettings
+
             _cls_settings = OpenAIChatPromptExecutionSettings(
                 service_id="chat-completion-4o",  # Fast model (gpt-4o-mini)
                 temperature=0.3,
-                max_completion_tokens=50
+                max_completion_tokens=50,
             )
             _cls_args = KernelArguments(settings=_cls_settings)
-            
+
             # Use Semantic Kernel for classification
             result = await self.kernel.invoke_prompt(
                 prompt=prompt,
                 function_name="classify_query",
                 plugin_name="classification",
-                arguments=_cls_args
+                arguments=_cls_args,
             )
-            
+
             intent = self._extract_clean_content_from_sk_result(result).strip().lower()
             logger.info(f"[BOT] GPT classified query '{query}' as: {intent}")
-            
+
             # Return in expected format with auto-detected modules
-            if intent == 'map_only_request':
+            if intent == "map_only_request":
                 classification_result = {
                     "intent_type": "map_only_request",
                     "needs_satellite_data": True,
                     "needs_contextual_info": False,
-                    "modules_required": [{"name": "map_display", "priority": 10, "config": {}}],
+                    "modules_required": [
+                        {"name": "map_display", "priority": 10, "config": {}}
+                    ],
                     "confidence": 0.95,
-                    "query": query
+                    "query": query,
                 }
-            elif intent == 'chat_only_request':
+            elif intent == "chat_only_request":
                 classification_result = {
                     "intent_type": "chat_only_request",
                     "needs_satellite_data": False,
                     "needs_contextual_info": True,
                     "modules_required": [],
                     "confidence": 0.95,
-                    "query": query
+                    "query": query,
                 }
             else:  # hybrid_request
                 classification_result = {
                     "intent_type": "hybrid_request",
                     "needs_satellite_data": True,
                     "needs_contextual_info": True,
-                    "modules_required": [{"name": "map_display", "priority": 10, "config": {}}],
+                    "modules_required": [
+                        {"name": "map_display", "priority": 10, "config": {}}
+                    ],
                     "confidence": 0.90,
-                    "query": query
+                    "query": query,
                 }
-            
-            logger.info(f"[TARGET] Fallback classification result: {classification_result}")
+
+            logger.info(
+                f"[TARGET] Fallback classification result: {classification_result}"
+            )
             return classification_result
-                
+
         except Exception as e:
             logger.error(f"[FAIL] Fallback classification failed: {e}")
             # Default to hybrid since most disaster/impact queries need both map and context
@@ -1117,34 +1245,44 @@ Query: "{query}"
                 "intent_type": "hybrid",
                 "needs_satellite_data": True,
                 "needs_contextual_info": True,
-                "modules_required": [{"name": "map_display", "priority": 10, "config": {}}],
+                "modules_required": [
+                    {"name": "map_display", "priority": 10, "config": {}}
+                ],
                 "confidence": 0.5,
                 "query": query,
-                "fallback_reason": "GPT classification failed, defaulting to hybrid"
+                "fallback_reason": "GPT classification failed, defaulting to hybrid",
             }
 
-    async def classify_query_intent_old_complex(self, query: str, conversation_id: str = None) -> Dict[str, Any]:
+    async def classify_query_intent_old_complex(
+        self, query: str, conversation_id: str = None
+    ) -> Dict[str, Any]:
         """OLD COMPLEX METHOD - Classify query to determine if it needs STAC data search or contextual Earth science analysis"""
-        
-        logger.debug(f"[LAUNCH] QUERY CLASSIFICATION: Starting for '{query}' (conversation: {conversation_id})")
-        
+
+        logger.debug(
+            f"[LAUNCH] QUERY CLASSIFICATION: Starting for '{query}' (conversation: {conversation_id})"
+        )
+
         # [BRAIN] CONVERSATION CONTEXT ANALYSIS
         context = None
         is_first_query = True
         is_follow_up = False
-        
+
         if conversation_id:
             context = self.get_conversation_context(conversation_id)
             is_first_query = context["query_count"] == 0
             is_follow_up = self.is_follow_up_query(conversation_id, query)
-            
-            logger.info(f"[BRAIN] Conversation context: first_query={is_first_query}, follow_up={is_follow_up}, map_rendered={context.get('has_rendered_map', False)}")
-        
+
+            logger.info(
+                f"[BRAIN] Conversation context: first_query={is_first_query}, follow_up={is_follow_up}, map_rendered={context.get('has_rendered_map', False)}"
+            )
+
         # [TARGET] ENHANCED CLASSIFICATION LOGIC
-        
+
         # First query: Default to geospatial_data_search with contextual info
         if is_first_query:
-            logger.info("[MAP] FIRST QUERY: Defaulting to geospatial_data_search with contextual analysis")
+            logger.info(
+                "[MAP] FIRST QUERY: Defaulting to geospatial_data_search with contextual analysis"
+            )
             return {
                 "intent_type": "hybrid",  # Show map AND provide context for first queries
                 "needs_satellite_data": True,
@@ -1153,12 +1291,14 @@ Query: "{query}"
                 "temporal_focus": None,
                 "disaster_or_event": None,
                 "confidence": 0.95,
-                "reasoning": "First query in conversation - showing map with contextual analysis"
+                "reasoning": "First query in conversation - showing map with contextual analysis",
             }
-        
+
         # Follow-up query: Pure contextual analysis (no new STAC search)
         if is_follow_up:
-            logger.info("[THINK] FOLLOW-UP QUERY: Pure contextual analysis, no new map rendering")
+            logger.info(
+                "[THINK] FOLLOW-UP QUERY: Pure contextual analysis, no new map rendering"
+            )
             return {
                 "intent_type": "contextual_analysis",
                 "needs_satellite_data": False,  # Reuse existing map data
@@ -1167,12 +1307,12 @@ Query: "{query}"
                 "temporal_focus": None,
                 "disaster_or_event": None,
                 "confidence": 0.90,
-                "reasoning": "Follow-up query - contextual analysis only"
+                "reasoning": "Follow-up query - contextual analysis only",
             }
-        
+
         # Ensure kernel is initialized
         await self._ensure_kernel_initialized()
-        
+
         if not self._kernel_initialized or self.kernel is None:
             logger.warning("Semantic Kernel not available, defaulting to hybrid")
             return {
@@ -1180,9 +1320,9 @@ Query: "{query}"
                 "needs_satellite_data": True,
                 "needs_contextual_info": True,
                 "confidence": 0.5,
-                "fallback_reason": "Semantic Kernel not available"
+                "fallback_reason": "Semantic Kernel not available",
             }
-        
+
         try:
             # Create classification prompt
             classification_prompt = """
@@ -1225,7 +1365,7 @@ Query: "{query}"
 
             Query to classify: "{{$query}}"
             """
-            
+
             # Create prompt configuration for SK 1.36.2
             prompt_config = PromptTemplateConfig(
                 template=classification_prompt,
@@ -1233,10 +1373,12 @@ Query: "{query}"
                 description="Classify user query for OpenGeo AI Assistant",
                 template_format="semantic-kernel",
                 input_variables=[
-                    InputVariable(name="query", description="The user's query to classify")
-                ]
+                    InputVariable(
+                        name="query", description="The user's query to classify"
+                    )
+                ],
             )
-            
+
             # Execute classification using SK 1.36.2 invoke_prompt
             arguments = KernelArguments(query=query)
             result = await asyncio.wait_for(
@@ -1245,46 +1387,60 @@ Query: "{query}"
                     function_name="classify_query",
                     plugin_name="semantic_translator",
                     arguments=arguments,
-                    prompt_template_config=prompt_config
+                    prompt_template_config=prompt_config,
                 ),
-                timeout=30.0
+                timeout=30.0,
             )
-            
+
             # Parse the JSON response
-            content = str(result.value) if hasattr(result, 'value') else str(result)
+            content = str(result.value) if hasattr(result, "value") else str(result)
             content = content.strip()
-            
+
             # CRITICAL FIX: If result is wrapped in ChatMessageContent/TextContent, extract the actual text
-            if content.startswith('[ChatMessageContent') or content.startswith('[TextContent'):
+            if content.startswith("[ChatMessageContent") or content.startswith(
+                "[TextContent"
+            ):
                 import re
-                text_match = re.search(r"text='([^']+)'", content) or re.search(r'text="([^"]+)"', content)
+
+                text_match = re.search(r"text='([^']+)'", content) or re.search(
+                    r'text="([^"]+)"', content
+                )
                 if text_match:
                     content = text_match.group(1)
-            
+
             # Clean up the response to extract JSON
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0]
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0]
-            
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+
             classification = json.loads(content)
-            
+
             # Validate required fields - default to hybrid if incomplete
-            required_fields = ['intent_type', 'needs_satellite_data', 'needs_contextual_info', 'confidence']
+            required_fields = [
+                "intent_type",
+                "needs_satellite_data",
+                "needs_contextual_info",
+                "confidence",
+            ]
             for field in required_fields:
                 if field not in classification:
-                    logger.warning(f"Missing field {field} in classification, defaulting to hybrid")
+                    logger.warning(
+                        f"Missing field {field} in classification, defaulting to hybrid"
+                    )
                     return {
                         "intent_type": "hybrid",
                         "needs_satellite_data": True,
                         "needs_contextual_info": True,
                         "confidence": 0.5,
-                        "fallback_reason": f"Missing field: {field}"
+                        "fallback_reason": f"Missing field: {field}",
                     }
-            
-            logger.info(f"Query classified as: {classification['intent_type']} (confidence: {classification['confidence']})")
+
+            logger.info(
+                f"Query classified as: {classification['intent_type']} (confidence: {classification['confidence']})"
+            )
             return classification
-            
+
         except Exception as e:
             logger.error(f"Query classification failed: {e}, defaulting to hybrid")
             return {
@@ -1292,40 +1448,39 @@ Query: "{query}"
                 "needs_satellite_data": True,
                 "needs_contextual_info": True,
                 "confidence": 0.5,
-                "fallback_reason": f"Classification failed: {str(e)}"
+                "fallback_reason": f"Classification failed: {str(e)}",
             }
-    
 
-        
     async def _ensure_kernel_initialized(self):
         """Lazy initialization of the Semantic Kernel with proper error handling"""
         logger.info("[TOOL] _ensure_kernel_initialized() called")
         logger.info(f"   Current state: _kernel_initialized={self._kernel_initialized}")
-        
+
         if self._kernel_initialized:
-            logger.info(f"   [OK] Kernel already initialized, returning")
+            logger.info("   [OK] Kernel already initialized, returning")
             return
-            
+
         try:
-            logger.info(f"   [SYNC] Starting kernel initialization...")
+            logger.info("   [SYNC] Starting kernel initialization...")
             logger.info(f"   LLM Base URL: {self.llm_base_url}")
             logger.info(f"   Model Name: {self.get_active_model()}")
             logger.info(f"   API Key present: {bool(self.llm_api_key)}")
-            
+
             self.kernel = Kernel()
-            logger.info(f"   [OK] Kernel object created")
-            
+            logger.info("   [OK] Kernel object created")
+
             # Get the active model (supports runtime override)
             active_model = self.get_active_model()
             logger.info(f"   Base URL: {self.llm_base_url}")
 
             # Primary service
             from semantic_kernel.connectors.ai.open_ai import OpenAIChatCompletion
+
             chat_service = OpenAIChatCompletion(
                 ai_model_id=active_model,
                 api_key=self.llm_api_key,
                 base_url=self.llm_base_url,
-                service_id="chat-completion"
+                service_id="chat-completion",
             )
             self.kernel.add_service(chat_service)
             logger.info(f"   [OK] {active_model} service added to kernel")
@@ -1337,13 +1492,15 @@ Query: "{query}"
                     ai_model_id=fast_model,
                     api_key=self.llm_api_key,
                     base_url=self.llm_base_url,
-                    service_id="chat-completion-4o"
+                    service_id="chat-completion-4o",
                 )
                 self.kernel.add_service(chat_service_fast)
-                logger.info(f"   [OK] Fast {fast_model} service added to kernel for classification/extraction")
+                logger.info(
+                    f"   [OK] Fast {fast_model} service added to kernel for classification/extraction"
+                )
             except Exception as e:
                 logger.warning(f"   [WARN] Failed to add secondary service: {e}")
-            
+
             # ================================================================
             # [MAP] REGISTER GEOCODING PLUGIN - Nominatim tool for function calling
             # ================================================================
@@ -1355,32 +1512,36 @@ Query: "{query}"
                 # Create the geocoding function with proper decorator
                 @kernel_function(
                     name="geocode",
-                    description="Geocode a location name using Nominatim. Returns bbox coordinates and location metadata. Use this to verify locations and get accurate coordinates."
+                    description="Geocode a location name using Nominatim. Returns bbox coordinates and location metadata. Use this to verify locations and get accurate coordinates.",
                 )
                 async def geocode_location(location_name: str) -> str:
                     """Geocode a location using Nominatim."""
                     return await geocoding_plugin.geocode(location_name)
 
                 # Add as a plugin to the kernel
-                self.kernel.add_function(plugin_name="geocoding", function=geocode_location)
-                logger.info(f"   [OK] Geocoding plugin registered (geocode tool available)")
+                self.kernel.add_function(
+                    plugin_name="geocoding", function=geocode_location
+                )
+                logger.info(
+                    "   [OK] Geocoding plugin registered (geocode tool available)"
+                )
             except Exception as e:
                 logger.warning(f"   [WARN] Failed to register geocoding plugin: {e}")
                 # Not fatal - will fall back to non-tool location extraction
 
             self._kernel_initialized = True
-            logger.info(f"   [OK] Kernel initialization SUCCESSFUL!")
+            logger.info("   [OK] Kernel initialization SUCCESSFUL!")
             logger.info(f"   [OK] Semantic Kernel initialized with {self.model_name}")
 
         except Exception as e:
-            logger.error(f"   [FAIL] Kernel initialization FAILED!")
+            logger.error("   [FAIL] Kernel initialization FAILED!")
             logger.error(f"   Exception type: {type(e).__name__}")
             logger.error(f"   Exception message: {str(e)}")
-            logger.error(f"   Traceback:")
+            logger.error("   Traceback:")
             logger.error(traceback.format_exc())
             self.kernel = None
             self._kernel_initialized = False
-    
+
     async def test_connection(self) -> bool:
         """Test connection to LLM for health check"""
         try:
@@ -1395,6 +1556,7 @@ Query: "{query}"
 
             # Create chat history for testing
             from semantic_kernel.contents import ChatHistory
+
             chat_history = ChatHistory()
             chat_history.add_user_message(test_prompt)
 
@@ -1402,11 +1564,12 @@ Query: "{query}"
             chat_completion = self.kernel.get_service("chat-completion")
 
             # Test with minimal settings and timeout
-            from semantic_kernel.connectors.ai.open_ai import OpenAIChatPromptExecutionSettings
+            from semantic_kernel.connectors.ai.open_ai import (
+                OpenAIChatPromptExecutionSettings,
+            )
+
             execution_settings = OpenAIChatPromptExecutionSettings(
-                temperature=1.0,
-                max_completion_tokens=200,
-                service_id="chat-completion"
+                temperature=1.0, max_completion_tokens=200, service_id="chat-completion"
             )
 
             # Try to get a response with timeout
@@ -1414,16 +1577,20 @@ Query: "{query}"
                 chat_completion.get_chat_message_content(
                     chat_history=chat_history,
                     settings=execution_settings,
-                    kernel=self.kernel
+                    kernel=self.kernel,
                 ),
-                timeout=30.0
+                timeout=30.0,
             )
 
             if response:
                 if response.content:
-                    logger.info(f"[OK] LLM {self.model_name} connectivity test successful: {response.content[:50]}...")
+                    logger.info(
+                        f"[OK] LLM {self.model_name} connectivity test successful: {response.content[:50]}..."
+                    )
                 else:
-                    logger.info(f"[OK] LLM {self.model_name} connectivity test successful (reasoning model response)")
+                    logger.info(
+                        f"[OK] LLM {self.model_name} connectivity test successful (reasoning model response)"
+                    )
                 return True
             else:
                 logger.warning("[WARN] LLM responded but with no response object")
@@ -1436,28 +1603,28 @@ Query: "{query}"
             logger.error(f"[FAIL] LLM connectivity test failed: {e}")
             logger.error(f"[FAIL] Full traceback: {traceback.format_exc()}")
             return False
-    
+
     # ========================================================================
     # COLLECTION MAPPING AGENT: Intelligently select relevant STAC collections
     # ========================================================================
-    
+
     async def collection_mapping_agent(self, query: str) -> List[str]:
         """
         [BOT] COLLECTION MAPPING AGENT: Use GPT to intelligently select relevant collections
-        
+
         This agent maps user queries to appropriate STAC collections by:
         - Understanding query intent (elevation, fire, optical imagery, etc.)
         - Matching to collection capabilities from COLLECTION_PROFILES
         - Handling both explicit mentions ("Landsat") and implicit ("satellite images")
-        
+
         Returns:
             List of collection IDs (e.g., ["cop-dem-glo-30", "sentinel-2-l2a"])
         """
-        
+
         logger.info("=" * 80)
         logger.info(f"[BOT] AGENT 1 START: Collection Mapping for query: '{query}'")
         logger.info("=" * 80)
-        
+
         # ========================================================================
         # [FAST] PERFORMANCE OPTIMIZATION: Fast keyword matching before LLM
         # ========================================================================
@@ -1465,27 +1632,39 @@ Query: "{query}"
         # Falls back to LLM for ambiguous/complex queries
         keyword_matched = self._fast_collection_keyword_match(query)
         if keyword_matched:
-            logger.info(f"[FAST] FAST KEYWORD MATCH: {keyword_matched} (skipped LLM - saved ~1.2s)")
+            logger.info(
+                f"[FAST] FAST KEYWORD MATCH: {keyword_matched} (skipped LLM - saved ~1.2s)"
+            )
             return keyword_matched
         # ========================================================================
-        
+
         await self._ensure_kernel_initialized()
-        
-        logger.info(f"[SEARCH] AGENT 1 DEBUG: Kernel initialized? {self._kernel_initialized}")
-        logger.info(f"[SEARCH] AGENT 1 DEBUG: Kernel object exists? {self.kernel is not None}")
-        
+
+        logger.info(
+            f"[SEARCH] AGENT 1 DEBUG: Kernel initialized? {self._kernel_initialized}"
+        )
+        logger.info(
+            f"[SEARCH] AGENT 1 DEBUG: Kernel object exists? {self.kernel is not None}"
+        )
+
         if not self._kernel_initialized or self.kernel is None:
-            logger.warning("[WARN] AGENT 1: Kernel not initialized - falling back to keyword-based selection")
+            logger.warning(
+                "[WARN] AGENT 1: Kernel not initialized - falling back to keyword-based selection"
+            )
             fallback_result = self._select_collections_fallback(query)
-            logger.info(f"[SYNC] AGENT 1 FALLBACK: Returned {len(fallback_result)} collections: {fallback_result}")
+            logger.info(
+                f"[SYNC] AGENT 1 FALLBACK: Returned {len(fallback_result)} collections: {fallback_result}"
+            )
             return fallback_result
-        
+
         try:
             logger.info("[TOOL] AGENT 1: Building collection catalog...")
             # Build comprehensive collection catalog from COLLECTION_PROFILES
             collection_catalog = self._build_comprehensive_collection_catalog()
-            logger.info(f"[OK] AGENT 1: Collection catalog built ({len(collection_catalog)} characters)")
-            
+            logger.info(
+                f"[OK] AGENT 1: Collection catalog built ({len(collection_catalog)} characters)"
+            )
+
             prompt = f"""You are a satellite data expert. Select the most relevant STAC collections from the Planetary Computer catalog.
 
 {collection_catalog}
@@ -1557,274 +1736,360 @@ Format: ["collection-id"]"""
 
             logger.info("[TOOL] AGENT 1: Creating execution settings...")
             # Execute with Semantic Kernel
+            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import (
+                OpenAIChatPromptExecutionSettings,
+            )
             from semantic_kernel.functions.kernel_arguments import KernelArguments
-            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import OpenAIChatPromptExecutionSettings
-            
+
             # Use fast model (gpt-4o-mini) for structured classification tasks
             # Collection mapping is a lightweight task — just returns a JSON array of IDs
             execution_settings = OpenAIChatPromptExecutionSettings(
                 service_id="chat-completion-4o",  # Fast model (gpt-4o-mini)
                 temperature=0.3,  # Lower temp for precise classification
-                max_completion_tokens=300  # Reduced tokens (just need JSON array)
+                max_completion_tokens=300,  # Reduced tokens (just need JSON array)
             )
-            logger.info(f"[OK] AGENT 1: Execution settings created (fast model, temp=0.3, max_tokens=300)")
-            
+            logger.info(
+                "[OK] AGENT 1: Execution settings created (fast model, temp=0.3, max_tokens=300)"
+            )
+
             arguments = KernelArguments(settings=execution_settings)
-            logger.info(f"[OK] AGENT 1: KernelArguments created")
-            
-            logger.info(f"[LAUNCH] AGENT 1: Calling kernel.invoke_prompt() with query: '{query[:100]}...'")
+            logger.info("[OK] AGENT 1: KernelArguments created")
+
+            logger.info(
+                f"[LAUNCH] AGENT 1: Calling kernel.invoke_prompt() with query: '{query[:100]}...'"
+            )
             logger.info(f"[LAUNCH] AGENT 1: Prompt length: {len(prompt)} characters")
-            
+
             result = await asyncio.wait_for(
                 self.kernel.invoke_prompt(
                     prompt=prompt,
                     function_name="select_collections",
                     plugin_name="collection_selector",
-                    arguments=arguments
+                    arguments=arguments,
                 ),
-                timeout=30.0
+                timeout=30.0,
             )
-            
-            logger.info(f"[OK] AGENT 1: kernel.invoke_prompt() completed successfully")
+
+            logger.info("[OK] AGENT 1: kernel.invoke_prompt() completed successfully")
             logger.info(f"[SEARCH] AGENT 1: Result type: {type(result)}")
-            logger.info(f"[SEARCH] AGENT 1: Result has 'value' attr? {hasattr(result, 'value')}")
-            
+            logger.info(
+                f"[SEARCH] AGENT 1: Result has 'value' attr? {hasattr(result, 'value')}"
+            )
+
             # Extract result - handle Semantic Kernel response objects properly
-            if hasattr(result, 'value'):
+            if hasattr(result, "value"):
                 content = str(result.value)
-                logger.info(f"[PAGE] AGENT 1: Extracted content from result.value")
+                logger.info("[PAGE] AGENT 1: Extracted content from result.value")
             else:
                 content = str(result)
-                logger.info(f"[PAGE] AGENT 1: Extracted content from str(result)")
-            
+                logger.info("[PAGE] AGENT 1: Extracted content from str(result)")
+
             # CRITICAL FIX: If result is wrapped in ChatMessageContent/TextContent, extract the actual text
             # This happens when SK returns a list of content objects instead of plain text
-            if content.startswith('[ChatMessageContent') or content.startswith('[TextContent'):
-                logger.info(f"[TOOL] AGENT 1: Detected wrapped SK content, extracting text...")
+            if content.startswith("[ChatMessageContent") or content.startswith(
+                "[TextContent"
+            ):
+                logger.info(
+                    "[TOOL] AGENT 1: Detected wrapped SK content, extracting text..."
+                )
                 # Extract text from the content object(s)
                 # Pattern: text='["collection-id"]' or text="[\"collection-id\"]"
                 import re
-                text_match = re.search(r"text='([^']+)'", content) or re.search(r'text="([^"]+)"', content)
+
+                text_match = re.search(r"text='([^']+)'", content) or re.search(
+                    r'text="([^"]+)"', content
+                )
                 if text_match:
                     content = text_match.group(1)
-                    logger.info(f"[OK] AGENT 1: Extracted text content: {content[:100]}")
+                    logger.info(
+                        f"[OK] AGENT 1: Extracted text content: {content[:100]}"
+                    )
                 else:
-                    logger.error(f"[FAIL] AGENT 1: Failed to extract text from wrapped content")
+                    logger.error(
+                        "[FAIL] AGENT 1: Failed to extract text from wrapped content"
+                    )
                     logger.error(f"   Content preview: {content[:200]}")
-                    raise ValueError(f"Could not extract text from SK response")
-            
-            logger.info(f"[PAGE] AGENT 1: Raw GPT Response (first 500 chars):")
+                    raise ValueError("Could not extract text from SK response")
+
+            logger.info("[PAGE] AGENT 1: Raw GPT Response (first 500 chars):")
             logger.info(f"   {content[:500]}")
-            logger.info(f"[PAGE] AGENT 1: Raw GPT Response (last 100 chars):")
+            logger.info("[PAGE] AGENT 1: Raw GPT Response (last 100 chars):")
             logger.info(f"   ...{content[-100:]}")
-            logger.info(f"[PAGE] AGENT 1: Total response length: {len(content)} characters")
-            
-            logger.info(f"[TOOL] AGENT 1: Attempting to parse JSON...")
+            logger.info(
+                f"[PAGE] AGENT 1: Total response length: {len(content)} characters"
+            )
+
+            logger.info("[TOOL] AGENT 1: Attempting to parse JSON...")
             # Parse JSON response
             try:
                 collections = json.loads(content.strip())
-                logger.info(f"[OK] AGENT 1: JSON parsed successfully")
+                logger.info("[OK] AGENT 1: JSON parsed successfully")
             except json.JSONDecodeError as e:
                 logger.error(f"[FAIL] AGENT 1: JSON parse error: {e}")
                 logger.error(f"[FAIL] AGENT 1: Failed content: {content}")
                 raise ValueError(f"GPT returned invalid JSON: {e}")
-            
+
             logger.info(f"[SEARCH] AGENT 1: Parsed result type: {type(collections)}")
             logger.info(f"[SEARCH] AGENT 1: Parsed result value: {collections}")
-            
+
             if not isinstance(collections, list):
-                logger.error(f"[FAIL] AGENT 1: Result is not a list! Type: {type(collections)}")
+                logger.error(
+                    f"[FAIL] AGENT 1: Result is not a list! Type: {type(collections)}"
+                )
                 raise ValueError("Agent returned non-list response")
-            
-            logger.info(f"[OK] AGENT 1: Result is a valid list with {len(collections)} items")
-            logger.info(f"[SEARCH] AGENT 1: Collections before validation: {collections}")
-            
+
+            logger.info(
+                f"[OK] AGENT 1: Result is a valid list with {len(collections)} items"
+            )
+            logger.info(
+                f"[SEARCH] AGENT 1: Collections before validation: {collections}"
+            )
+
             # Validate collections against known collections
             KNOWN_COLLECTIONS = {
-                "sentinel-2-l2a", "sentinel-1-grd", "sentinel-1-rtc",
-                "landsat-c2-l2", "hls2-l30", "hls2-s30",  # [OK] Correct IDs from collection_profiles.py
-                "cop-dem-glo-30", "cop-dem-glo-90", "nasadem",
-                "modis-14A1-061", "modis-14A2-061", "modis-64A1-061",
-                "modis-13Q1-061", "modis-13A1-061", "modis-09A1-061",
-                "modis-09Q1-061", "modis-10A1-061", "modis-10A2-061",
-                "modis-11A1-061", "modis-15A2H-061", "modis-17A2H-061", "modis-17A3HGF-061",
-                "naip", "3dep-seamless", "alos-dem", "alos-palsar-mosaic",
-                "aster-l1t", "era5-pds", "goes-cmi", "goes-glm",
-                "ms-buildings", "noaa-climate-normals-gridded",  # [OK] Fixed: ms-buildings (was microsoft-buildings)
-                "noaa-climate-normals-netcdf", "us-census"
+                "sentinel-2-l2a",
+                "sentinel-1-grd",
+                "sentinel-1-rtc",
+                "landsat-c2-l2",
+                "hls2-l30",
+                "hls2-s30",  # [OK] Correct IDs from collection_profiles.py
+                "cop-dem-glo-30",
+                "cop-dem-glo-90",
+                "nasadem",
+                "modis-14A1-061",
+                "modis-14A2-061",
+                "modis-64A1-061",
+                "modis-13Q1-061",
+                "modis-13A1-061",
+                "modis-09A1-061",
+                "modis-09Q1-061",
+                "modis-10A1-061",
+                "modis-10A2-061",
+                "modis-11A1-061",
+                "modis-15A2H-061",
+                "modis-17A2H-061",
+                "modis-17A3HGF-061",
+                "naip",
+                "3dep-seamless",
+                "alos-dem",
+                "alos-palsar-mosaic",
+                "aster-l1t",
+                "era5-pds",
+                "goes-cmi",
+                "goes-glm",
+                "ms-buildings",
+                "noaa-climate-normals-gridded",  # [OK] Fixed: ms-buildings (was microsoft-buildings)
+                "noaa-climate-normals-netcdf",
+                "us-census",
                 # Removed: mur-sst, worldpop (no longer in STAC API)
             }
-            
+
             # If PC metadata is loaded, use it as the source of truth (ALL 47 collections from PC repository)
             if PC_METADATA_AVAILABLE:
                 KNOWN_COLLECTIONS = set(get_all_collection_ids())
-                logger.info(f"[SEARCH] AGENT 1: Using PC metadata as source of truth ({len(KNOWN_COLLECTIONS)} collections from PC repository)")
+                logger.info(
+                    f"[SEARCH] AGENT 1: Using PC metadata as source of truth ({len(KNOWN_COLLECTIONS)} collections from PC repository)"
+                )
             else:
-                logger.info(f"[SEARCH] AGENT 1: Using hardcoded KNOWN_COLLECTIONS ({len(KNOWN_COLLECTIONS)} collections)")
-            
+                logger.info(
+                    f"[SEARCH] AGENT 1: Using hardcoded KNOWN_COLLECTIONS ({len(KNOWN_COLLECTIONS)} collections)"
+                )
+
             valid_collections = [c for c in collections if c in KNOWN_COLLECTIONS]
             invalid_collections = [c for c in collections if c not in KNOWN_COLLECTIONS]
-            
+
             if invalid_collections:
-                logger.warning(f"[WARN] AGENT 1: Found {len(invalid_collections)} invalid collections: {invalid_collections}")
-            
+                logger.warning(
+                    f"[WARN] AGENT 1: Found {len(invalid_collections)} invalid collections: {invalid_collections}"
+                )
+
             if not valid_collections:
-                logger.error(f"[FAIL] AGENT 1: No valid collections found!")
+                logger.error("[FAIL] AGENT 1: No valid collections found!")
                 logger.error(f"   GPT returned: {collections}")
-                logger.error(f"   Valid options are: {sorted(KNOWN_COLLECTIONS)[:20]}... ({len(KNOWN_COLLECTIONS)} total)")
-                logger.info(f"[SYNC] AGENT 1: Falling back to keyword-based selection")
+                logger.error(
+                    f"   Valid options are: {sorted(KNOWN_COLLECTIONS)[:20]}... ({len(KNOWN_COLLECTIONS)} total)"
+                )
+                logger.info("[SYNC] AGENT 1: Falling back to keyword-based selection")
                 fallback_result = self._select_collections_fallback(query)
-                logger.info(f"[OK] AGENT 1 FALLBACK: Returned {len(fallback_result)} collections: {fallback_result}")
+                logger.info(
+                    f"[OK] AGENT 1 FALLBACK: Returned {len(fallback_result)} collections: {fallback_result}"
+                )
                 return fallback_result
-            
+
             logger.info("=" * 80)
-            logger.info(f"[BOT] STEP 3: COLLECTION MAPPER (AGENT 1) - OUTPUT")
+            logger.info("[BOT] STEP 3: COLLECTION MAPPER (AGENT 1) - OUTPUT")
             logger.info(f"🆔 SESSION: {self.current_session_id}")
             logger.info(f"[INBOX] INPUT Query: '{query}'")
             logger.info(f"[OUTBOX] OUTPUT Collections: {valid_collections}")
             logger.info(f"[CHART] Collection Count: {len(valid_collections)}")
             # NOTE: Typically returns exactly 1 collection. Exception: HLS returns 2 (hls2-l30, hls2-s30)
             if len(valid_collections) == 1:
-                logger.info(f"   [OK] Single collection selected (standard behavior)")
-            elif len(valid_collections) == 2 and all('hls' in c.lower() for c in valid_collections):
-                logger.info(f"   [OK] HLS pair selected (expected: hls2-l30 + hls2-s30 = same product family)")
+                logger.info("   [OK] Single collection selected (standard behavior)")
+            elif len(valid_collections) == 2 and all(
+                "hls" in c.lower() for c in valid_collections
+            ):
+                logger.info(
+                    "   [OK] HLS pair selected (expected: hls2-l30 + hls2-s30 = same product family)"
+                )
             else:
-                logger.warning(f"   [WARN] Multiple collections returned - unusual (should typically be 1 or HLS pair)")
+                logger.warning(
+                    "   [WARN] Multiple collections returned - unusual (should typically be 1 or HLS pair)"
+                )
             for i, coll in enumerate(valid_collections, 1):
                 logger.info(f"  {i}. {coll}")
             logger.info("=" * 80)
             return valid_collections
-            
+
         except Exception as e:
             logger.error(f"[FAIL] AGENT 1 EXCEPTION: {type(e).__name__}: {str(e)}")
-            logger.error(f"[FAIL] AGENT 1 TRACEBACK:")
+            logger.error("[FAIL] AGENT 1 TRACEBACK:")
             logger.error(traceback.format_exc())
-            logger.info(f"� AGENT 1: Falling back to keyword-based selection")
+            logger.info("� AGENT 1: Falling back to keyword-based selection")
             fallback_result = self._select_collections_fallback(query)
-            logger.info(f"[OK] AGENT 1 FALLBACK: Returned {len(fallback_result)} collections: {fallback_result}")
+            logger.info(
+                f"[OK] AGENT 1 FALLBACK: Returned {len(fallback_result)} collections: {fallback_result}"
+            )
             logger.info("=" * 80)
             return fallback_result
-    
+
     def _fast_collection_keyword_match(self, query: str) -> Optional[List[str]]:
         """
         [FAST] FAST KEYWORD MATCHING - Single source of truth for collection selection
-        
+
         PRIORITY ORDER:
         1. EXPLICIT platforms with modifiers (Landsat Level 1, HLS S30, Sentinel-1 RTC)
         2. EXPLICIT platform names (Landsat, Sentinel-2, HLS, MODIS, NAIP)
         3. GENERIC intent keywords (fire, elevation, flood, vegetation)
         4. Return None -> LLM handles truly ambiguous queries
-        
+
         This handles 90%+ of queries with fast keyword matching (10ms vs 1200ms LLM).
         """
         query_lower = query.lower()
-        
+
         # ========================================================================
         # TIER 1: EXPLICIT PLATFORMS WITH MODIFIERS (highest specificity)
         # ========================================================================
-        
+
         # HLS (Harmonized Landsat Sentinel) - check BEFORE Landsat since name contains "landsat"
-        if any(k in query_lower for k in ["hls", "harmonized landsat sentinel", "harmonized landsat"]):
-            logger.info(f"[FAST] HLS DETECTED in query")
+        if any(
+            k in query_lower
+            for k in ["hls", "harmonized landsat sentinel", "harmonized landsat"]
+        ):
+            logger.info("[FAST] HLS DETECTED in query")
             if "s30" in query_lower:
                 return ["hls2-s30"]
             if "l30" in query_lower:
                 return ["hls2-l30"]
             return ["hls2-l30", "hls2-s30"]  # Both if unspecified
-        
+
         # Landsat - check for Level 1 vs Level 2
         if "landsat" in query_lower:
-            logger.info(f"[FAST] LANDSAT DETECTED in query")
+            logger.info("[FAST] LANDSAT DETECTED in query")
             # Level 1 indicators
-            if any(k in query_lower for k in ["level 1", "level-1", "l1", "c2-l1", "c2 l1"]):
-                logger.info(f"[FAST] LANDSAT LEVEL 1 -> landsat-c2-l1")
+            if any(
+                k in query_lower for k in ["level 1", "level-1", "l1", "c2-l1", "c2 l1"]
+            ):
+                logger.info("[FAST] LANDSAT LEVEL 1 -> landsat-c2-l1")
                 return ["landsat-c2-l1"]
             # Default to Level 2 (most common, atmospherically corrected)
-            logger.info(f"[FAST] LANDSAT (default L2) -> landsat-c2-l2")
+            logger.info("[FAST] LANDSAT (default L2) -> landsat-c2-l2")
             return ["landsat-c2-l2"]
-        
+
         # Sentinel-2 (optical)
         if any(k in query_lower for k in ["sentinel-2", "sentinel 2"]):
-            logger.info(f"[FAST] SENTINEL-2 DETECTED -> sentinel-2-l2a")
+            logger.info("[FAST] SENTINEL-2 DETECTED -> sentinel-2-l2a")
             return ["sentinel-2-l2a"]
-        
+
         # Sentinel-1 (SAR/radar)
         if any(k in query_lower for k in ["sentinel-1", "sentinel 1"]):
-            logger.info(f"[FAST] SENTINEL-1 DETECTED")
+            logger.info("[FAST] SENTINEL-1 DETECTED")
             if any(k in query_lower for k in ["rtc", "terrain corrected"]):
                 return ["sentinel-1-rtc"]
             return ["sentinel-1-grd"]
-        
+
         # MODIS - check for specific product types
         if "modis" in query_lower:
-            logger.info(f"[FAST] MODIS DETECTED in query")
+            logger.info("[FAST] MODIS DETECTED in query")
             if any(k in query_lower for k in ["fire", "thermal", "hotspot"]):
                 return ["modis-14A1-061"]
-            if any(k in query_lower for k in ["vegetation", "vedgetation", "ndvi", "evi", "vegetation ind"]):
+            if any(
+                k in query_lower
+                for k in ["vegetation", "vedgetation", "ndvi", "evi", "vegetation ind"]
+            ):
                 return ["modis-13Q1-061"]
             if any(k in query_lower for k in ["snow"]):
                 return ["modis-10A1-061"]
             if any(k in query_lower for k in ["burn", "burned"]):
                 return ["modis-64A1-061"]
-            if any(k in query_lower for k in ["npp", "net primary production", "primary production", "gpp"]):
+            if any(
+                k in query_lower
+                for k in ["npp", "net primary production", "primary production", "gpp"]
+            ):
                 return ["modis-17A3HGF-061"]
             if any(k in query_lower for k in ["brdf", "bdrf", "nadir", "reflectance"]):
                 return ["modis-43A4-061"]
             return ["modis-09A1-061"]  # Default to surface reflectance
-        
+
         # Sea Surface Temperature
-        if any(k in query_lower for k in ["sea surface temperature", "sst", "ocean temperature"]):
-            logger.info(f"[FAST] SST DETECTED -> noaa-cdr-sea-surface-temperature-whoi")
+        if any(
+            k in query_lower
+            for k in ["sea surface temperature", "sst", "ocean temperature"]
+        ):
+            logger.info("[FAST] SST DETECTED -> noaa-cdr-sea-surface-temperature-whoi")
             return ["noaa-cdr-sea-surface-temperature-whoi"]
-        
+
         # Chloris biomass
         if any(k in query_lower for k in ["chloris", "biomass"]):
-            logger.info(f"[FAST] CHLORIS DETECTED -> chloris-biomass")
+            logger.info("[FAST] CHLORIS DETECTED -> chloris-biomass")
             return ["chloris-biomass"]
-        
+
         # USDA Cropland Data Layer
-        if any(k in query_lower for k in ["usda", "cdl", "cropland data layer", "cropland"]):
-            logger.info(f"[FAST] USDA CDL DETECTED -> usda-cdl")
+        if any(
+            k in query_lower for k in ["usda", "cdl", "cropland data layer", "cropland"]
+        ):
+            logger.info("[FAST] USDA CDL DETECTED -> usda-cdl")
             return ["usda-cdl"]
-        
+
         # 3DEP / LiDAR HAG - must come BEFORE buildings ("building location" contains "building")
-        if any(k in query_lower for k in ["3dep", "lidar", "hag", "height above ground"]):
-            logger.info(f"[FAST] 3DEP DETECTED -> 3dep-lidar-hag")
+        if any(
+            k in query_lower for k in ["3dep", "lidar", "hag", "height above ground"]
+        ):
+            logger.info("[FAST] 3DEP DETECTED -> 3dep-lidar-hag")
             return ["3dep-lidar-hag"]
-        
+
         # Microsoft Buildings
         if any(k in query_lower for k in ["building", "buildings", "ms-buildings"]):
-            logger.info(f"[FAST] BUILDINGS DETECTED -> ms-buildings")
+            logger.info("[FAST] BUILDINGS DETECTED -> ms-buildings")
             return ["ms-buildings"]
-        
+
         # NAIP
         if "naip" in query_lower:
-            logger.info(f"[FAST] NAIP DETECTED -> naip")
+            logger.info("[FAST] NAIP DETECTED -> naip")
             return ["naip"]
-        
+
         # Copernicus DEM
         if any(k in query_lower for k in ["cop-dem", "copernicus dem"]):
-            logger.info(f"[FAST] COPERNICUS DEM DETECTED -> cop-dem-glo-30")
+            logger.info("[FAST] COPERNICUS DEM DETECTED -> cop-dem-glo-30")
             return ["cop-dem-glo-30"]
-        
+
         # ALOS
         if "alos" in query_lower:
             if "palsar" in query_lower:
                 return ["alos-palsar-mosaic"]
             return ["alos-dem"]
-        
+
         # ESA WorldCover
         if any(k in query_lower for k in ["worldcover", "esa worldcover"]):
             return ["esa-worldcover"]
-        
+
         # JRC Global Surface Water
         if any(k in query_lower for k in ["jrc", "global surface water"]):
             return ["jrc-gsw"]
-        
+
         # MTBS
         if any(k in query_lower for k in ["mtbs", "monitoring trends"]):
             return ["mtbs"]
-        
+
         # ========================================================================
         # TIER 2: GENERIC INTENT KEYWORDS (no specific dataset mentioned)
         # ========================================================================
@@ -1835,34 +2100,27 @@ Format: ["collection-id"]"""
             "terrain": ["cop-dem-glo-30"],
             "topography": ["cop-dem-glo-30"],
             "altitude": ["cop-dem-glo-30"],
-            
             # Fire/Thermal
             "fire": ["modis-14A1-061"],
             "wildfire": ["modis-14A1-061"],
             "thermal anomal": ["modis-14A1-061"],
             "burn scar": ["modis-64A1-061"],
-            
             # Water/Flood
             "flood": ["sentinel-1-rtc"],
             "flooding": ["sentinel-1-rtc"],
             "surface water": ["jrc-gsw"],
-            
             # Vegetation
             "vegetation index": ["modis-13Q1-061"],
             "ndvi": ["sentinel-2-l2a"],
             "greenness": ["modis-13Q1-061"],
-            
             # Radar/SAR
             "radar": ["sentinel-1-rtc"],
             "sar": ["sentinel-1-rtc"],
-            
             # Land cover
             "land use": ["esa-worldcover"],
             "land cover": ["esa-worldcover"],
-            
             # Snow
             "snow cover": ["modis-10A1-061"],
-            
             # Climate Projections
             "climate projection": ["nasa-nex-gddp-cmip6"],
             "climate projections": ["nasa-nex-gddp-cmip6"],
@@ -1870,7 +2128,6 @@ Format: ["collection-id"]"""
             "nex-gddp": ["nasa-nex-gddp-cmip6"],
             "extreme weather": ["nasa-nex-gddp-cmip6"],
             "climate scenario": ["nasa-nex-gddp-cmip6"],
-            
             # Generic imagery defaults
             "satellite imagery": ["sentinel-2-l2a"],
             "satellite images": ["sentinel-2-l2a"],
@@ -1880,37 +2137,39 @@ Format: ["collection-id"]"""
             "aerial imagery": ["naip"],
             "imagery": ["sentinel-2-l2a"],
         }
-        
+
         # Check generic keywords (longest first for specificity)
         for keyword in sorted(GENERIC_INTENT_KEYWORDS.keys(), key=len, reverse=True):
             if keyword in query_lower:
                 collections = GENERIC_INTENT_KEYWORDS[keyword]
-                logger.info(f"[FAST] GENERIC KEYWORD MATCH: '{keyword}' -> {collections}")
+                logger.info(
+                    f"[FAST] GENERIC KEYWORD MATCH: '{keyword}' -> {collections}"
+                )
                 return collections
-        
+
         # No match - let LLM handle truly ambiguous queries
         logger.info("[BOT] No keyword match - deferring to LLM")
         return None
-    
+
     def _fast_location_keyword_match(self, query: str) -> Optional[str]:
         """
         [FAST] FAST LOCATION EXTRACTION - Check for known locations BEFORE calling GPT
-        
+
         Uses the hardcoded location names from location_resolver.py (SINGLE SOURCE OF TRUTH)
         to quickly identify locations in queries. This is faster (10ms vs 1200ms) and more
         reliable than GPT for known locations.
-        
+
         If a location is NOT found here, the location_extraction_agent will use GPT-5
         with the geocode tool to resolve unknown locations.
-        
+
         Args:
             query: User's natural language query
-            
+
         Returns:
             Location name if found, None otherwise
         """
         query_lower = query.lower()
-        
+
         # ========================================================================
         # SINGLE SOURCE OF TRUTH: Use locations from EnhancedLocationResolver
         # ========================================================================
@@ -1919,37 +2178,50 @@ Format: ["collection-id"]"""
         # ========================================================================
         try:
             from location_resolver import EnhancedLocationResolver
+
             hardcoded_locations = list(EnhancedLocationResolver.STORED_LOCATIONS.keys())
-            logger.debug(f"[FAST] Loaded {len(hardcoded_locations)} locations from EnhancedLocationResolver")
+            logger.debug(
+                f"[FAST] Loaded {len(hardcoded_locations)} locations from EnhancedLocationResolver"
+            )
         except Exception as e:
-            logger.warning(f"[WARN] Could not load locations from location_resolver: {e}")
+            logger.warning(
+                f"[WARN] Could not load locations from location_resolver: {e}"
+            )
             # Minimal fallback - just a few essential locations
-            hardcoded_locations = ["nyc", "new york", "moscow", "london", "paris", "tokyo", "greece"]
-        
+            hardcoded_locations = [
+                "nyc",
+                "new york",
+                "moscow",
+                "london",
+                "paris",
+                "tokyo",
+                "greece",
+            ]
+
         # Check for location patterns: "of <location>", "in <location>", "for <location>"
         import re
-        
+
         # Sort by length (longest first) to match "new york" before "york"
         hardcoded_locations_sorted = sorted(hardcoded_locations, key=len, reverse=True)
-        
+
         for location in hardcoded_locations_sorted:
             # Check various patterns where location appears
             patterns = [
-                rf'\bof\s+{re.escape(location)}\b',           # "of Moscow"
-                rf'\bof\s+the\s+{re.escape(location)}\b',     # "of the Amazon rainforest"
-                rf'\bin\s+{re.escape(location)}\b',           # "in Moscow"
-                rf'\bin\s+the\s+{re.escape(location)}\b',     # "in the Amazon"
-                rf'\bfor\s+{re.escape(location)}\b',          # "for Moscow"
-                rf'\bfor\s+the\s+{re.escape(location)}\b',    # "for the Amazon rainforest"
-                rf'\bnear\s+{re.escape(location)}\b',         # "near Moscow"
-                rf'\bnear\s+the\s+{re.escape(location)}\b',   # "near the coast"
-                rf'\baround\s+{re.escape(location)}\b',       # "around Moscow"
-                rf'\bat\s+{re.escape(location)}\b',           # "at Moscow"
-                rf'{re.escape(location)}\s+imagery\b',        # "Moscow imagery"
-                rf'{re.escape(location)}\s+satellite\b',      # "Moscow satellite"
-                rf'{re.escape(location)}\s+data\b',           # "Moscow data"
+                rf"\bof\s+{re.escape(location)}\b",  # "of Moscow"
+                rf"\bof\s+the\s+{re.escape(location)}\b",  # "of the Amazon rainforest"
+                rf"\bin\s+{re.escape(location)}\b",  # "in Moscow"
+                rf"\bin\s+the\s+{re.escape(location)}\b",  # "in the Amazon"
+                rf"\bfor\s+{re.escape(location)}\b",  # "for Moscow"
+                rf"\bfor\s+the\s+{re.escape(location)}\b",  # "for the Amazon rainforest"
+                rf"\bnear\s+{re.escape(location)}\b",  # "near Moscow"
+                rf"\bnear\s+the\s+{re.escape(location)}\b",  # "near the coast"
+                rf"\baround\s+{re.escape(location)}\b",  # "around Moscow"
+                rf"\bat\s+{re.escape(location)}\b",  # "at Moscow"
+                rf"{re.escape(location)}\s+imagery\b",  # "Moscow imagery"
+                rf"{re.escape(location)}\s+satellite\b",  # "Moscow satellite"
+                rf"{re.escape(location)}\s+data\b",  # "Moscow data"
             ]
-            
+
             for pattern in patterns:
                 if re.search(pattern, query_lower):
                     # Capitalize properly for display
@@ -1959,97 +2231,112 @@ Format: ["collection-id"]"""
                         display_name = location.upper()
                     else:
                         display_name = location.title()
-                    
-                    logger.info(f"[FAST] FAST LOCATION MATCH: Found '{display_name}' in query")
+
+                    logger.info(
+                        f"[FAST] FAST LOCATION MATCH: Found '{display_name}' in query"
+                    )
                     return display_name
-        
+
         # No match found
         return None
-    
+
     def _build_comprehensive_collection_catalog(self) -> str:
         """
         Build comprehensive collection catalog from pc_rendering_config.json
-        
+
         UNIFIED CONFIG: Uses pc_rendering_config.json which now contains both:
         - Collection descriptions and categories (for agent selection)
         - Rendering parameters (for tile URL building)
-        
+
         This eliminates duplication and ensures single source of truth.
         """
         try:
             # Load from unified pc_rendering_config.json
             collections_file = Path(__file__).parent / "pc_rendering_config.json"
-            
+
             if not collections_file.exists():
-                logger.warning(f"[WARN] pc_rendering_config.json not found at {collections_file}")
+                logger.warning(
+                    f"[WARN] pc_rendering_config.json not found at {collections_file}"
+                )
                 return self._get_hardcoded_collection_catalog()
-            
+
             logger.info(f"[DIR] Loading collection catalog from {collections_file}")
-            
-            with open(collections_file, 'r', encoding='utf-8') as f:
+
+            with open(collections_file, "r", encoding="utf-8") as f:
                 config = json.load(f)
-            
-            collections_dict = config.get('collections', {})
-            
+
+            collections_dict = config.get("collections", {})
+
             # Build concise catalog for GPT (descriptions only, no full metadata)
             catalog = [
                 f"AVAILABLE COLLECTIONS ({len(collections_dict)} collections from Planetary Computer):",
                 "=" * 80,
-                ""
+                "",
             ]
-            
+
             # Group by category for better organization
             by_category = {}
             for collection_id, coll_data in collections_dict.items():
-                category = coll_data.get('category', 'Other')
+                category = coll_data.get("category", "Other")
                 if category not in by_category:
                     by_category[category] = []
-                
+
                 # Description is nested under 'metadata' in pc_rendering_config.json
-                metadata = coll_data.get('metadata', {})
-                description = metadata.get('description', coll_data.get('description', 'No description available'))
-                title = metadata.get('title', collection_id)
-                
-                by_category[category].append({
-                    'collection_id': collection_id,
-                    'title': title,
-                    'description': description
-                })
-            
+                metadata = coll_data.get("metadata", {})
+                description = metadata.get(
+                    "description",
+                    coll_data.get("description", "No description available"),
+                )
+                title = metadata.get("title", collection_id)
+
+                by_category[category].append(
+                    {
+                        "collection_id": collection_id,
+                        "title": title,
+                        "description": description,
+                    }
+                )
+
             # Build catalog with categories
             for category in sorted(by_category.keys()):
                 catalog.append(f"\n{category}:")
                 catalog.append("-" * 40)
-                
+
                 for coll in by_category[category]:
-                    cid = coll['collection_id']
-                    desc = coll['description']
-                    
+                    cid = coll["collection_id"]
+                    desc = coll["description"]
+
                     # Truncate long descriptions to save tokens
                     if len(desc) > 150:
                         desc = desc[:150] + "..."
-                    
+
                     catalog.append(f"  - {cid}: {desc}")
-            
+
             catalog_text = "\n".join(catalog)
-            logger.info(f"[OK] Built catalog from pc_rendering_config.json ({len(catalog_text)} characters, {len(collections_dict)} collections)")
+            logger.info(
+                f"[OK] Built catalog from pc_rendering_config.json ({len(catalog_text)} characters, {len(collections_dict)} collections)"
+            )
             return catalog_text
-            
+
         except Exception as e:
             logger.error(f"[FAIL] Failed to load pc_rendering_config.json: {e}")
             logger.warning("[WARN] Falling back to hardcoded catalog")
             return self._get_hardcoded_collection_catalog()
-    
+
     def _get_hardcoded_collection_catalog(self) -> str:
         """
         Minimal emergency fallback when pc_rendering_config.json is missing.
-        
+
         This should NEVER be used in production - the JSON file is always deployed.
         Only included for dev/testing resilience.
         """
-        logger.error("[FAIL] CRITICAL: pc_rendering_config.json is missing! Using emergency fallback.")
-        logger.error("[FAIL] This fallback is incomplete and should not be used in production.")
-        
+        logger.error(
+            "[FAIL] CRITICAL: pc_rendering_config.json is missing! Using emergency fallback."
+        )
+        logger.error(
+            "[FAIL] This fallback is incomplete and should not be used in production."
+        )
+
         return """EMERGENCY FALLBACK - LIMITED COLLECTIONS:
 ================================================================================
 [WARN]  WARNING: pc_rendering_config.json is missing!
@@ -2072,57 +2359,75 @@ ESSENTIAL FIRE:
 
 [WARN]  For full collection catalog, ensure pc_rendering_config.json is present.
 ================================================================================"""
-    
+
     def _build_collection_catalog_for_agent(self) -> str:
         """Build a concise catalog of collections for Collection Mapping Agent using PC metadata"""
-        
+
         if not PC_METADATA_AVAILABLE:
             return "Limited collection information available"
-        
+
         metadata = load_pc_metadata()
         catalog_lines = []
-        
+
         # Iterate through all categories and collections from PC metadata
-        for category in metadata.get('categories', []):
-            for coll in category.get('collections', []):
-                collection_id = coll.get('id')
-                title = coll.get('title', collection_id)
-                temporal = coll.get('temporal_extent', '')
-                resolution = coll.get('spatial_resolution', '')
-                is_static = coll.get('is_static', False)
-                
+        for category in metadata.get("categories", []):
+            for coll in category.get("collections", []):
+                collection_id = coll.get("id")
+                title = coll.get("title", collection_id)
+                temporal = coll.get("temporal_extent", "")
+                resolution = coll.get("spatial_resolution", "")
+                is_static = coll.get("is_static", False)
+
                 # Build capability text
                 caps_text = ""
                 if is_static:
                     caps_text = "(Static DEM/Elevation)"
-                elif 'modis' in collection_id.lower():
+                elif "modis" in collection_id.lower():
                     caps_text = "(MODIS Time-series)"
-                elif any(x in collection_id.lower() for x in ['sentinel', 'landsat', 'hls']):
+                elif any(
+                    x in collection_id.lower() for x in ["sentinel", "landsat", "hls"]
+                ):
                     caps_text = "(Optical Imagery)"
-                elif 'lulc' in collection_id.lower() or 'lcmap' in collection_id.lower():
+                elif (
+                    "lulc" in collection_id.lower() or "lcmap" in collection_id.lower()
+                ):
                     caps_text = "(Land Cover)"
-                elif 'lidar' in collection_id.lower():
+                elif "lidar" in collection_id.lower():
                     caps_text = "(LiDAR)"
-                
+
                 res_text = f"{resolution}" if resolution else ""
-                catalog_lines.append(f"- {collection_id}: {title} {caps_text} [{temporal}, {res_text}]")
-        
+                catalog_lines.append(
+                    f"- {collection_id}: {title} {caps_text} [{temporal}, {res_text}]"
+                )
+
         return "\n".join(catalog_lines)
-    
+
     def _select_collections_fallback(self, query: str) -> List[str]:
         """Fallback keyword-based collection selection"""
-        
+
         query_lower = query.lower()
-        
+
         # CRITICAL: Check for SAR/radar FIRST (highest priority)
-        if any(keyword in query_lower for keyword in ["sar", "radar", "sentinel-1", "sentinel 1", "synthetic aperture"]):
+        if any(
+            keyword in query_lower
+            for keyword in [
+                "sar",
+                "radar",
+                "sentinel-1",
+                "sentinel 1",
+                "synthetic aperture",
+            ]
+        ):
             logger.info(f"[SAT] SAR/RADAR DETECTED in query: {query_lower}")
             return ["sentinel-1-grd"]
-        
+
         # Explicit platform mentions (exact matches)
         if any(keyword in query_lower for keyword in ["hls", "harmonized"]):
             logger.info(f"[SAT] HLS PLATFORM DETECTED in query: {query_lower}")
-            return ["hls2-l30", "hls2-s30"]  # [OK] Correct IDs from collection_profiles.py
+            return [
+                "hls2-l30",
+                "hls2-s30",
+            ]  # [OK] Correct IDs from collection_profiles.py
         if "landsat" in query_lower:
             return ["landsat-c2-l2"]
         if "sentinel-2" in query_lower or "sentinel 2" in query_lower:
@@ -2132,122 +2437,154 @@ ESSENTIAL FIRE:
         if "modis" in query_lower:
             if any(w in query_lower for w in ["fire", "thermal", "burn", "hotspot"]):
                 return ["modis-14A1-061", "modis-64A1-061"]
-            if any(w in query_lower for w in ["vegetation", "ndvi", "evi", "crop", "agriculture"]):
+            if any(
+                w in query_lower
+                for w in ["vegetation", "ndvi", "evi", "crop", "agriculture"]
+            ):
                 return ["modis-13Q1-061"]
             return ["modis-09A1-061"]
-        
+
         # Topic-based selection (use cases)
-        if any(w in query_lower for w in ["elevation", "dem", "terrain", "topography", "slope", "altitude"]):
+        if any(
+            w in query_lower
+            for w in ["elevation", "dem", "terrain", "topography", "slope", "altitude"]
+        ):
             return ["cop-dem-glo-30", "nasadem"]
-        if any(w in query_lower for w in ["fire", "wildfire", "thermal", "burn", "hotspot"]):
+        if any(
+            w in query_lower for w in ["fire", "wildfire", "thermal", "burn", "hotspot"]
+        ):
             return ["modis-14A1-061", "modis-64A1-061"]
         if any(w in query_lower for w in ["snow", "snow cover", "ice", "glacier"]):
             return ["sentinel-2-l2a", "landsat-c2-l2"]  # Optical for snow detection
         if any(w in query_lower for w in ["flood", "water", "inundation"]):
             return ["sentinel-1-grd", "sentinel-2-l2a"]  # SAR + optical
-        if any(w in query_lower for w in ["vegetation", "ndvi", "crop", "agriculture", "forest"]):
+        if any(
+            w in query_lower
+            for w in ["vegetation", "ndvi", "crop", "agriculture", "forest"]
+        ):
             return ["modis-13Q1-061", "sentinel-2-l2a"]
         if any(w in query_lower for w in ["land cover", "land use", "classification"]):
             return ["esa-worldcover", "sentinel-2-l2a"]
-        if any(w in query_lower for w in ["weather", "temperature", "precipitation", "climate"]):
+        if any(
+            w in query_lower
+            for w in ["weather", "temperature", "precipitation", "climate"]
+        ):
             return ["daymet-daily-na", "era5-pds"]
-        
+
         # Default to Sentinel-2 (global coverage, 10m resolution)
         # HLS has limited coverage (primarily North America) so Sentinel-2 is safer as default
-        logger.info(f"[SYNC] No specific collection detected - defaulting to Sentinel-2")
+        logger.info("[SYNC] No specific collection detected - defaulting to Sentinel-2")
         return ["sentinel-2-l2a"]
-    
+
     # ========================================================================
     # AGENT 2: STAC QUERY BUILDER
     # ========================================================================
-    
-    async def build_stac_query_agent(self, query: str, collections: List[str]) -> Dict[str, Any]:
+
+    async def build_stac_query_agent(
+        self, query: str, collections: List[str]
+    ) -> Dict[str, Any]:
         """
         [BOT] AGENT 2: Build complete STAC query using two-step process
-        
+
         Step 1: Extract location_name from query (if present)
         Step 2: Build STAC query parameters (datetime, filters, etc.)
         Step 3: Resolve location_name to bbox coordinates
         Step 4: Combine into final STAC query
-        
+
         Returns:
             Complete STAC query dict ready for API
         """
-        
+
         await self._ensure_kernel_initialized()
-        
-        print(f"[ALERT] DEBUG: After _ensure_kernel_initialized() - _kernel_initialized={self._kernel_initialized}, kernel={self.kernel is not None}")
-        
+
+        print(
+            f"[ALERT] DEBUG: After _ensure_kernel_initialized() - _kernel_initialized={self._kernel_initialized}, kernel={self.kernel is not None}"
+        )
+
         if not self._kernel_initialized or self.kernel is None:
-            print(f"[FAIL][ALERT] DEBUG: KERNEL NOT INITIALIZED! Using fallback basic query builder")
+            print(
+                "[FAIL][ALERT] DEBUG: KERNEL NOT INITIALIZED! Using fallback basic query builder"
+            )
             print(f"   _kernel_initialized: {self._kernel_initialized}")
             print(f"   self.kernel: {self.kernel}")
             logger.warning("[WARN] Kernel not initialized - using basic query builder")
             return await self._build_stac_query_basic(query, collections)
-        
+
         try:
-            print(f"[ALERT][ALERT][ALERT] DEBUG: AGENT 2 STARTING - Query: '{query}', Collections: {collections}")
+            print(
+                f"[ALERT][ALERT][ALERT] DEBUG: AGENT 2 STARTING - Query: '{query}', Collections: {collections}"
+            )
             logger.info("=" * 100)
-            logger.info(f"[BOT][BOT][BOT] AGENT 2 START: STAC Query Building Agent")
+            logger.info("[BOT][BOT][BOT] AGENT 2 START: STAC Query Building Agent")
             logger.info(f"[NOTE] Query: '{query}'")
             logger.info(f"[DOCS] Collections: {collections}")
-            logger.info(f"[TOOL] Collections Count: {len(collections) if collections else 0}")
+            logger.info(
+                f"[TOOL] Collections Count: {len(collections) if collections else 0}"
+            )
             logger.info("=" * 100)
-            
+
             # ========================================================================
             # [LAUNCH] PERFORMANCE OPTIMIZATION: Parallel Agent Execution
             # ========================================================================
             # STEP 1-3: Run location, datetime, and cloud filtering agents IN PARALLEL
             # These agents don't depend on each other, so we can run them concurrently
             # This reduces latency from ~3 sequential calls to ~1 parallel call
-            logger.info(f"[BOT] AGENT 2 STEPS 1-3: Running location, datetime, and cloud agents IN PARALLEL...")
-            print(f"[LAUNCH] DEBUG: AGENT 2 - Starting PARALLEL execution of 3 agents")
-            
+            logger.info(
+                "[BOT] AGENT 2 STEPS 1-3: Running location, datetime, and cloud agents IN PARALLEL..."
+            )
+            print("[LAUNCH] DEBUG: AGENT 2 - Starting PARALLEL execution of 3 agents")
+
             # Run all three agents concurrently
             entities_task = self.location_extraction_agent(query)
             datetime_task = self.datetime_translation_agent(query, collections)
             cloud_task = self.cloud_filtering_agent(query, collections)
-            
+
             # Wait for all to complete
             entities, datetime_range, cloud_filter = await asyncio.gather(
-                entities_task,
-                datetime_task,
-                cloud_task
+                entities_task, datetime_task, cloud_task
             )
-            
-            print(f"[OK] DEBUG: AGENT 2 - PARALLEL execution complete")
-            
+
+            print("[OK] DEBUG: AGENT 2 - PARALLEL execution complete")
+
             # Extract location from entities
             location = entities.get("location", {})
             location_name = location.get("name")
-            
+
             if location_name:
-                logger.info(f"[PIN] AGENT 2: Location extracted: '{location_name}' (type: {location.get('type')}, confidence: {location.get('confidence')})")
-                print(f"[OK] DEBUG: AGENT 2 STEP 1 SUCCESS - Location: '{location_name}'")
+                logger.info(
+                    f"[PIN] AGENT 2: Location extracted: '{location_name}' (type: {location.get('type')}, confidence: {location.get('confidence')})"
+                )
+                print(
+                    f"[OK] DEBUG: AGENT 2 STEP 1 SUCCESS - Location: '{location_name}'"
+                )
             else:
-                logger.info(f"[PIN] AGENT 2: No location found in query")
-                print(f"ℹ️ DEBUG: AGENT 2 STEP 1 - No location in query")
-            
+                logger.info("[PIN] AGENT 2: No location found in query")
+                print("ℹ️ DEBUG: AGENT 2 STEP 1 - No location in query")
+
             if datetime_range:
                 logger.info(f"[OK] Datetime translation: {datetime_range}")
                 print(f"[OK] DEBUG: AGENT 2.2 SUCCESS - Datetime: {datetime_range}")
             else:
-                logger.info(f"ℹ️ No datetime filter (will get most recent or use sortby)")
-                print(f"ℹ️ DEBUG: AGENT 2.2 - No datetime filter")
-            
+                logger.info(
+                    "ℹ️ No datetime filter (will get most recent or use sortby)"
+                )
+                print("ℹ️ DEBUG: AGENT 2.2 - No datetime filter")
+
             if cloud_filter:
                 logger.info(f"[OK] Cloud filter: {cloud_filter}")
-                print(f"[OK] DEBUG: AGENT 2.3 SUCCESS - Cloud filter determined")
+                print("[OK] DEBUG: AGENT 2.3 SUCCESS - Cloud filter determined")
             else:
-                logger.info(f"ℹ️ No cloud filter")
-                print(f"ℹ️ DEBUG: AGENT 2.3 - No cloud filtering")
-            
+                logger.info("ℹ️ No cloud filter")
+                print("ℹ️ DEBUG: AGENT 2.3 - No cloud filtering")
+
             # STEP 4: Build STAC query parameters (PURE FUNCTION - No GPT)
-            logger.info(f"[TOOL] UTILITY: Building STAC parameters (deterministic)")
-            print(f"[TOOL] DEBUG: Building STAC parameters")
-            stac_query = await self._build_stac_parameters(query, collections, entities, datetime_range)
-            print(f"[OK] DEBUG: STAC parameters built")
-            
+            logger.info("[TOOL] UTILITY: Building STAC parameters (deterministic)")
+            print("[TOOL] DEBUG: Building STAC parameters")
+            stac_query = await self._build_stac_parameters(
+                query, collections, entities, datetime_range
+            )
+            print("[OK] DEBUG: STAC parameters built")
+
             # STEP 5: Apply cloud filter if determined by agent
             if cloud_filter:
                 filter_dict = cloud_filter.get("filter", {})
@@ -2256,8 +2593,8 @@ ESSENTIAL FIRE:
                         stac_query["query"] = {}
                     stac_query["query"].update(filter_dict)
                     logger.info(f"[OK] Applied cloud filter: {filter_dict}")
-                    print(f"[OK] DEBUG: Cloud filter applied to STAC query")
-            
+                    print("[OK] DEBUG: Cloud filter applied to STAC query")
+
             # STEP 5.1: Apply USDA CDL type filter if applicable
             # =================================================================
             # The usda-cdl collection has 3 item types: cropland, cultivated, frequency
@@ -2273,9 +2610,11 @@ ESSENTIAL FIRE:
                 if "query" not in stac_query:
                     stac_query["query"] = {}
                 stac_query["query"]["usda_cdl:type"] = {"eq": "cropland"}
-                logger.info(f"[CROP] USDA CDL: Added filter for 'cropland' type items (required for render config)")
-                print(f"[OK] DEBUG: USDA CDL type filter applied to STAC query")
-            
+                logger.info(
+                    "[CROP] USDA CDL: Added filter for 'cropland' type items (required for render config)"
+                )
+                print("[OK] DEBUG: USDA CDL type filter applied to STAC query")
+
             # STEP 6: Resolve location to bbox if present
             # ========================================================================
             # [ALERT] LOCATION REQUIREMENT: Location is mandatory for STAC queries
@@ -2284,32 +2623,38 @@ ESSENTIAL FIRE:
             # which is not useful for users and wastes API resources
             # ========================================================================
             if location_name:
-                logger.info(f"[TOOL] UTILITY: Resolving '{location_name}' to coordinates...")
-                print(f"[TOOL] DEBUG: STEP 6 - Resolving location to bbox")
+                logger.info(
+                    f"[TOOL] UTILITY: Resolving '{location_name}' to coordinates..."
+                )
+                print("[TOOL] DEBUG: STEP 6 - Resolving location to bbox")
                 bbox = await self.resolve_location_to_bbox(location_name, "region")
-                
+
                 if bbox and self._validate_bbox(bbox):
                     stac_query["bbox"] = bbox
                     stac_query["location_name"] = location_name  # Keep for reference
-                    
+
                     # ====================================================================
                     # [PIN] LOCATION AGENT OUTPUT LOGGING
                     # ====================================================================
                     logger.info("=" * 80)
-                    logger.info(f"[BOT] AGENT 2.1 (LOCATION EXTRACTION) - OUTPUT")
+                    logger.info("[BOT] AGENT 2.1 (LOCATION EXTRACTION) - OUTPUT")
                     logger.info(f"🆔 SESSION: {self.current_session_id}")
                     logger.info(f"[INBOX] INPUT Query: '{query}'")
                     logger.info(f"[OUTBOX] OUTPUT Location Name: '{location_name}'")
                     logger.info(f"[PIN] OUTPUT Bounding Box: {bbox}")
-                    logger.info(f"[MAP]  Coordinates Breakdown:")
+                    logger.info("[MAP]  Coordinates Breakdown:")
                     logger.info(f"   West (min_lon):  {bbox[0]:.6f}")
                     logger.info(f"   South (min_lat): {bbox[1]:.6f}")
                     logger.info(f"   East (max_lon):  {bbox[2]:.6f}")
                     logger.info(f"   North (max_lat): {bbox[3]:.6f}")
-                    logger.info(f"[ANGLE] Area width: {bbox[2] - bbox[0]:.6f}° longitude")
-                    logger.info(f"[ANGLE] Area height: {bbox[3] - bbox[1]:.6f}° latitude")
+                    logger.info(
+                        f"[ANGLE] Area width: {bbox[2] - bbox[0]:.6f}° longitude"
+                    )
+                    logger.info(
+                        f"[ANGLE] Area height: {bbox[3] - bbox[1]:.6f}° latitude"
+                    )
                     logger.info("=" * 80)
-                    
+
                     # ================================================================
                     # [CHART] DYNAMIC TILE LIMIT - Calculate based on bbox size
                     # ================================================================
@@ -2318,47 +2663,65 @@ ESSENTIAL FIRE:
                     bbox_width = bbox[2] - bbox[0]  # longitude span
                     bbox_height = bbox[3] - bbox[1]  # latitude span
                     bbox_area_degrees = bbox_width * bbox_height
-                    
+
                     # Estimate GRID CELLS needed: ~1 tile per square degree, plus boundary overlap
                     estimated_grid_cells = int(bbox_area_degrees * 1.5) + 5
-                    
+
                     # CRITICAL: STAC returns items sorted by date, so we need to request
                     # enough items to get ALL grid cells. If there are 5 recent acquisitions
                     # per grid cell, we need 5x the grid cells count.
                     # Formula: grid_cells × acquisitions_per_cell = items needed
                     acquisitions_multiplier = 5  # Assume ~5 recent dates per grid cell
                     items_needed = estimated_grid_cells * acquisitions_multiplier
-                    
-                    if bbox_area_degrees > 50:  # Large country (e.g., Greece ~71 sq deg)
+
+                    if (
+                        bbox_area_degrees > 50
+                    ):  # Large country (e.g., Greece ~71 sq deg)
                         # Greece: 71 sq deg × 1.5 = ~107 grid cells × 5 = 535 items
-                        dynamic_limit = min(500, max(300, items_needed))  # 300-500 for large countries
-                        logger.info(f"[GLOBE] LARGE COUNTRY detected: {bbox_area_degrees:.1f} sq deg -> limit={dynamic_limit}")
+                        dynamic_limit = min(
+                            500, max(300, items_needed)
+                        )  # 300-500 for large countries
+                        logger.info(
+                            f"[GLOBE] LARGE COUNTRY detected: {bbox_area_degrees:.1f} sq deg -> limit={dynamic_limit}"
+                        )
                     elif bbox_area_degrees > 25:  # Medium country/large state
                         dynamic_limit = min(300, max(150, items_needed))  # 150-300
                     else:
                         dynamic_limit = max(50, min(150, items_needed))
                     stac_query["limit"] = dynamic_limit
-                    
-                    logger.info(f"[CHART] DYNAMIC TILE LIMIT CALCULATION:")
+
+                    logger.info("[CHART] DYNAMIC TILE LIMIT CALCULATION:")
                     logger.info(f"   BBox area: {bbox_area_degrees:.1f} sq degrees")
                     logger.info(f"   Estimated grid cells: {estimated_grid_cells}")
-                    logger.info(f"   Items requested (grid cells × {acquisitions_multiplier}): {dynamic_limit}")
-                    print(f"[CHART] Dynamic limit: {dynamic_limit} tiles (based on {bbox_area_degrees:.1f} sq deg area)")
-                    
+                    logger.info(
+                        f"   Items requested (grid cells × {acquisitions_multiplier}): {dynamic_limit}"
+                    )
+                    print(
+                        f"[CHART] Dynamic limit: {dynamic_limit} tiles (based on {bbox_area_degrees:.1f} sq deg area)"
+                    )
+
                     logger.info(f"[OK] Resolved '{location_name}' -> bbox: {bbox}")
                     print(f"[OK] DEBUG: STEP 6 SUCCESS - bbox: {bbox}")
                 else:
-                    logger.error(f"[FAIL] Failed to resolve '{location_name}' to coordinates")
-                    print(f"[FAIL][ALERT] DEBUG: STEP 6 FAILED - Could not resolve bbox")
-                    raise ValueError(f"Unable to resolve location '{location_name}'. Check API keys.")
+                    logger.error(
+                        f"[FAIL] Failed to resolve '{location_name}' to coordinates"
+                    )
+                    print("[FAIL][ALERT] DEBUG: STEP 6 FAILED - Could not resolve bbox")
+                    raise ValueError(
+                        f"Unable to resolve location '{location_name}'. Check API keys."
+                    )
             else:
                 # NO LOCATION FOUND - This is now an error condition
-                logger.warning(f"[WARN] LOCATION REQUIRED: No location found in query '{query}'")
-                print(f"[FAIL][ALERT] DEBUG: STEP 6 FAILED - No location in query (REQUIRED)")
-                
+                logger.warning(
+                    f"[WARN] LOCATION REQUIRED: No location found in query '{query}'"
+                )
+                print(
+                    "[FAIL][ALERT] DEBUG: STEP 6 FAILED - No location in query (REQUIRED)"
+                )
+
                 # Return special error code that caller can detect
                 raise ValueError("LOCATION_REQUIRED")
-            
+
             # ========================================================================
             # [CHART] FINAL STAC QUERY SUMMARY - Critical for debugging
             # ========================================================================
@@ -2368,21 +2731,27 @@ ESSENTIAL FIRE:
             logger.info(f"[PKG] Collections: {stac_query.get('collections', [])}")
             logger.info(f"[MAP]  BBox: {stac_query.get('bbox', 'NONE')}")
             logger.info(f"[DATE] DateTime: {stac_query.get('datetime', 'NONE')}")
-            logger.info(f"[PIN] Location Name: {stac_query.get('location_name', 'NONE')}")
+            logger.info(
+                f"[PIN] Location Name: {stac_query.get('location_name', 'NONE')}"
+            )
             logger.info(f"[CLOUD]  Cloud Filter: {stac_query.get('query', {})}")
             logger.info(f"[NUM] Limit: {stac_query.get('limit', 'default')}")
             logger.info(f"[SEARCH] Full Query JSON: {json.dumps(stac_query, indent=2)}")
             logger.info("=" * 80)
-            
-            print(f"[OK] DEBUG: AGENT 2 COMPLETE")
-            print(f"  - Agent 2.1 (Location): {'[OK]' if location_name else 'ℹ️ skipped'}")
-            print(f"  - Agent 2.2 (Datetime): {'[OK]' if datetime_range else 'ℹ️ skipped'}")
+
+            print("[OK] DEBUG: AGENT 2 COMPLETE")
+            print(
+                f"  - Agent 2.1 (Location): {'[OK]' if location_name else 'ℹ️ skipped'}"
+            )
+            print(
+                f"  - Agent 2.2 (Datetime): {'[OK]' if datetime_range else 'ℹ️ skipped'}"
+            )
             print(f"  - Agent 2.3 (Cloud): {'[OK]' if cloud_filter else 'ℹ️ skipped'}")
             print(f"  - Final STAC query: {stac_query}")
             return stac_query
-            
+
         except Exception as e:
-            print(f"[FAIL][ALERT] DEBUG: AGENT 2 EXCEPTION CAUGHT!")
+            print("[FAIL][ALERT] DEBUG: AGENT 2 EXCEPTION CAUGHT!")
             print(f"[FAIL][ALERT] Exception type: {type(e).__name__}")
             print(f"[FAIL][ALERT] Exception message: {str(e)}")
             print(f"[FAIL][ALERT] Traceback: {traceback.format_exc()}")
@@ -2390,35 +2759,35 @@ ESSENTIAL FIRE:
             logger.error(f"[FAIL] Full exception details: {traceback.format_exc()}")
             logger.info("[LIST] Falling back to basic query builder")
             return await self._build_stac_query_basic(query, collections)
-    
+
     async def location_extraction_agent(self, query: str) -> Dict[str, Any]:
         """
         [BOT] AGENT 2.1: GPT-powered location extraction agent
-        
+
         Extracts location entities from natural language queries.
         This agent handles:
         - City names: "Seattle", "NYC"
-        - Regions: "Pacific Northwest", "Gulf Coast"  
+        - Regions: "Pacific Northwest", "Gulf Coast"
         - States/Countries: "California", "Turkey"
         - Landmarks: "Grand Canyon", "Mount Rainier"
         - Routes: "Denver to Colorado Springs" -> primary location
         - Complex: "50km around Houston" -> center point
-        
+
         NOTE: Temporal extraction is now handled by datetime_translation_agent.
         Collection selection is handled by collection_mapping_agent (Agent 1).
-        
+
         Args:
             query: User's natural language query
-            
+
         Returns:
             Dict with 'location' entity:
             {
                 "location": {"name": "Seattle", "type": "city", "confidence": 0.9}
             }
         """
-        
+
         logger.info("=" * 100)
-        logger.info(f"[BOT][BOT][BOT] AGENT 2.1 START: Location Extraction Agent")
+        logger.info("[BOT][BOT][BOT] AGENT 2.1 START: Location Extraction Agent")
         logger.info(f"[NOTE] Query to analyze: '{query}'")
         logger.info("=" * 100)
 
@@ -2428,23 +2797,31 @@ ESSENTIAL FIRE:
         # This is faster (10ms vs 1200ms) and more reliable for common locations
         fast_location = self._fast_location_keyword_match(query)
         if fast_location:
-            logger.info(f"[FAST] FAST LOCATION MATCH: '{fast_location}' (skipped GPT - saved ~1.2s)")
+            logger.info(
+                f"[FAST] FAST LOCATION MATCH: '{fast_location}' (skipped GPT - saved ~1.2s)"
+            )
             return {
-                "location": {"name": fast_location, "type": "region", "confidence": 0.95}
+                "location": {
+                    "name": fast_location,
+                    "type": "region",
+                    "confidence": 0.95,
+                }
             }
         # ========================================================================
 
         # Ensure kernel is initialized before use
         await self._ensure_kernel_initialized()
-        
+
         logger.info("=" * 100)
-        logger.info(f"[BOT][BOT][BOT] AGENT 2.1 START: Location Extraction Agent")
+        logger.info("[BOT][BOT][BOT] AGENT 2.1 START: Location Extraction Agent")
         logger.info(f"[NOTE] Query to analyze: '{query}'")
         logger.info("=" * 100)
-        
+
         if not self.kernel:
             logger.error("=" * 100)
-            logger.error("[FAIL][FAIL][FAIL] AGENT 2.1 CRITICAL: Kernel initialization failed, cannot extract location")
+            logger.error(
+                "[FAIL][FAIL][FAIL] AGENT 2.1 CRITICAL: Kernel initialization failed, cannot extract location"
+            )
             logger.error("=" * 100)
             return {"location": None}
 
@@ -2516,9 +2893,11 @@ Query to analyze: {query}
 Return only the JSON object. No explanations or additional text."""
 
         try:
+            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import (
+                OpenAIChatPromptExecutionSettings,
+            )
             from semantic_kernel.functions.kernel_arguments import KernelArguments
-            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import OpenAIChatPromptExecutionSettings
-            
+
             # Use fast model (gpt-4o-mini) for location extraction with function calling
             # Location extraction is a structured entity extraction task (extract city/region name)
             # gpt-4o-mini supports function calling and is much faster for this task
@@ -2528,93 +2907,117 @@ Return only the JSON object. No explanations or additional text."""
                 max_completion_tokens=500,  # Increased for function calling responses
                 function_choice_behavior=FunctionChoiceBehavior.Auto(
                     auto_invoke=True,  # Automatically execute tool calls
-                    filters={"included_plugins": ["geocoding"]}  # Only allow geocoding plugin
-                )
+                    filters={
+                        "included_plugins": ["geocoding"]
+                    },  # Only allow geocoding plugin
+                ),
             )
-            
-            logger.info("[TOOL] Function calling enabled - fast model can use geocode tool")
+
+            logger.info(
+                "[TOOL] Function calling enabled - fast model can use geocode tool"
+            )
 
             # Execute using simplified invoke_prompt (no template needed with f-string)
             arguments = KernelArguments(settings=execution_settings)
-            
-            logger.info(f"[SEARCH] Sending location extraction prompt to fast model...")
-            logger.info(f"[TOOL] Using fast model (temp=0.3, max_tokens=500) for structured entity extraction")
-            logger.info(f"[SEARCH] Prompt preview (first 200 chars): {entity_extraction_prompt[:200]}...")
-            
+
+            logger.info("[SEARCH] Sending location extraction prompt to fast model...")
+            logger.info(
+                "[TOOL] Using fast model (temp=0.3, max_tokens=500) for structured entity extraction"
+            )
+            logger.info(
+                f"[SEARCH] Prompt preview (first 200 chars): {entity_extraction_prompt[:200]}..."
+            )
+
             result = await asyncio.wait_for(
                 self.kernel.invoke_prompt(
                     prompt=entity_extraction_prompt,
                     function_name="extract_entities",
                     plugin_name="semantic_translator",
-                    arguments=arguments
+                    arguments=arguments,
                 ),
-                timeout=20.0
+                timeout=20.0,
             )
 
             # Extract and clean response from SK result (Semantic Kernel 1.37.0+)
-            if hasattr(result, 'value'):
+            if hasattr(result, "value"):
                 # SK returns FunctionResult with .value attribute
                 if isinstance(result.value, list) and len(result.value) > 0:
                     # List of ChatMessageContent objects
                     content = str(result.value[0].content)
                 else:
                     content = str(result.value)
-            elif hasattr(result, 'content'):
+            elif hasattr(result, "content"):
                 # Direct ChatMessageContent object
                 content = str(result.content)
             elif isinstance(result, list) and len(result) > 0:
                 # List of ChatMessageContent objects returned directly
                 content = str(result[0].content)
-            elif hasattr(result, 'result'):
+            elif hasattr(result, "result"):
                 content = str(result.result)
             else:
                 content = str(result)
-            
+
             content = content.strip()
-            
+
             # [SEARCH] DEBUG: Log raw GPT-5 response
-            logger.info(f"[SEARCH] DEBUG: Raw GPT-5 response (first 500 chars): {content[:500]}")
-            print(f"[SEARCH] DEBUG: ===== RAW GPT-5 RESPONSE =====")
+            logger.info(
+                f"[SEARCH] DEBUG: Raw GPT-5 response (first 500 chars): {content[:500]}"
+            )
+            print("[SEARCH] DEBUG: ===== RAW GPT-5 RESPONSE =====")
             print(content[:1000] if len(content) > 1000 else content)
-            print(f"[SEARCH] DEBUG: ================================")
-            
+            print("[SEARCH] DEBUG: ================================")
+
             # Clean JSON markers
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0].strip()
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0].strip()
-            
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
             # [SEARCH] DEBUG: Log cleaned content before parsing
-            logger.info(f"[SEARCH] DEBUG: Cleaned content before JSON parse: {content[:500]}")
+            logger.info(
+                f"[SEARCH] DEBUG: Cleaned content before JSON parse: {content[:500]}"
+            )
             print(f"[SEARCH] DEBUG: Cleaned content: {content}")
-            
+
             # Parse JSON
             entities = json.loads(content)
-            
+
             # [SEARCH] DEBUG: Log parsed entities structure
-            logger.info(f"[SEARCH] DEBUG: Parsed entities: {json.dumps(entities, indent=2)}")
-            print(f"[SEARCH] DEBUG: ===== PARSED ENTITIES =====")
+            logger.info(
+                f"[SEARCH] DEBUG: Parsed entities: {json.dumps(entities, indent=2)}"
+            )
+            print("[SEARCH] DEBUG: ===== PARSED ENTITIES =====")
             print(json.dumps(entities, indent=2))
-            print(f"[SEARCH] DEBUG: ===========================")
-            
+            print("[SEARCH] DEBUG: ===========================")
+
             # Log extracted entities
             location = entities.get("location", {})
             temporal = entities.get("temporal", {})
-            
+
             if location.get("name"):
-                logger.info(f"[PIN] Location: {location.get('name')} ({location.get('type')}, confidence: {location.get('confidence')})")
-                print(f"[OK] DEBUG: Entity extraction - Location: {location.get('name')}")
-            
-            if temporal.get("year") or temporal.get("month") or temporal.get("relative"):
-                logger.info(f"[DATE] Temporal: year={temporal.get('year')}, month={temporal.get('month')}, relative={temporal.get('relative')}")
+                logger.info(
+                    f"[PIN] Location: {location.get('name')} ({location.get('type')}, confidence: {location.get('confidence')})"
+                )
+                print(
+                    f"[OK] DEBUG: Entity extraction - Location: {location.get('name')}"
+                )
+
+            if (
+                temporal.get("year")
+                or temporal.get("month")
+                or temporal.get("relative")
+            ):
+                logger.info(
+                    f"[DATE] Temporal: year={temporal.get('year')}, month={temporal.get('month')}, relative={temporal.get('relative')}"
+                )
                 print(f"[OK] DEBUG: Entity extraction - Temporal: {temporal}")
-            
+
             return entities
 
         except json.JSONDecodeError as e:
             logger.error(f"[FAIL] JSON parsing failed: {e}")
             logger.error(f"Raw content: {content[:500]}")
-            print(f"[FAIL][ALERT] DEBUG: JSON parsing failed!")
+            print("[FAIL][ALERT] DEBUG: JSON parsing failed!")
             print(f"[FAIL][ALERT] Error: {e}")
             print(f"[FAIL][ALERT] Raw content: {content[:500]}")
             return {
@@ -2622,12 +3025,12 @@ Return only the JSON object. No explanations or additional text."""
                 "temporal": {},
                 "disaster": {},
                 "damage_indicators": {},
-                "analysis_intent": {}
+                "analysis_intent": {},
             }
         except Exception as e:
             logger.error(f"[FAIL] Entity extraction failed: {type(e).__name__}: {e}")
             logger.error(f"Full traceback: {traceback.format_exc()}")
-            print(f"[FAIL][ALERT] DEBUG: Entity extraction EXCEPTION!")
+            print("[FAIL][ALERT] DEBUG: Entity extraction EXCEPTION!")
             print(f"[FAIL][ALERT] Exception: {type(e).__name__}: {e}")
             print(f"[FAIL][ALERT] Traceback: {traceback.format_exc()}")
             return {
@@ -2635,68 +3038,65 @@ Return only the JSON object. No explanations or additional text."""
                 "temporal": {},
                 "disaster": {},
                 "damage_indicators": {},
-                "analysis_intent": {}
+                "analysis_intent": {},
             }
-    
+
     # ============================================================================
     # AGENT 4: TILE SELECTOR - HELPER FUNCTIONS (Conditional Logic)
     # ============================================================================
-    
+
     def _calculate_bbox_area_km2(self, bbox: List[float]) -> float:
         """
         Calculate the area of a bounding box in square kilometers.
-        
+
         Args:
             bbox: [west, south, east, north] in degrees
-        
+
         Returns:
             Area in square kilometers
         """
         from geopy.distance import geodesic
-        
+
         west, south, east, north = bbox
-        
+
         # Calculate width at the center latitude
         center_lat = (south + north) / 2
         width_km = geodesic((center_lat, west), (center_lat, east)).km
-        
+
         # Calculate height
         height_km = geodesic((south, west), (north, west)).km
-        
+
         # Approximate area (not perfect for large regions, but sufficient)
         area_km2 = width_km * height_km
-        
+
         return area_km2
-    
+
     def _should_use_agent_selector(
-        self,
-        tile_count: int,
-        bbox: List[float],
-        query: str
+        self, tile_count: int, bbox: List[float], query: str
     ) -> bool:
         """
         Determine if we should use the intelligent GPT-5 agent for tile selection
         or the fast rule-based function.
-        
+
         Strategy:
         - Use simple function (fast path) for few tiles
         - Use GPT-5 agent (smart path) for many tiles or complex queries
-        
+
         Args:
             tile_count: Number of tiles returned from STAC
             bbox: Bounding box [west, south, east, north]
             query: User's natural language query
-        
+
         Returns:
             True if agent should be used, False for simple function
         """
         # Calculate area of interest
         bbox_area_km2 = self._calculate_bbox_area_km2(bbox)
-        
+
         # Base thresholds by area size
         SMALL_AREA_THRESHOLD = 100  # km² (e.g., city-sized area)
         MEDIUM_AREA_THRESHOLD = 1000  # km² (e.g., county-sized area)
-        
+
         # Adaptive tile count thresholds
         if bbox_area_km2 < SMALL_AREA_THRESHOLD:
             # Small area: Use agent if > 10 tiles
@@ -2707,59 +3107,83 @@ Return only the JSON object. No explanations or additional text."""
         else:
             # Large area: Use agent if > 50 tiles
             tile_threshold = 50
-        
+
         # Check for complex query keywords that benefit from intelligent selection
         complex_keywords = [
-            'best', 'clearest', 'least cloud', 'most cloud', 'highest quality',
-            'most recent', 'before', 'after', 'compare', 'change', 'cleanest',
-            'optimal', 'perfect', 'ideal', 'specific date'
+            "best",
+            "clearest",
+            "least cloud",
+            "most cloud",
+            "highest quality",
+            "most recent",
+            "before",
+            "after",
+            "compare",
+            "change",
+            "cleanest",
+            "optimal",
+            "perfect",
+            "ideal",
+            "specific date",
         ]
-        has_complex_query = any(keyword in query.lower() for keyword in complex_keywords)
-        
+        has_complex_query = any(
+            keyword in query.lower() for keyword in complex_keywords
+        )
+
         # Decision logic
         if tile_count < tile_threshold and not has_complex_query:
-            logger.info(f"[LAUNCH] FAST PATH: Using rule-based selector (tiles: {tile_count}, threshold: {tile_threshold}, area: {bbox_area_km2:.1f}km²)")
+            logger.info(
+                f"[LAUNCH] FAST PATH: Using rule-based selector (tiles: {tile_count}, threshold: {tile_threshold}, area: {bbox_area_km2:.1f}km²)"
+            )
             return False  # Use simple function (fast path)
         else:
-            logger.info(f"[BOT] SMART PATH: Using GPT-5 agent (tiles: {tile_count}, threshold: {tile_threshold}, area: {bbox_area_km2:.1f}km², complex_query: {has_complex_query})")
-            return True   # Use agent (smart path)
-    
+            logger.info(
+                f"[BOT] SMART PATH: Using GPT-5 agent (tiles: {tile_count}, threshold: {tile_threshold}, area: {bbox_area_km2:.1f}km², complex_query: {has_complex_query})"
+            )
+            return True  # Use agent (smart path)
+
     # ============================================================================
     # AGENT 4: TILE SELECTOR AGENT (GPT-Powered Intelligent Tile Selection)
     # ============================================================================
-    
+
     async def tile_selector_agent(
         self,
         stac_features: List[Dict],
         query: str,
         collection_ids: List[str],
-        bbox: List[float]
+        bbox: List[float],
     ) -> List[Dict]:
         """
         AGENT 3: Intelligent tile selection using GPT-5
-        
+
         Priorities:
         1. HIGHEST RESOLUTION: Select tiles from highest resolution collections
         2. FULL COVERAGE: Ensure 100% spatial coverage of requested area
         3. QUERY ALIGNMENT: Respect user's cloud cover, date, and other criteria
-        
+
         Returns: Optimized subset of tiles (5-50 tiles) for static map rendering
         """
-        
+
         logger.info("=" * 80)
-        logger.info(f"[TARGET] AGENT 3 (TILE SELECTOR): Starting intelligent tile selection")
-        logger.info(f"   Input: {len(stac_features)} tiles from {len(collection_ids)} collections")
+        logger.info(
+            "[TARGET] AGENT 3 (TILE SELECTOR): Starting intelligent tile selection"
+        )
+        logger.info(
+            f"   Input: {len(stac_features)} tiles from {len(collection_ids)} collections"
+        )
         logger.info(f"   Query: {query[:100]}...")
         logger.info(f"   Collections: {collection_ids}")
-        
+
         try:
             # Quick validation
             if not stac_features:
-                logger.warning("[WARN] AGENT 3: No tiles to select from, returning empty list")
+                logger.warning(
+                    "[WARN] AGENT 3: No tiles to select from, returning empty list"
+                )
                 return []
-            
+
             # Step 1: Extract resolution information for each collection from PC metadata
-            logger.info(f"[CHART] AGENT 3 STEP 1: Analyzing collection resolutions...")
+            logger.info("[CHART] AGENT 3 STEP 1: Analyzing collection resolutions...")
             collection_resolutions = {}
             for coll_id in collection_ids:
                 coll_metadata = get_collection_metadata(coll_id)
@@ -2770,28 +3194,32 @@ Return only the JSON object. No explanations or additional text."""
                 res_meters = self._parse_resolution(res_str)
                 collection_resolutions[coll_id] = {
                     "resolution_str": res_str,
-                    "resolution_m": res_meters
+                    "resolution_m": res_meters,
                 }
                 logger.info(f"   {coll_id}: {res_str} ({res_meters}m)")
-            
+
             # Find highest resolution
-            best_resolution = min([v["resolution_m"] for v in collection_resolutions.values()])
+            best_resolution = min(
+                [v["resolution_m"] for v in collection_resolutions.values()]
+            )
             logger.info(f"   [TROPHY] Best resolution: {best_resolution}m")
-            
+
             # Step 2: Calculate AOI characteristics
-            logger.info(f"[MAP] AGENT 3 STEP 2: Analyzing area of interest...")
+            logger.info("[MAP] AGENT 3 STEP 2: Analyzing area of interest...")
             aoi_area_km2 = self._calculate_area(bbox)
             tile_limit = self._determine_tile_limit(bbox, query)
             coverage_info = self._check_spatial_coverage(stac_features, bbox)
-            
+
             logger.info(f"   AOI area: {aoi_area_km2:.2f} km²")
             logger.info(f"   Tile limit: {tile_limit} tiles")
             logger.info(f"   Coverage: {coverage_info.get('coverage_percent', 0):.1f}%")
-            logger.info(f"   Intersecting tiles: {coverage_info.get('intersecting_tiles', 0)}/{len(stac_features)}")
-            
+            logger.info(
+                f"   Intersecting tiles: {coverage_info.get('intersecting_tiles', 0)}/{len(stac_features)}"
+            )
+
             # Step 3: Prepare data summary for GPT
-            logger.info(f"[NOTE] AGENT 3 STEP 3: Preparing data for GPT analysis...")
-            
+            logger.info("[NOTE] AGENT 3 STEP 3: Preparing data for GPT analysis...")
+
             # Group tiles by collection
             tiles_by_collection = {}
             for feature in stac_features:
@@ -2799,30 +3227,32 @@ Return only the JSON object. No explanations or additional text."""
                 if coll not in tiles_by_collection:
                     tiles_by_collection[coll] = []
                 tiles_by_collection[coll].append(feature)
-            
+
             # Create summary of available tiles
             tile_summary = []
             for coll, tiles in tiles_by_collection.items():
                 res_info = collection_resolutions.get(coll, {})
-                tile_summary.append({
-                    "collection": coll,
-                    "resolution": res_info.get("resolution_str", "unknown"),
-                    "resolution_m": res_info.get("resolution_m", 1000),
-                    "tile_count": len(tiles),
-                    "sample_tiles": tiles[:3]  # First 3 for GPT analysis
-                })
-            
+                tile_summary.append(
+                    {
+                        "collection": coll,
+                        "resolution": res_info.get("resolution_str", "unknown"),
+                        "resolution_m": res_info.get("resolution_m", 1000),
+                        "tile_count": len(tiles),
+                        "sample_tiles": tiles[:3],  # First 3 for GPT analysis
+                    }
+                )
+
             # Sort by resolution (best first)
             tile_summary.sort(key=lambda x: x["resolution_m"])
-            
+
             logger.info(f"   Prepared summary for {len(tile_summary)} collections")
-            
+
             # Step 4: Call GPT-5 for intelligent selection
-            logger.info(f"[BOT] AGENT 3 STEP 4: Calling GPT-5 for tile selection...")
-            
+            logger.info("[BOT] AGENT 3 STEP 4: Calling GPT-5 for tile selection...")
+
             try:
                 await self._initialize_kernel()
-                
+
                 # Build GPT prompt
                 prompt = f"""You are an expert satellite imagery selection agent. Your task is to select the OPTIMAL tiles for visualization.
 
@@ -2889,104 +3319,133 @@ IMPORTANT:
                 execution_settings = OpenAIChatPromptExecutionSettings(
                     max_completion_tokens=2000,
                     temperature=1.0,  # GPT-5 only supports default temperature
-                    top_p=0.95
+                    top_p=0.95,
                 )
-                
+
                 # Create chat history
                 chat_history = ChatHistory()
-                chat_history.add_system_message("You are an expert satellite imagery selection agent. Return ONLY valid JSON arrays.")
+                chat_history.add_system_message(
+                    "You are an expert satellite imagery selection agent. Return ONLY valid JSON arrays."
+                )
                 chat_history.add_user_message(prompt)
-                
+
                 # Get chat completion service for tile selection
                 chat_completion = self.kernel.get_service(type=ChatCompletionClientBase)
-                
+
                 # Get GPT response
                 result = await chat_completion.get_chat_message_content(
                     chat_history=chat_history,
                     settings=execution_settings,
-                    kernel=self.kernel
+                    kernel=self.kernel,
                 )
-                
+
                 # Extract tile IDs from response
                 response_text = str(result) if result else ""
                 logger.info(f"   GPT response length: {len(response_text)} chars")
                 logger.info(f"   GPT response preview: {response_text[:200]}...")
-                
+
                 # Parse JSON response
-                selected_tile_ids = self._extract_tile_ids_from_gpt_response(response_text)
-                
+                selected_tile_ids = self._extract_tile_ids_from_gpt_response(
+                    response_text
+                )
+
                 if not selected_tile_ids:
-                    logger.warning(f"[WARN] AGENT 3: GPT returned no tile IDs, falling back to rule-based")
-                    return await self._rule_based_tile_selector(
-                        stac_features, query, collection_ids, bbox, tile_limit, best_resolution
+                    logger.warning(
+                        "[WARN] AGENT 3: GPT returned no tile IDs, falling back to rule-based"
                     )
-                
-                logger.info(f"[OK] AGENT 3 GPT: Selected {len(selected_tile_ids)} tile IDs")
-                
+                    return await self._rule_based_tile_selector(
+                        stac_features,
+                        query,
+                        collection_ids,
+                        bbox,
+                        tile_limit,
+                        best_resolution,
+                    )
+
+                logger.info(
+                    f"[OK] AGENT 3 GPT: Selected {len(selected_tile_ids)} tile IDs"
+                )
+
                 # Map tile IDs back to features
                 selected_features = []
                 for feature in stac_features:
                     feature_id = feature.get("id", "")
                     collection = feature.get("collection", "")
                     full_id = f"{collection}/{feature_id}"
-                    
+
                     if full_id in selected_tile_ids or feature_id in selected_tile_ids:
                         selected_features.append(feature)
-                
+
                 if not selected_features:
-                    logger.warning(f"[WARN] AGENT 3: Could not map tile IDs to features, falling back")
-                    return await self._rule_based_tile_selector(
-                        stac_features, query, collection_ids, bbox, tile_limit, best_resolution
+                    logger.warning(
+                        "[WARN] AGENT 3: Could not map tile IDs to features, falling back"
                     )
-                
-                logger.info(f"[OK] AGENT 3 SUCCESS: Selected {len(selected_features)} tiles")
+                    return await self._rule_based_tile_selector(
+                        stac_features,
+                        query,
+                        collection_ids,
+                        bbox,
+                        tile_limit,
+                        best_resolution,
+                    )
+
+                logger.info(
+                    f"[OK] AGENT 3 SUCCESS: Selected {len(selected_features)} tiles"
+                )
                 logger.info(f"   Coverage: {len(selected_features)}/{tile_limit} tiles")
                 logger.info("=" * 80)
                 return selected_features
-                
+
             except Exception as gpt_error:
-                logger.error(f"[FAIL] AGENT 3 GPT ERROR: {type(gpt_error).__name__}: {str(gpt_error)}")
-                logger.error(f"   Falling back to rule-based selector")
-                return await self._rule_based_tile_selector(
-                    stac_features, query, collection_ids, bbox, tile_limit, best_resolution
+                logger.error(
+                    f"[FAIL] AGENT 3 GPT ERROR: {type(gpt_error).__name__}: {str(gpt_error)}"
                 )
-        
+                logger.error("   Falling back to rule-based selector")
+                return await self._rule_based_tile_selector(
+                    stac_features,
+                    query,
+                    collection_ids,
+                    bbox,
+                    tile_limit,
+                    best_resolution,
+                )
+
         except Exception as e:
             logger.error(f"[FAIL] AGENT 3 EXCEPTION: {type(e).__name__}: {str(e)}")
-            logger.error(f"[FAIL] AGENT 3 TRACEBACK:")
+            logger.error("[FAIL] AGENT 3 TRACEBACK:")
             logger.error(traceback.format_exc())
-            logger.warning(f"[WARN] AGENT 3: Critical error, falling back to rule-based")
-            
+            logger.warning("[WARN] AGENT 3: Critical error, falling back to rule-based")
+
             # Emergency fallback
             tile_limit = self._determine_tile_limit(bbox, query)
             return await self._rule_based_tile_selector(
                 stac_features, query, collection_ids, bbox, tile_limit, 30.0
             )
-    
+
     def _extract_tile_ids_from_gpt_response(self, response_text: str) -> List[str]:
         """Extract tile IDs from GPT response (handles various formats)"""
         try:
             # Try direct JSON parse
             if response_text.strip().startswith("["):
                 return json.loads(response_text.strip())
-            
+
             # Try to find JSON array in response
-            json_match = re.search(r'\[.*?\]', response_text, re.DOTALL)
+            json_match = re.search(r"\[.*?\]", response_text, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group(0))
-            
+
             # Try to extract quoted strings
             tile_ids = re.findall(r'"([^"]+)"', response_text)
             if tile_ids:
                 return tile_ids
-            
-            logger.warning(f"[WARN] Could not extract tile IDs from GPT response")
+
+            logger.warning("[WARN] Could not extract tile IDs from GPT response")
             return []
-            
+
         except Exception as e:
             logger.error(f"[FAIL] Error parsing GPT tile IDs: {e}")
             return []
-    
+
     async def _rule_based_tile_selector(
         self,
         stac_features: List[Dict],
@@ -2994,20 +3453,20 @@ IMPORTANT:
         collection_ids: List[str],
         bbox: List[float],
         tile_limit: int,
-        best_resolution_m: float
+        best_resolution_m: float,
     ) -> List[Dict]:
         """
         RULE-BASED FALLBACK: Simple, reliable tile selection
-        
+
         Strategy:
         1. Filter to highest resolution collection only
         2. Sort by datetime (most recent first)
         3. Filter by spatial intersection with bbox
         4. Take top N tiles up to limit
         """
-        
+
         logger.info("[SYNC] AGENT 3 FALLBACK: Using rule-based tile selection")
-        
+
         try:
             # Step 1: Filter to highest resolution tiles
             high_res_tiles = []
@@ -3020,42 +3479,44 @@ IMPORTANT:
                     else:
                         res_str = "1000m"
                     res_m = self._parse_resolution(res_str)
-                    
+
                     # Allow tiles within 20% of best resolution
                     if res_m <= best_resolution_m * 1.2:
                         high_res_tiles.append(feature)
-            
+
             logger.info(f"   Filtered to {len(high_res_tiles)} high-resolution tiles")
-            
+
             if not high_res_tiles:
                 high_res_tiles = stac_features  # Fallback: use all
-            
+
             # Step 2: Filter by spatial intersection
             west, south, east, north = bbox
             intersecting_tiles = []
-            
+
             for feature in high_res_tiles:
                 feature_bbox = feature.get("bbox")
                 if not feature_bbox or len(feature_bbox) != 4:
                     continue
-                
+
                 fw, fs, fe, fn = feature_bbox
-                
+
                 # Check if bboxes intersect
                 if not (fe < west or fw > east or fn < south or fs > north):
                     intersecting_tiles.append(feature)
-            
-            logger.info(f"   Filtered to {len(intersecting_tiles)} spatially intersecting tiles")
-            
+
+            logger.info(
+                f"   Filtered to {len(intersecting_tiles)} spatially intersecting tiles"
+            )
+
             if not intersecting_tiles:
                 intersecting_tiles = high_res_tiles  # Fallback
-            
+
             # Step 3: Group by acquisition datetime and select SINGLE timepoint
             # RULE: Always pick most recent datetime, whether user specified or not
             from collections import defaultdict
-            
+
             tiles_by_datetime = defaultdict(list)
-            
+
             def get_datetime(feature):
                 try:
                     dt_str = feature.get("properties", {}).get("datetime", "")
@@ -3066,62 +3527,66 @@ IMPORTANT:
                     return datetime.min
                 except (ValueError, AttributeError, TypeError):
                     return datetime.min
-            
+
             # Group tiles by datetime
             for feature in intersecting_tiles:
                 dt = get_datetime(feature)
                 tiles_by_datetime[dt].append(feature)
-            
-            logger.info(f"   Found {len(tiles_by_datetime)} different acquisition times")
-            
+
+            logger.info(
+                f"   Found {len(tiles_by_datetime)} different acquisition times"
+            )
+
             # TEMPORAL SELECTION LOGIC:
             # 1. If user specified datetime -> tiles are already filtered by Agent 2
             # 2. Pick MOST RECENT datetime from available tiles
             # 3. If multiple tiles at same datetime -> sort by ID and take last
-            
+
             if tiles_by_datetime:
                 most_recent_time = max(tiles_by_datetime.keys())
                 selected_time_tiles = tiles_by_datetime[most_recent_time]
-                
+
                 logger.info(f"   Most recent acquisition: {most_recent_time}")
                 logger.info(f"   Tiles from that time: {len(selected_time_tiles)}")
-                
+
                 # Sort tiles by ID (deterministic ordering) and acquisition time
                 # This ensures if there are multiple tiles at exact same datetime,
                 # we consistently pick the "last" one (alphabetically last ID)
                 selected_time_tiles.sort(
                     key=lambda f: (
                         get_datetime(f),  # Primary: datetime
-                        f.get("id", "")   # Secondary: tile ID (last alphabetically)
+                        f.get("id", ""),  # Secondary: tile ID (last alphabetically)
                     ),
-                    reverse=True  # Most recent first
+                    reverse=True,  # Most recent first
                 )
-                
-                logger.info(f"   Sorted {len(selected_time_tiles)} tiles by datetime (most recent first)")
+
+                logger.info(
+                    f"   Sorted {len(selected_time_tiles)} tiles by datetime (most recent first)"
+                )
             else:
                 selected_time_tiles = intersecting_tiles
-            
+
             # Step 4: Select tiles ensuring FULL COVERAGE of requested bbox
             # Strategy: Add tiles until requested bbox is fully covered
             selected = []
             west, south, east, north = bbox
-            
+
             # Track which parts of the bbox are covered
             covered_regions = []  # List of covered bbox regions
-            
+
             for tile in selected_time_tiles:
                 if len(selected) >= tile_limit:
                     break
-                
+
                 tile_bbox = tile.get("bbox")
                 if not tile_bbox or len(tile_bbox) != 4:
                     continue
-                
+
                 tw, ts, te, tn = tile_bbox
-                
+
                 # Check if this tile adds new coverage
                 adds_coverage = False
-                
+
                 # If no tiles selected yet, or if this tile covers uncovered area
                 if not selected:
                     adds_coverage = True
@@ -3130,8 +3595,11 @@ IMPORTANT:
                     # Simple heuristic: if tile center is within requested bbox, it likely adds coverage
                     tile_center_lon = (tw + te) / 2
                     tile_center_lat = (ts + tn) / 2
-                    
-                    if west <= tile_center_lon <= east and south <= tile_center_lat <= north:
+
+                    if (
+                        west <= tile_center_lon <= east
+                        and south <= tile_center_lat <= north
+                    ):
                         adds_coverage = True
                     elif not (te < west or tw > east or tn < south or ts > north):
                         # Tile intersects bbox - check if it's far from selected tiles
@@ -3145,133 +3613,162 @@ IMPORTANT:
                                 overlap_e = min(te, se)
                                 overlap_s = max(ts, ss)
                                 overlap_n = min(tn, sn)
-                                
+
                                 if overlap_e > overlap_w and overlap_n > overlap_s:
                                     # Significant overlap - check if >80% overlap
-                                    overlap_area = (overlap_e - overlap_w) * (overlap_n - overlap_s)
+                                    overlap_area = (overlap_e - overlap_w) * (
+                                        overlap_n - overlap_s
+                                    )
                                     tile_area = (te - tw) * (tn - ts)
-                                    if tile_area > 0 and (overlap_area / tile_area) > 0.8:
+                                    if (
+                                        tile_area > 0
+                                        and (overlap_area / tile_area) > 0.8
+                                    ):
                                         adds_coverage = False
                                         break
-                
+
                 if adds_coverage:
                     selected.append(tile)
                     covered_regions.append(tile_bbox)
-            
+
             # If we don't have enough coverage, add more tiles
             if len(selected) < 5 and len(selected_time_tiles) > len(selected):
-                logger.info(f"   [WARN] Only {len(selected)} tiles selected, adding more for coverage")
+                logger.info(
+                    f"   [WARN] Only {len(selected)} tiles selected, adding more for coverage"
+                )
                 for tile in selected_time_tiles:
                     if len(selected) >= tile_limit:
                         break
                     if tile not in selected:
                         selected.append(tile)
-            
-            logger.info(f"[OK] AGENT 3 FALLBACK: Selected {len(selected)} tiles for FULL COVERAGE")
+
+            logger.info(
+                f"[OK] AGENT 3 FALLBACK: Selected {len(selected)} tiles for FULL COVERAGE"
+            )
             if selected:
                 first_tile_dt = get_datetime(selected[0])
                 logger.info(f"   Single acquisition time: {first_tile_dt}")
-                logger.info(f"   Tile IDs: {[f.get('id', 'unknown')[:30] + '...' for f in selected[:3]]}")
-                logger.info(f"   Coverage regions: {len(covered_regions)} tiles covering requested bbox")
-            logger.info(f"   (Highest resolution + most recent + FULL COVERAGE + NO temporal overlap)")
-            
+                logger.info(
+                    f"   Tile IDs: {[f.get('id', 'unknown')[:30] + '...' for f in selected[:3]]}"
+                )
+                logger.info(
+                    f"   Coverage regions: {len(covered_regions)} tiles covering requested bbox"
+                )
+            logger.info(
+                "   (Highest resolution + most recent + FULL COVERAGE + NO temporal overlap)"
+            )
+
             return selected
-            
+
         except Exception as e:
             logger.error(f"[FAIL] FALLBACK ERROR: {e}, returning limited original list")
-            return stac_features[:min(tile_limit, len(stac_features))]
-    
-    async def _build_stac_parameters(self, query: str, collections: List[str], entities: Optional[Dict[str, Any]] = None, datetime_range: Optional[str] = None) -> Dict[str, Any]:
+            return stac_features[: min(tile_limit, len(stac_features))]
+
+    async def _build_stac_parameters(
+        self,
+        query: str,
+        collections: List[str],
+        entities: Optional[Dict[str, Any]] = None,
+        datetime_range: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         [TOOL] UTILITY: Build STAC query parameters (DETERMINISTIC - No GPT)
-        
+
         This is now a pure function that assembles STAC parameters from resolved components.
         All ambiguity has been handled by upstream agents:
         - Collections: Selected by collection_mapping_agent (Agent 1)
         - Datetime: Resolved by datetime_translation_agent (Agent 2.2)
         - Cloud filter: Determined by cloud_filtering_agent (Agent 2.3)
         - Location: Extracted by location_extraction_agent (Agent 2.1)
-        
+
         Args:
             query: User's natural language query (for reference)
             collections: Selected collection IDs
             entities: Extracted entities (for context)
             datetime_range: Pre-resolved ISO 8601 datetime or None
-        
+
         Returns:
             Dict with STAC query parameters
         """
-        
+
         # [SEARCH] DEBUG: Log input parameters
-        logger.info(f"� UTILITY: _build_stac_parameters (deterministic)")
+        logger.info("� UTILITY: _build_stac_parameters (deterministic)")
         logger.info(f"� Collections: {collections}")
         logger.info(f"� Datetime range: {datetime_range}")
-        print(f"� DEBUG: ===== BUILD STAC PARAMETERS (PURE FUNCTION) =====")
+        print("� DEBUG: ===== BUILD STAC PARAMETERS (PURE FUNCTION) =====")
         print(f"� DEBUG: Collections: {collections}")
         print(f"� DEBUG: Datetime: {datetime_range}")
-        
+
         # Build base parameters
         stac_query = {
             "collections": collections,
-            "sortby": [{"field": "datetime", "direction": "desc"}]
+            "sortby": [{"field": "datetime", "direction": "desc"}],
         }
-        
+
         # Add datetime if provided (already validated by datetime_translation_agent)
         if datetime_range:
             stac_query["datetime"] = datetime_range
             logger.info("=" * 80)
-            logger.info(f"[DATE] DATETIME FILTER - ADDED TO STAC QUERY")
+            logger.info("[DATE] DATETIME FILTER - ADDED TO STAC QUERY")
             logger.info("=" * 80)
             logger.info(f"[OUTBOX] SENDING TO STAC API: datetime={datetime_range}")
-            if '/' in datetime_range:
-                start, end = datetime_range.split('/')
+            if "/" in datetime_range:
+                start, end = datetime_range.split("/")
                 logger.info(f"   |--- Start Date: {start}")
                 logger.info(f"   \--- End Date:   {end}")
             logger.info("=" * 80)
             print(f"[OK] Datetime added to STAC query: {datetime_range}")
         else:
             logger.info("=" * 80)
-            logger.info(f"ℹ️ NO DATETIME FILTER - Will use sortby to get most recent")
+            logger.info("ℹ️ NO DATETIME FILTER - Will use sortby to get most recent")
             logger.info("=" * 80)
-            print(f"ℹ️ No datetime filter")
-        
+            print("ℹ️ No datetime filter")
+
         # DEFAULT LIMIT: 50 tiles as fallback
         # This will be overridden by dynamic calculation after bbox is resolved
         # The dynamic limit (calculated in STEP 6) uses bbox area to determine optimal tile count
         stac_query["limit"] = 50
-        
-        logger.info(f"[OK] Default query limit: 50 (will be adjusted based on bbox size)")
-        print(f"[OK] Default limit: 50 tiles (dynamic adjustment after bbox resolution)")
-        
+
+        logger.info(
+            "[OK] Default query limit: 50 (will be adjusted based on bbox size)"
+        )
+        print("[OK] Default limit: 50 tiles (dynamic adjustment after bbox resolution)")
+
         # [SEARCH] DEBUG: Log final parameters
         logger.info(f"� STAC parameters built (deterministic): {stac_query}")
-        print(f"� DEBUG: ===== BUILT STAC PARAMETERS =====")
+        print("� DEBUG: ===== BUILT STAC PARAMETERS =====")
         print(json.dumps(stac_query, indent=2))
-        print(f"� DEBUG: ====================================")
-        
+        print("� DEBUG: ====================================")
+
         return stac_query
-    
-    async def _add_cloud_filtering_to_query(self, stac_query: Dict[str, Any], query: str, entities: Dict[str, Any], collections: List[str]) -> None:
+
+    async def _add_cloud_filtering_to_query(
+        self,
+        stac_query: Dict[str, Any],
+        query: str,
+        entities: Dict[str, Any],
+        collections: List[str],
+    ) -> None:
         """
         Add cloud filtering to STAC query ONLY if user explicitly mentions cloud cover.
-        
+
         This method:
         1. Detects EXPLICIT cloud cover mentions (low/medium/high cloud, clear, cloudy, etc.)
         2. Checks if selected collections support cloud filtering
         3. Adds filter only if both conditions are met
         4. Logs warning if user requests cloud filtering for non-supporting collections
-        
+
         Modifies stac_query in-place by adding to the 'query' dict.
         """
         # Import PC metadata helpers for cloud filtering
         from pc_tasks_config_loader import (
+            get_cloud_cover_property,
             supports_cloud_filtering,
-            get_cloud_cover_property
         )
-        
+
         # Detect EXPLICIT cloud cover intent (returns None if no explicit mention)
         cloud_intent = await self._detect_cloud_cover_intent(query)
-        
+
         if cloud_intent is None:
             # No explicit cloud mention - apply DEFAULT filter for optical imagery
             # This creates cohesive mosaics by filtering out heavily clouded tiles
@@ -3280,23 +3777,35 @@ IMPORTANT:
                 # Apply 30% default for optical imagery (balances coverage vs clarity)
                 cloud_limit = 30
                 reasoning = "Default cloud filter for optical imagery (no explicit user preference)"
-                logger.info(f"[Cloud Filter] {reasoning} - applying default threshold: {cloud_limit}%")
+                logger.info(
+                    f"[Cloud Filter] {reasoning} - applying default threshold: {cloud_limit}%"
+                )
             else:
-                logger.info(f"[Cloud Filter] No explicit cloud mention and no filterable collections - skipping filter")
+                logger.info(
+                    "[Cloud Filter] No explicit cloud mention and no filterable collections - skipping filter"
+                )
                 return
         else:
             cloud_limit = cloud_intent["threshold"]
             reasoning = cloud_intent["reasoning"]
             logger.info(f"[Cloud Filter] {reasoning} - threshold: {cloud_limit}%")
-        
+
         # Check which collections support cloud filtering
-        cloud_filterable_collections = [c for c in collections if supports_cloud_filtering(c)]
-        non_filterable_collections = [c for c in collections if not supports_cloud_filtering(c)]
-        
-        logger.info(f"[Cloud Filter] Filterable collections: {cloud_filterable_collections}")
+        cloud_filterable_collections = [
+            c for c in collections if supports_cloud_filtering(c)
+        ]
+        non_filterable_collections = [
+            c for c in collections if not supports_cloud_filtering(c)
+        ]
+
+        logger.info(
+            f"[Cloud Filter] Filterable collections: {cloud_filterable_collections}"
+        )
         if non_filterable_collections:
-            logger.info(f"[Cloud Filter] Non-filterable collections: {non_filterable_collections}")
-        
+            logger.info(
+                f"[Cloud Filter] Non-filterable collections: {non_filterable_collections}"
+            )
+
         # If user requested cloud filtering but NO collections support it
         if len(cloud_filterable_collections) == 0:
             warning_msg = (
@@ -3307,31 +3816,33 @@ IMPORTANT:
                 f"or are pre-processed composites where clouds have already been removed."
             )
             logger.warning(f"[Cloud Filter] {warning_msg}")
-            
+
             # Store warning for response generation
-            entities['cloud_filter_unavailable'] = {
-                'requested_threshold': cloud_limit,
-                'collections': collections,
-                'warning_message': warning_msg
+            entities["cloud_filter_unavailable"] = {
+                "requested_threshold": cloud_limit,
+                "collections": collections,
+                "warning_message": warning_msg,
             }
             return
-        
+
         # Add cloud filter to query
-        if 'query' not in stac_query:
-            stac_query['query'] = {}
-        
-        query_filters = stac_query['query']
-        
+        if "query" not in stac_query:
+            stac_query["query"] = {}
+
+        query_filters = stac_query["query"]
+
         # Use the FIRST cloud-filterable collection to determine property name
         primary_collection = cloud_filterable_collections[0]
         prop_name = get_cloud_cover_property(primary_collection)
-        
+
         if prop_name:
             # Build filter: {"eo:cloud_cover": {"lt": 25}}
             filter_value = {"lt": cloud_limit}
             query_filters[prop_name] = filter_value
-            logger.info(f"[Cloud Filter] [OK] ADDED: {prop_name} < {cloud_limit}% for {primary_collection}")
-            
+            logger.info(
+                f"[Cloud Filter] [OK] ADDED: {prop_name} < {cloud_limit}% for {primary_collection}"
+            )
+
             # If some collections don't support filtering, log mixed collection warning
             if non_filterable_collections:
                 logger.warning(
@@ -3339,26 +3850,28 @@ IMPORTANT:
                     f"{cloud_filterable_collections} but NOT {non_filterable_collections}"
                 )
         else:
-            logger.error(f"[Cloud Filter] Failed to get property name for collection {primary_collection}")
-    
+            logger.error(
+                f"[Cloud Filter] Failed to get property name for collection {primary_collection}"
+            )
+
     def _build_collection_rules_for_agent(self, collections: List[str]) -> str:
         """Build collection rules summary for Agent 2 using PC metadata"""
-        
+
         if not PC_METADATA_AVAILABLE:
             return "Limited collection rules available"
-        
+
         rules_lines = []
         for collection_id in collections:
             coll_metadata = get_collection_metadata(collection_id)
             if not coll_metadata:
                 continue
-            
+
             is_static = coll_metadata.get("is_static", False)
             temporal_extent = coll_metadata.get("temporal_extent", "")
             description = coll_metadata.get("description", "")
-            
+
             rules_text = f"\n{collection_id}:"
-            
+
             if is_static:
                 rules_text += "\n  - Type: STATIC (DEM/Elevation data)"
                 rules_text += "\n  - Rule: NEVER use datetime"
@@ -3368,54 +3881,71 @@ IMPORTANT:
                 rules_text += "\n  - Type: DYNAMIC (Time-series)"
                 rules_text += "\n  - Rule: CAN use datetime (optional)"
                 rules_text += f"\n  - Temporal: {temporal_extent}"
-                if any(x in collection_id.lower() for x in ['sentinel', 'landsat', 'hls', 'naip']):
-                    rules_text += "\n  - Rule: CAN use cloud_cover filter (optical imagery)"
-            
+                if any(
+                    x in collection_id.lower()
+                    for x in ["sentinel", "landsat", "hls", "naip"]
+                ):
+                    rules_text += (
+                        "\n  - Rule: CAN use cloud_cover filter (optical imagery)"
+                    )
+
             # Add brief description for context
-            desc_short = description[:150] + "..." if len(description) > 150 else description
+            desc_short = (
+                description[:150] + "..." if len(description) > 150 else description
+            )
             rules_text += f"\n  - Description: {desc_short}"
-            
+
             rules_lines.append(rules_text)
-        
+
         return "\n".join(rules_lines)
-    
+
     async def _extract_location_name(self, query: str) -> Optional[str]:
         """
         DEPRECATED: Extract location name from query using keyword pattern matching
-        
+
         This function is NO LONGER USED as of 2025-10-09.
         Location extraction is now handled by Agent 2 (GPT-5) which provides
         both location_name and bbox in its response.
-        
+
         Keeping this function for backwards compatibility, but it should be
         removed in future cleanup.
-        
+
         Historical context:
         - Originally created as workaround when Agent 2 was told NOT to include bbox
         - Used fragile regex patterns that failed on many query phrasings
         - Replaced by letting GPT-5 do natural language understanding
         """
-        
+
         # Simple location extraction - look for common patterns
         query_lower = query.lower()
-        
+
         # Try to extract location name
         location_keywords = ["in ", "at ", "of ", "for ", "near "]
         location_name = None
-        
+
         for keyword in location_keywords:
             if keyword in query_lower:
                 # Extract text after keyword
                 idx = query_lower.find(keyword)
-                after_keyword = query[idx + len(keyword):].strip()
-                
+                after_keyword = query[idx + len(keyword) :].strip()
+
                 # Extract location name: take up to the first punctuation or question word
                 # Skip articles like "the"
                 words = after_keyword.split()
                 location_parts = []
                 for word in words:
                     # Stop at punctuation or question words
-                    if word.lower() in ["?", "!", ".", ",", "what", "when", "where", "how", "why"]:
+                    if word.lower() in [
+                        "?",
+                        "!",
+                        ".",
+                        ",",
+                        "what",
+                        "when",
+                        "where",
+                        "how",
+                        "why",
+                    ]:
                         break
                     # Skip articles
                     if word.lower() in ["the", "a", "an"]:
@@ -3424,206 +3954,248 @@ IMPORTANT:
                     # Take up to 3 words for compound names (e.g., "Grand Canyon National")
                     if len(location_parts) >= 3:
                         break
-                
+
                 if location_parts:
                     location_name = " ".join(location_parts)
                     break
-        
+
         if not location_name:
             # Try common place names as fallback
-            places = ["grand canyon", "california", "seattle", "houston", "florida", "texas", "yosemite", "yellowstone"]
+            places = [
+                "grand canyon",
+                "california",
+                "seattle",
+                "houston",
+                "florida",
+                "texas",
+                "yosemite",
+                "yellowstone",
+            ]
             for place in places:
                 if place in query_lower:
                     location_name = place.title()
                     break
-        
+
         if location_name:
             logger.info(f"[PIN] Extracted location name from query: '{location_name}'")
         else:
             logger.warning(f"[WARN] Could not extract location from query: '{query}'")
-        
+
         return location_name
-    
-    async def _build_stac_query_basic(self, query: str, collections: List[str]) -> Dict[str, Any]:
+
+    async def _build_stac_query_basic(
+        self, query: str, collections: List[str]
+    ) -> Dict[str, Any]:
         """Fallback basic STAC query builder with location resolution"""
-        
-        logger.warning("[WARN] Using fallback basic query builder (kernel not initialized)")
-        
+
+        logger.warning(
+            "[WARN] Using fallback basic query builder (kernel not initialized)"
+        )
+
         stac_query = {
             "collections": collections,
-            "limit": 20  # Optimal for fast queries - reduced from 100 to 20 (saves ~8 seconds)
+            "limit": 20,  # Optimal for fast queries - reduced from 100 to 20 (saves ~8 seconds)
         }
-        
+
         # Check if static collection
         is_static = any(is_static_collection(c) for c in collections)
-        
+
         if not is_static:
             # Add recent datetime for dynamic collections
             stac_query["datetime"] = "2023-01-01/.."
             stac_query["sortby"] = [{"field": "datetime", "direction": "desc"}]
-        
+
         # CRITICAL FIX: Attempt basic location extraction even in fallback mode
         # This prevents returning 1000 global tiles for location-specific queries
         try:
             location_name = await self._extract_location_basic(query)
             if location_name:
-                logger.info(f"[PIN] Fallback: Attempting to resolve '{location_name}' to bbox")
+                logger.info(
+                    f"[PIN] Fallback: Attempting to resolve '{location_name}' to bbox"
+                )
                 bbox = await self.resolve_location_to_bbox(location_name, "region")
                 if bbox and self._validate_bbox(bbox):
                     stac_query["bbox"] = bbox
                     stac_query["location_name"] = location_name
-                    logger.info(f"[OK] Fallback: Resolved '{location_name}' -> bbox: {bbox}")
+                    logger.info(
+                        f"[OK] Fallback: Resolved '{location_name}' -> bbox: {bbox}"
+                    )
                 else:
-                    logger.warning(f"[WARN] Fallback: Could not resolve '{location_name}' to bbox")
+                    logger.warning(
+                        f"[WARN] Fallback: Could not resolve '{location_name}' to bbox"
+                    )
         except Exception as e:
             logger.warning(f"[WARN] Fallback location extraction failed: {e}")
-        
+
         return stac_query
-    
+
     async def _extract_location_basic(self, query: str) -> Optional[str]:
         """
         Basic location extraction using regex patterns and STORED_LOCATIONS.
         Used as fallback when the GPT-powered location_extraction_agent is unavailable.
-        
+
         Extracts location names from common query patterns like:
         - "Show X of/for/in <location>"
         - "Display X near/around <location>"
         """
         query_lower = query.lower().strip()
-        
+
         # Strategy 1: Check against STORED_LOCATIONS keys
         try:
             from location_resolver import EnhancedLocationResolver
+
             stored_locations = list(EnhancedLocationResolver.STORED_LOCATIONS.keys())
             # Sort by length descending to match longer names first (e.g., "new york city" before "new york")
             stored_locations.sort(key=len, reverse=True)
             for loc in stored_locations:
                 if loc in query_lower:
-                    logger.info(f"[PIN] Basic extraction: Found stored location '{loc}' in query")
+                    logger.info(
+                        f"[PIN] Basic extraction: Found stored location '{loc}' in query"
+                    )
                     return loc
         except Exception as e:
             logger.warning(f"[WARN] Could not check stored locations: {e}")
-        
+
         # Strategy 2: Regex patterns for common location phrases
         location_patterns = [
-            r'(?:of|for|in|near|around|over)\s+(?:the\s+)?([A-Z][a-zA-Z\s,]+?)(?:\s*$|\s*\.|\s*\?)',
-            r'(?:show|display|map|imagery|satellite)\s+.*?\s+(?:of|for|in)\s+(?:the\s+)?([A-Z][a-zA-Z\s,]+?)(?:\s*$|\s*\.|\s*\?)',
+            r"(?:of|for|in|near|around|over)\s+(?:the\s+)?([A-Z][a-zA-Z\s,]+?)(?:\s*$|\s*\.|\s*\?)",
+            r"(?:show|display|map|imagery|satellite)\s+.*?\s+(?:of|for|in)\s+(?:the\s+)?([A-Z][a-zA-Z\s,]+?)(?:\s*$|\s*\.|\s*\?)",
         ]
-        
+
         for pattern in location_patterns:
             match = re.search(pattern, query, re.IGNORECASE)
             if match:
-                location = match.group(1).strip().rstrip(',. ')
+                location = match.group(1).strip().rstrip(",. ")
                 if len(location) > 2 and len(location) < 100:
-                    logger.info(f"[PIN] Basic extraction: Regex matched location '{location}'")
+                    logger.info(
+                        f"[PIN] Basic extraction: Regex matched location '{location}'"
+                    )
                     return location
-        
+
         logger.info(f"[PIN] Basic extraction: No location found in query '{query}'")
         return None
-    
+
     # ========================================================================
     # LOCATION RESOLUTION
     # ========================================================================
-    
+
     def _extract_json_safely(self, content: str) -> Dict[str, Any]:
         """Enhanced JSON extraction with multiple parsing strategies"""
-        
+
         content = content.strip()
-        
+
         # Strategy 1: Direct JSON parsing
         try:
             return json.loads(content)
         except json.JSONDecodeError:
             pass
-        
+
         # Strategy 2: Extract JSON from markdown code blocks
         json_patterns = [
-            r'```json\s*(\{.*?\})\s*```',
-            r'```\s*(\{.*?\})\s*```',
-            r'(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})',
+            r"```json\s*(\{.*?\})\s*```",
+            r"```\s*(\{.*?\})\s*```",
+            r"(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})",
         ]
-        
+
         for pattern in json_patterns:
             matches = re.findall(pattern, content, re.DOTALL | re.IGNORECASE)
             for match in matches:
                 try:
                     # Clean up the match
-                    cleaned = re.sub(r'\\n', '\n', match)
+                    cleaned = re.sub(r"\\n", "\n", match)
                     cleaned = re.sub(r'\\"', '"', cleaned)
                     return json.loads(cleaned)
                 except (json.JSONDecodeError, TypeError):
                     continue
-        
+
         # Strategy 3: Line-by-line JSON reconstruction
-        lines = content.split('\n')
+        lines = content.split("\n")
         json_lines = []
         in_json = False
-        
+
         for line in lines:
             line = line.strip()
-            if line.startswith('{'):
+            if line.startswith("{"):
                 in_json = True
                 json_lines = [line]
             elif in_json:
                 json_lines.append(line)
-                if line.endswith('}') and len(json_lines) > 1:
+                if line.endswith("}") and len(json_lines) > 1:
                     try:
-                        json_content = '\n'.join(json_lines)
+                        json_content = "\n".join(json_lines)
                         return json.loads(json_content)
                     except json.JSONDecodeError:
                         continue
-        
+
         # Strategy 4: Extract from ChatMessageContent format
-        if 'ChatMessageContent' in content or 'content=' in content:
+        if "ChatMessageContent" in content or "content=" in content:
             content_patterns = [
                 r"content=['\"]([^'\"]*)['\"]",
                 r"content='([^']*)'",
                 r'content="([^"]*)"',
                 r"message=ChatCompletionMessage\(content='([^']*)'",
             ]
-            
+
             for pattern in content_patterns:
                 match = re.search(pattern, content)
                 if match:
                     extracted_content = match.group(1)
                     # Unescape content
-                    extracted_content = extracted_content.replace('\\"', '"').replace('\\n', '\n')
+                    extracted_content = extracted_content.replace('\\"', '"').replace(
+                        "\\n", "\n"
+                    )
                     try:
                         return json.loads(extracted_content)
                     except json.JSONDecodeError:
                         continue
-        
+
         # Strategy 5: Build JSON from extracted components
-        logger.warning("All JSON extraction strategies failed, using component extraction")
+        logger.warning(
+            "All JSON extraction strategies failed, using component extraction"
+        )
         return self._extract_components_from_text(content)
-    
+
     def _extract_components_from_text(self, content: str) -> Dict[str, Any]:
         """Extract individual components when JSON parsing fails completely"""
-        
+
         # Use regex to extract key information
-        location_match = re.search(r'(?:location|place|area)["\']?\s*:\s*["\']?([^,\n"\']+)', content, re.IGNORECASE)
-        disaster_match = re.search(r'(?:disaster|event|type)["\']?\s*:\s*["\']?([^,\n"\']+)', content, re.IGNORECASE)
-        year_match = re.search(r'(?:year)["\']?\s*:\s*["\']?(\d{4})', content, re.IGNORECASE)
-        month_match = re.search(r'(?:month)["\']?\s*:\s*["\']?(\d{1,2})', content, re.IGNORECASE)
-        
+        location_match = re.search(
+            r'(?:location|place|area)["\']?\s*:\s*["\']?([^,\n"\']+)',
+            content,
+            re.IGNORECASE,
+        )
+        disaster_match = re.search(
+            r'(?:disaster|event|type)["\']?\s*:\s*["\']?([^,\n"\']+)',
+            content,
+            re.IGNORECASE,
+        )
+        year_match = re.search(
+            r'(?:year)["\']?\s*:\s*["\']?(\d{4})', content, re.IGNORECASE
+        )
+        month_match = re.search(
+            r'(?:month)["\']?\s*:\s*["\']?(\d{1,2})', content, re.IGNORECASE
+        )
+
         # Build basic structure
         result = {
             "location": {
                 "name": location_match.group(1).strip() if location_match else None,
                 "type": "region",
-                "confidence": 0.6 if location_match else 0.1
+                "confidence": 0.6 if location_match else 0.1,
             },
             "temporal": {
                 "year": year_match.group(1) if year_match else None,
                 "month": f"{int(month_match.group(1)):02d}" if month_match else None,
                 "season": None,
                 "relative": None,
-                "confidence": 0.5 if year_match or month_match else 0.1
+                "confidence": 0.5 if year_match or month_match else 0.1,
             },
             "disaster": {
-                "type": disaster_match.group(1).strip().lower() if disaster_match else None,
+                "type": (
+                    disaster_match.group(1).strip().lower() if disaster_match else None
+                ),
                 "name": None,
-                "confidence": 0.6 if disaster_match else 0.1
+                "confidence": 0.6 if disaster_match else 0.1,
             },
             "damage_indicators": {
                 "blue_tarp": False,
@@ -3631,34 +4203,34 @@ IMPORTANT:
                 "flooding": False,
                 "fire_damage": False,
                 "debris": False,
-                "confidence": 0.1
+                "confidence": 0.1,
             },
             "analysis_intent": {
                 "type": "general_imagery",
-                "urgency": "low", 
-                "confidence": 0.1
-            }
+                "urgency": "low",
+                "confidence": 0.1,
+            },
         }
-        
+
         logger.warning(f"Used component extraction for parsing: {result}")
         return result
-        
+
         # Handle escaped newlines first
-        content = content.replace('\\n', '\n').replace('\\"', '"')
-        
+        content = content.replace("\\n", "\n").replace('\\"', '"')
+
         # Strategy 1: Direct JSON parsing
         try:
             return json.loads(content)
         except json.JSONDecodeError:
             pass
-        
+
         # Strategy 2: Find JSON block with newlines
         patterns = [
-            r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}',  # Better nested JSON handling
-            r'```json\s*(\{.*?\})\s*```',  # Markdown JSON block
-            r'```\s*(\{.*?\})\s*```'  # Generic code block
+            r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}",  # Better nested JSON handling
+            r"```json\s*(\{.*?\})\s*```",  # Markdown JSON block
+            r"```\s*(\{.*?\})\s*```",  # Generic code block
         ]
-        
+
         for pattern in patterns:
             matches = re.findall(pattern, content, re.DOTALL | re.MULTILINE)
             for match in matches:
@@ -3668,67 +4240,77 @@ IMPORTANT:
                     return json.loads(clean_match)
                 except json.JSONDecodeError:
                     continue
-        
+
         # Strategy 3: Extract using braces (improved for multiline)
-        start_idx = content.find('{')
+        start_idx = content.find("{")
         if start_idx != -1:
             brace_count = 0
             end_idx = -1
             in_string = False
             escape_next = False
-            
+
             for i in range(start_idx, len(content)):
                 char = content[i]
-                
+
                 if escape_next:
                     escape_next = False
                     continue
-                
-                if char == '\\':
+
+                if char == "\\":
                     escape_next = True
                     continue
-                
+
                 if char == '"' and not escape_next:
                     in_string = not in_string
                     continue
-                
+
                 if not in_string:
-                    if char == '{':
+                    if char == "{":
                         brace_count += 1
-                    elif char == '}':
+                    elif char == "}":
                         brace_count -= 1
                         if brace_count == 0:
                             end_idx = i + 1
                             break
-            
+
             if end_idx != -1:
                 try:
                     json_str = content[start_idx:end_idx]
                     return json.loads(json_str)
                 except json.JSONDecodeError as e:
                     logger.warning(f"JSON parse error: {e}, JSON: {json_str[:200]}")
-        
-        raise ValueError(f"Could not extract valid JSON from response: {content[:200]}...")
-    
-    def _validate_entities(self, entities: Dict[str, Any], query: str = "") -> Dict[str, Any]:
+
+        raise ValueError(
+            f"Could not extract valid JSON from response: {content[:200]}..."
+        )
+
+    def _validate_entities(
+        self, entities: Dict[str, Any], query: str = ""
+    ) -> Dict[str, Any]:
         """Validate and sanitize extracted entities"""
-        
+
         # Add the original query for collection selection logic
         entities["original_query"] = query
-        
+
         # Ensure all required top-level keys exist
-        required_keys = ["location", "temporal", "disaster", "damage_indicators", "analysis_intent"]
+        required_keys = [
+            "location",
+            "temporal",
+            "disaster",
+            "damage_indicators",
+            "analysis_intent",
+        ]
         for key in required_keys:
             if key not in entities:
                 entities[key] = {}
-        
+
         # Validate confidence scores
         for section in entities.values():
             if isinstance(section, dict) and "confidence" in section:
                 conf = section.get("confidence", 0.0)
                 if not isinstance(conf, (int, float)) or conf < 0 or conf > 1:
                     section["confidence"] = 0.5  # Default confidence
-        
+
         # Validate and enhance temporal information
         temporal = entities.get("temporal", {})
         if temporal.get("year"):
@@ -3738,213 +4320,284 @@ IMPORTANT:
                     temporal["year"] = None
             except (ValueError, TypeError):
                 temporal["year"] = None
-        
+
         return entities
-    
-    def _resolve_temporal_to_datetime(self, entities: Optional[Dict[str, Any]], collections: List[str]) -> Optional[str]:
+
+    def _resolve_temporal_to_datetime(
+        self, entities: Optional[Dict[str, Any]], collections: List[str]
+    ) -> Optional[str]:
         """
         [DATE] Convert temporal entities to ISO 8601 datetime range for STAC API
-        
+
         This is an INTERNAL helper method for build_stac_query_agent().
         Separates temporal resolution from STAC query building for cleaner architecture.
-        
+
         Args:
             entities: Extracted entities with temporal info (from _extract_location_and_temporal)
             collections: List of collection IDs (to determine if temporal filtering applies)
-        
+
         Returns:
             ISO 8601 datetime range string (e.g., "2025-06-01/2025-06-30") or None
-        
+
         Examples:
             - Year + Month: "2025-06-01/2025-06-30"
             - Year only: "2025-01-01/2025-12-31"
             - Relative "recent": "2025-09-17/2025-10-17" (last 30 days)
             - No temporal info: None (get most recent)
         """
-        
+
         # [SEARCH] DEBUG: Log input parameters
-        logger.info(f"[SEARCH] DEBUG: _resolve_temporal_to_datetime called")
+        logger.info("[SEARCH] DEBUG: _resolve_temporal_to_datetime called")
         logger.info(f"[SEARCH] DEBUG: Collections: {collections}")
         logger.info(f"[SEARCH] DEBUG: Entities: {entities}")
-        print(f"[SEARCH] DEBUG: _resolve_temporal_to_datetime - Collections: {collections}")
-        print(f"[SEARCH] DEBUG: _resolve_temporal_to_datetime - Entities: {json.dumps(entities, indent=2) if entities else 'None'}")
-        
+        print(
+            f"[SEARCH] DEBUG: _resolve_temporal_to_datetime - Collections: {collections}"
+        )
+        print(
+            f"[SEARCH] DEBUG: _resolve_temporal_to_datetime - Entities: {json.dumps(entities, indent=2) if entities else 'None'}"
+        )
+
         # Check if any collections support temporal filtering
         # Static collections (DEM) and composites (MODIS) don't use datetime
-        static_collections = ["cop-dem-glo-30", "cop-dem-glo-90", "3dep-seamless", "alos-dem"]
-        composite_collections = ["modis-09Q1-061", "modis-11A2-061", "modis-13Q1-061", "modis-14A2-061", "modis-43A4-061", "modis-64A1-061"]
-        
+        static_collections = [
+            "cop-dem-glo-30",
+            "cop-dem-glo-90",
+            "3dep-seamless",
+            "alos-dem",
+        ]
+        composite_collections = [
+            "modis-09Q1-061",
+            "modis-11A2-061",
+            "modis-13Q1-061",
+            "modis-14A2-061",
+            "modis-43A4-061",
+            "modis-64A1-061",
+        ]
+
         all_static = all(c in static_collections for c in collections)
         all_composite = all(c in composite_collections for c in collections)
-        
+
         if all_static:
             logger.info("[DATE] Static collections (DEM) -> No datetime filter")
-            print("[DATE] DEBUG: Static collections detected - no datetime filter needed")
+            print(
+                "[DATE] DEBUG: Static collections detected - no datetime filter needed"
+            )
             return None
-        
+
         if all_composite:
-            logger.info("[DATE] Composite collections (MODIS) -> No datetime filter (use sortby instead)")
-            print("[DATE] DEBUG: Composite collections detected - no datetime filter needed")
+            logger.info(
+                "[DATE] Composite collections (MODIS) -> No datetime filter (use sortby instead)"
+            )
+            print(
+                "[DATE] DEBUG: Composite collections detected - no datetime filter needed"
+            )
             return None
-        
+
         # Extract temporal info from entities
         if not entities or not entities.get("temporal"):
-            logger.info("[DATE] No temporal entities extracted -> No datetime filter (will return most recent)")
-            print("[DATE] DEBUG: No temporal entities found - will return most recent data")
+            logger.info(
+                "[DATE] No temporal entities extracted -> No datetime filter (will return most recent)"
+            )
+            print(
+                "[DATE] DEBUG: No temporal entities found - will return most recent data"
+            )
             return None
-        
+
         temporal = entities.get("temporal", {})
         year = temporal.get("year")
         month = temporal.get("month")
         relative = temporal.get("relative")
-        
+
         # [SEARCH] DEBUG: Log extracted temporal values
-        logger.info(f"[SEARCH] DEBUG: Extracted temporal values - year: {year}, month: {month}, relative: {relative}")
-        print(f"[SEARCH] DEBUG: Temporal values extracted:")
+        logger.info(
+            f"[SEARCH] DEBUG: Extracted temporal values - year: {year}, month: {month}, relative: {relative}"
+        )
+        print("[SEARCH] DEBUG: Temporal values extracted:")
         print(f"  - year: {year}")
         print(f"  - month: {month}")
         print(f"  - relative: {relative}")
-        
+
         import calendar
-        from datetime import datetime, timedelta
-        
+        from datetime import datetime
+
         # Case 1: Specific month and year
         if year and month:
             # [SEARCH] DEBUG: Log Case 1 entry
-            logger.info(f"[SEARCH] DEBUG: Entering Case 1 (Year + Month): year={year}, month={month}")
+            logger.info(
+                f"[SEARCH] DEBUG: Entering Case 1 (Year + Month): year={year}, month={month}"
+            )
             print(f"[SEARCH] DEBUG: Case 1 (Year + Month) - year={year}, month={month}")
-            
+
             try:
                 year_int = int(year)
                 month_int = int(month)
-                
+
                 # [SEARCH] DEBUG: Log conversion results
-                logger.info(f"[SEARCH] DEBUG: Converted to integers - year_int={year_int}, month_int={month_int}")
-                print(f"[SEARCH] DEBUG: Converted values - year_int={year_int}, month_int={month_int}")
-                
+                logger.info(
+                    f"[SEARCH] DEBUG: Converted to integers - year_int={year_int}, month_int={month_int}"
+                )
+                print(
+                    f"[SEARCH] DEBUG: Converted values - year_int={year_int}, month_int={month_int}"
+                )
+
                 last_day = calendar.monthrange(year_int, month_int)[1]
-                
+
                 # [SEARCH] DEBUG: Log last day calculation
-                logger.info(f"[SEARCH] DEBUG: Last day of {calendar.month_name[month_int]} {year_int}: {last_day}")
+                logger.info(
+                    f"[SEARCH] DEBUG: Last day of {calendar.month_name[month_int]} {year_int}: {last_day}"
+                )
                 print(f"[SEARCH] DEBUG: Last day of month: {last_day}")
-                
+
                 datetime_range = f"{year_int}-{month_int:02d}-01/{year_int}-{month_int:02d}-{last_day}"
-                
-                logger.info(f"[DATE] Resolved temporal: {calendar.month_name[month_int]} {year_int} -> {datetime_range}")
-                
+
+                logger.info(
+                    f"[DATE] Resolved temporal: {calendar.month_name[month_int]} {year_int} -> {datetime_range}"
+                )
+
                 # [SEARCH] DEBUG: Log final result
-                logger.info(f"[SEARCH] DEBUG: Case 1 RESULT - datetime_range: {datetime_range}")
-                print(f"[SEARCH] DEBUG: Case 1 RESULT - datetime_range: {datetime_range}")
+                logger.info(
+                    f"[SEARCH] DEBUG: Case 1 RESULT - datetime_range: {datetime_range}"
+                )
+                print(
+                    f"[SEARCH] DEBUG: Case 1 RESULT - datetime_range: {datetime_range}"
+                )
                 print(f"  [OK] Start: {year_int}-{month_int:02d}-01")
                 print(f"  [OK] End: {year_int}-{month_int:02d}-{last_day}")
-                
+
                 return datetime_range
             except (ValueError, TypeError) as e:
-                logger.warning(f"[WARN] Failed to parse year={year}, month={month}: {e}")
+                logger.warning(
+                    f"[WARN] Failed to parse year={year}, month={month}: {e}"
+                )
                 print(f"[WARN] ERROR: Failed to parse year={year}, month={month}: {e}")
                 return None
-        
+
         # Case 2: Year only
         if year:
             # [SEARCH] DEBUG: Log Case 2 entry
             logger.info(f"[SEARCH] DEBUG: Entering Case 2 (Year only): year={year}")
             print(f"[SEARCH] DEBUG: Case 2 (Year only) - year={year}")
-            
+
             try:
                 year_int = int(year)
-                
+
                 logger.info(f"[SEARCH] DEBUG: Converted year to int: {year_int}")
                 print(f"[SEARCH] DEBUG: Year as int: {year_int}")
-                
+
                 datetime_range = f"{year_int}-01-01/{year_int}-12-31"
-                
-                logger.info(f"[DATE] Resolved temporal: Year {year_int} -> {datetime_range}")
-                
+
+                logger.info(
+                    f"[DATE] Resolved temporal: Year {year_int} -> {datetime_range}"
+                )
+
                 # [SEARCH] DEBUG: Log final result
-                logger.info(f"[SEARCH] DEBUG: Case 2 RESULT - datetime_range: {datetime_range}")
-                print(f"[SEARCH] DEBUG: Case 2 RESULT - datetime_range: {datetime_range}")
+                logger.info(
+                    f"[SEARCH] DEBUG: Case 2 RESULT - datetime_range: {datetime_range}"
+                )
+                print(
+                    f"[SEARCH] DEBUG: Case 2 RESULT - datetime_range: {datetime_range}"
+                )
                 print(f"  [OK] Full year: {year_int}")
-                
+
                 return datetime_range
             except (ValueError, TypeError) as e:
                 logger.warning(f"[WARN] Failed to parse year={year}: {e}")
                 print(f"[WARN] ERROR: Failed to parse year={year}: {e}")
                 return None
-        
+
         # Case 3: Month only (current year)
         if month:
             # [SEARCH] DEBUG: Log Case 3 entry
             logger.info(f"[SEARCH] DEBUG: Entering Case 3 (Month only): month={month}")
             print(f"[SEARCH] DEBUG: Case 3 (Month only) - month={month}")
-            
+
             try:
                 current_year = datetime.now().year
                 month_int = int(month)
-                
-                logger.info(f"[SEARCH] DEBUG: Using current year {current_year}, month_int={month_int}")
-                print(f"[SEARCH] DEBUG: Current year: {current_year}, month_int: {month_int}")
-                
+
+                logger.info(
+                    f"[SEARCH] DEBUG: Using current year {current_year}, month_int={month_int}"
+                )
+                print(
+                    f"[SEARCH] DEBUG: Current year: {current_year}, month_int: {month_int}"
+                )
+
                 last_day = calendar.monthrange(current_year, month_int)[1]
                 datetime_range = f"{current_year}-{month_int:02d}-01/{current_year}-{month_int:02d}-{last_day}"
-                
-                logger.info(f"[DATE] Resolved temporal: {calendar.month_name[month_int]} (current year) -> {datetime_range}")
-                
+
+                logger.info(
+                    f"[DATE] Resolved temporal: {calendar.month_name[month_int]} (current year) -> {datetime_range}"
+                )
+
                 # [SEARCH] DEBUG: Log final result
-                logger.info(f"[SEARCH] DEBUG: Case 3 RESULT - datetime_range: {datetime_range}")
-                print(f"[SEARCH] DEBUG: Case 3 RESULT - datetime_range: {datetime_range}")
-                
+                logger.info(
+                    f"[SEARCH] DEBUG: Case 3 RESULT - datetime_range: {datetime_range}"
+                )
+                print(
+                    f"[SEARCH] DEBUG: Case 3 RESULT - datetime_range: {datetime_range}"
+                )
+
                 return datetime_range
             except (ValueError, TypeError) as e:
                 logger.warning(f"[WARN] Failed to parse month={month}: {e}")
                 print(f"[WARN] ERROR: Failed to parse month={month}: {e}")
                 return None
-        
+
         # Case 4: Relative time (e.g., "recent")
         if relative == "recent":
             # [SEARCH] Use 6-month lookback for optical imagery (HLS/Sentinel/Landsat have ingestion lag)
             # Use 30-day lookback for near-real-time data (MODIS, VIIRS)
-            logger.info(f"[SEARCH] DEBUG: Entering Case 4 (Relative 'recent')")
-            
+            logger.info("[SEARCH] DEBUG: Entering Case 4 (Relative 'recent')")
+
             end_date = datetime.now()
             # Default to 6 months for optical imagery with ingestion lag
             start_date = end_date - timedelta(days=180)
             lookback_days = 180
-            
-            logger.info(f"[SEARCH] DEBUG: Using {lookback_days}-day lookback for 'recent' (optical imagery lag)")
-            print(f"[SEARCH] DEBUG: Case 4 (Relative 'recent') - last {lookback_days} days for optical data")
-            
-            logger.info(f"[SEARCH] DEBUG: Date range - start: {start_date}, end: {end_date}")
+
+            logger.info(
+                f"[SEARCH] DEBUG: Using {lookback_days}-day lookback for 'recent' (optical imagery lag)"
+            )
+            print(
+                f"[SEARCH] DEBUG: Case 4 (Relative 'recent') - last {lookback_days} days for optical data"
+            )
+
+            logger.info(
+                f"[SEARCH] DEBUG: Date range - start: {start_date}, end: {end_date}"
+            )
             print(f"[SEARCH] DEBUG: Start date: {start_date}, End date: {end_date}")
-            
-            datetime_range = f"{start_date.strftime('%Y-%m-%d')}/{end_date.strftime('%Y-%m-%d')}"
-            
-            logger.info(f"[DATE] Resolved temporal: Recent (last {lookback_days} days) -> {datetime_range}")
-            
+
+            datetime_range = (
+                f"{start_date.strftime('%Y-%m-%d')}/{end_date.strftime('%Y-%m-%d')}"
+            )
+
+            logger.info(
+                f"[DATE] Resolved temporal: Recent (last {lookback_days} days) -> {datetime_range}"
+            )
+
             # [SEARCH] DEBUG: Log final result
-            logger.info(f"[SEARCH] DEBUG: Case 4 RESULT - datetime_range: {datetime_range}")
+            logger.info(
+                f"[SEARCH] DEBUG: Case 4 RESULT - datetime_range: {datetime_range}"
+            )
             print(f"[SEARCH] DEBUG: Case 4 RESULT - datetime_range: {datetime_range}")
-            
+
             return datetime_range
-        
+
         # Case 5: No usable temporal info
         logger.info("[DATE] No usable temporal info -> No datetime filter")
         print("[SEARCH] DEBUG: Case 5 - No usable temporal info, returning None")
         return None
-    
+
     async def datetime_translation_agent(
-        self, 
-        query: str, 
-        collections: List[str],
-        mode: str = "single"
+        self, query: str, collections: List[str], mode: str = "single"
     ) -> Optional[Union[str, Dict[str, Any]]]:
         """
         [BOT] AGENT 2.5: GPT-powered datetime translation agent (EXTENDED for comparison mode)
-        
+
         Converts natural language temporal expressions to ISO 8601 datetime ranges.
         Supports TWO modes:
         - "single": Returns one datetime range (existing behavior, default)
         - "comparison": Returns two datetime ranges (before/after for temporal comparison)
-        
+
         This agent understands:
         - Specific dates: "October 2024", "June 15, 2023"
         - Relative time: "recent", "last month", "two weeks ago"
@@ -3952,160 +4605,209 @@ IMPORTANT:
         - Seasons: "summer 2024", "early spring"
         - Ranges: "January to March 2024"
         - Comparisons: "January 1st vs January 3rd", "2023 to 2025"
-        
+
         Args:
             query: User's natural language query
             collections: Selected collection IDs (to determine if temporal filtering applies)
             mode: "single" (default) or "comparison"
-        
+
         Returns:
             If mode="single": str (e.g., "2024-10-01/2024-10-31") or None
             If mode="comparison": dict (e.g., {"before": "2025-01-01/...", "after": "2025-01-03/...", "explanation": "..."}) or None
         """
-        
+
         # [SEARCH] Ensure kernel is initialized first
         await self._ensure_kernel_initialized()
-        
+
         # ========================================================================
         # � DATETIME AGENT - Input Logging
         # ========================================================================
         logger.info("=" * 80)
-        logger.info(f"[BOT] AGENT 2.2 (DATETIME TRANSLATION) - START")
+        logger.info("[BOT] AGENT 2.2 (DATETIME TRANSLATION) - START")
         logger.info("=" * 80)
         logger.info(f"[INBOX] INPUT - User Query: '{query}'")
         logger.info(f"[INBOX] INPUT - Collections: {collections}")
         logger.info(f"[INBOX] INPUT - Mode: {mode}")
         from datetime import datetime
-        logger.info(f"[DATE] CONTEXT - Current Date: {datetime.now().strftime('%Y-%m-%d')}")
+
+        logger.info(
+            f"[DATE] CONTEXT - Current Date: {datetime.now().strftime('%Y-%m-%d')}"
+        )
         logger.info(f"[DATE] CONTEXT - Current Year: {datetime.now().year}")
         logger.info("=" * 80)
-        print(f"[BOT] DEBUG: ========== DATETIME AGENT START ==========")
+        print("[BOT] DEBUG: ========== DATETIME AGENT START ==========")
         print(f"[BOT] DEBUG: Query: '{query}'")
         print(f"[BOT] DEBUG: Collections: {collections}")
         print(f"[BOT] DEBUG: Mode: {mode}")
-        
+
         # Validate mode
         if mode not in ["single", "comparison"]:
-            logger.error(f"[FAIL] Invalid mode: {mode}. Must be 'single' or 'comparison'")
+            logger.error(
+                f"[FAIL] Invalid mode: {mode}. Must be 'single' or 'comparison'"
+            )
             raise ValueError(f"Invalid mode: {mode}. Must be 'single' or 'comparison'")
-        
+
         # Check if collections support temporal filtering
-        static_collections = ["cop-dem-glo-30", "cop-dem-glo-90", "3dep-seamless", "alos-dem"]
-        composite_collections = ["modis-09Q1-061", "modis-11A2-061", "modis-13Q1-061", "modis-14A2-061", "modis-43A4-061", "modis-64A1-061"]
-        
+        static_collections = [
+            "cop-dem-glo-30",
+            "cop-dem-glo-90",
+            "3dep-seamless",
+            "alos-dem",
+        ]
+        composite_collections = [
+            "modis-09Q1-061",
+            "modis-11A2-061",
+            "modis-13Q1-061",
+            "modis-14A2-061",
+            "modis-43A4-061",
+            "modis-64A1-061",
+        ]
+
         all_static = all(c in static_collections for c in collections)
-        
+
         # [OK] CRITICAL FIX: Allow datetime filtering if ANY collection is NOT composite
         # This handles mixed collections like ["modis-14A1-061" (daily), "modis-64A1-061" (8-day)]
-        has_non_composite = any(c not in composite_collections and c not in static_collections for c in collections)
-        
+        has_non_composite = any(
+            c not in composite_collections and c not in static_collections
+            for c in collections
+        )
+
         # [OK] CRITICAL FIX 2: Detect if user explicitly mentioned a date/year/month
         # If so, ALWAYS apply datetime filter regardless of collection type
         import re
+
         explicit_date_patterns = [
-            r'\b(january|february|march|april|may|june|july|august|september|october|november|december)\b',
-            r'\b(20\d{2})\b',  # Years like 2020-2099
-            r'\b(19\d{2})\b',  # Years like 1900-1999
-            r'\bfrom\s+\w+\s+\d{4}\b',  # "from June 2025"
-            r'\bin\s+\w+\s+\d{4}\b',    # "in June 2025"
-            r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b',  # Date formats
-            r'\blast\s+(week|month|year)\b',
-            r'\brecent\b',
-            r'\bQ[1-4]\s+\d{4}\b',  # Q1 2024
-            r'\b(spring|summer|fall|autumn|winter)\s+\d{4}\b',  # seasons
+            r"\b(january|february|march|april|may|june|july|august|september|october|november|december)\b",
+            r"\b(20\d{2})\b",  # Years like 2020-2099
+            r"\b(19\d{2})\b",  # Years like 1900-1999
+            r"\bfrom\s+\w+\s+\d{4}\b",  # "from June 2025"
+            r"\bin\s+\w+\s+\d{4}\b",  # "in June 2025"
+            r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",  # Date formats
+            r"\blast\s+(week|month|year)\b",
+            r"\brecent\b",
+            r"\bQ[1-4]\s+\d{4}\b",  # Q1 2024
+            r"\b(spring|summer|fall|autumn|winter)\s+\d{4}\b",  # seasons
         ]
         query_lower = query.lower()
-        has_explicit_date = any(re.search(pattern, query_lower, re.IGNORECASE) for pattern in explicit_date_patterns)
-        
+        has_explicit_date = any(
+            re.search(pattern, query_lower, re.IGNORECASE)
+            for pattern in explicit_date_patterns
+        )
+
         if has_explicit_date:
-            logger.info("[DATE] User explicitly mentioned date/time -> FORCING datetime filter")
-            print(f"[DATE] DEBUG: Explicit date detected in query - will apply datetime filter")
-        
+            logger.info(
+                "[DATE] User explicitly mentioned date/time -> FORCING datetime filter"
+            )
+            print(
+                "[DATE] DEBUG: Explicit date detected in query - will apply datetime filter"
+            )
+
         if all_static:
             logger.info("[DATE] Static collections (DEM) -> No datetime filter")
             print("[DATE] DEBUG: Static collections - no datetime needed")
             return None
-        
+
         # [OK] ONLY skip datetime if ALL collections are composite AND user didn't explicitly specify a date
         if not has_non_composite and not has_explicit_date:
-            logger.info("[DATE] All composite collections AND no explicit date -> No datetime filter")
-            print("[DATE] DEBUG: Composite collections with no explicit date - no datetime needed")
+            logger.info(
+                "[DATE] All composite collections AND no explicit date -> No datetime filter"
+            )
+            print(
+                "[DATE] DEBUG: Composite collections with no explicit date - no datetime needed"
+            )
             return None
-        
+
         # Get current date for context
         from datetime import datetime
+
         current_date = datetime.now().strftime("%Y-%m-%d")
         current_year = datetime.now().year
-        
+
         # Build mode-specific GPT prompt
         if mode == "single":
-            datetime_prompt = self._build_single_datetime_prompt(current_date, current_year, query)
+            datetime_prompt = self._build_single_datetime_prompt(
+                current_date, current_year, query
+            )
         else:  # mode == "comparison"
-            datetime_prompt = self._build_comparison_datetime_prompt(current_date, current_year, query)
-        
+            datetime_prompt = self._build_comparison_datetime_prompt(
+                current_date, current_year, query
+            )
+
         try:
+            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import (
+                OpenAIChatPromptExecutionSettings,
+            )
             from semantic_kernel.functions.kernel_arguments import KernelArguments
-            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import OpenAIChatPromptExecutionSettings
-            
+
             # Use fast model (gpt-4o-mini) for datetime parsing
             # Datetime translation is a lightweight structured task — just returns JSON dates
             execution_settings = OpenAIChatPromptExecutionSettings(
                 service_id="chat-completion-4o",  # Fast model (gpt-4o-mini)
                 temperature=0.3,  # Lower temp for precise date parsing
-                max_completion_tokens=300 if mode == "comparison" else 150  # Reduced tokens for JSON output
+                max_completion_tokens=(
+                    300 if mode == "comparison" else 150
+                ),  # Reduced tokens for JSON output
             )
-            logger.info(f"[TOOL] AGENT 2.2: Using fast model (temp=0.3, max_tokens={300 if mode == 'comparison' else 150})")
-            
+            logger.info(
+                f"[TOOL] AGENT 2.2: Using fast model (temp=0.3, max_tokens={300 if mode == 'comparison' else 150})"
+            )
+
             arguments = KernelArguments(query=query, settings=execution_settings)
-            
+
             result = await asyncio.wait_for(
                 self.kernel.invoke_prompt(
                     prompt=datetime_prompt,
                     function_name=f"translate_datetime_{mode}",
                     plugin_name="datetime_agent",
-                    arguments=arguments
+                    arguments=arguments,
                 ),
-                timeout=15.0
+                timeout=15.0,
             )
-            
+
             # Extract content from SK result
-            if hasattr(result, 'value'):
-                content = str(result.value[0].content) if isinstance(result.value, list) else str(result.value)
+            if hasattr(result, "value"):
+                content = (
+                    str(result.value[0].content)
+                    if isinstance(result.value, list)
+                    else str(result.value)
+                )
             else:
                 content = str(result)
-            
+
             content = content.strip()
-            
+
             # [SEARCH] DEBUG: Log raw GPT response
             logger.info(f"[SEARCH] DEBUG: Raw datetime agent response: {content}")
             print(f"[SEARCH] DEBUG: Raw response: {content}")
-            
+
             # Clean JSON markers
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0].strip()
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0].strip()
-            
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
             # Parse response based on mode
             response = json.loads(content)
-            
+
             if mode == "single":
                 return self._parse_single_datetime_response(response)
             else:  # mode == "comparison"
                 return self._parse_comparison_datetime_response(response)
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"[FAIL] Datetime agent JSON parse error: {e}")
             logger.error(f"Raw content: {content}")
             print(f"[FAIL] ERROR: JSON parse failed - {e}")
             return None
-            
+
         except Exception as e:
             logger.error(f"[FAIL] Datetime translation failed: {e}")
             print(f"[FAIL] ERROR: Datetime agent failed - {e}")
             return None
-    
-    def _build_single_datetime_prompt(self, current_date: str, current_year: int, query: str) -> str:
+
+    def _build_single_datetime_prompt(
+        self, current_date: str, current_year: int, query: str
+    ) -> str:
         """Build GPT prompt for single datetime extraction (existing behavior)."""
         return f"""You are an expert at converting natural language temporal expressions to ISO 8601 datetime ranges for satellite imagery queries.
 
@@ -4186,8 +4888,10 @@ Response: {{"datetime_range": "2012-10-29/2012-10-30", "explanation": "Specific 
 USER QUERY: "{query}"
 
 Return ONLY a JSON object with "datetime_range" and "explanation". No additional text."""
-    
-    def _build_comparison_datetime_prompt(self, current_date: str, current_year: int, query: str) -> str:
+
+    def _build_comparison_datetime_prompt(
+        self, current_date: str, current_year: int, query: str
+    ) -> str:
         """Build GPT prompt for comparison datetime extraction (dual dates)."""
         return f"""You are an expert at extracting TWO separate temporal periods from natural language queries for before/after satellite imagery comparisons.
 
@@ -4263,86 +4967,96 @@ Response: {{
 USER QUERY: "{query}"
 
 Return ONLY a JSON object with "before", "after", and "explanation". If ambiguous, include "needs_clarification", "suggestion", and fallback dates."""
-    
-    def _parse_single_datetime_response(self, response: Dict[str, Any]) -> Optional[str]:
+
+    def _parse_single_datetime_response(
+        self, response: Dict[str, Any]
+    ) -> Optional[str]:
         """Parse single datetime mode response (existing behavior)."""
         datetime_range = response.get("datetime_range")
         explanation = response.get("explanation", "")
-        
+
         # ========================================================================
         # � DATETIME AGENT - Output Logging
         # ========================================================================
         logger.info("=" * 80)
-        logger.info(f"[BOT] AGENT 2.2 (DATETIME TRANSLATION) - OUTPUT")
+        logger.info("[BOT] AGENT 2.2 (DATETIME TRANSLATION) - OUTPUT")
         logger.info("=" * 80)
         logger.info(f"[OUTBOX] OUTPUT - datetime_range: {datetime_range}")
         logger.info(f"� OUTPUT - explanation: {explanation}")
         logger.info("=" * 80)
-        print(f"[BOT] DEBUG: ========== DATETIME AGENT OUTPUT ==========")
+        print("[BOT] DEBUG: ========== DATETIME AGENT OUTPUT ==========")
         print(f"� DEBUG: datetime_range = '{datetime_range}'")
         print(f"� DEBUG: explanation = '{explanation}'")
-        
+
         if datetime_range == "none" or not datetime_range:
-            logger.info("[DATE] RESULT: No temporal info -> No datetime filter will be applied to STAC query")
-            print("[DATE] DEBUG: No temporal info found - STAC query will use sortby=desc to get most recent")
+            logger.info(
+                "[DATE] RESULT: No temporal info -> No datetime filter will be applied to STAC query"
+            )
+            print(
+                "[DATE] DEBUG: No temporal info found - STAC query will use sortby=desc to get most recent"
+            )
             logger.info("=" * 80)
-            print(f"[BOT] DEBUG: ========== DATETIME AGENT END ==========")
+            print("[BOT] DEBUG: ========== DATETIME AGENT END ==========")
             return None
-        
-        logger.info(f"[OK] RESULT: Datetime filter will be applied to STAC query")
+
+        logger.info("[OK] RESULT: Datetime filter will be applied to STAC query")
         logger.info(f"   ISO 8601 Range: {datetime_range}")
         logger.info(f"   Human Readable: {explanation}")
         logger.info("=" * 80)
-        print(f"[OK] DEBUG: DATETIME AGENT SUCCESS")
+        print("[OK] DEBUG: DATETIME AGENT SUCCESS")
         print(f"   Filter: {datetime_range}")
-        print(f"[BOT] DEBUG: ========== DATETIME AGENT END ==========")
-        
+        print("[BOT] DEBUG: ========== DATETIME AGENT END ==========")
+
         return datetime_range
-    
-    def _parse_comparison_datetime_response(self, response: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+
+    def _parse_comparison_datetime_response(
+        self, response: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Parse comparison datetime mode response (dual dates)."""
-        
+
         # Check if clarification is needed
         if response.get("needs_clarification"):
-            logger.warning(f"[WARN] Ambiguous temporal query - clarification needed")
-            print(f"[WARN] WARNING: Ambiguous temporal query")
+            logger.warning("[WARN] Ambiguous temporal query - clarification needed")
+            print("[WARN] WARNING: Ambiguous temporal query")
             print(f"[INFO] Suggestion: {response.get('suggestion')}")
-            
+
             # Use fallback dates if provided
             before = response.get("fallback_before")
             after = response.get("fallback_after")
             explanation = response.get("explanation", "Using fallback periods")
-            
+
             if not before or not after:
                 logger.error("[FAIL] No fallback dates provided for ambiguous query")
                 print("[FAIL] ERROR: Cannot extract dates from ambiguous query")
                 return None
-            
+
             result = {
                 "before": before,
                 "after": after,
                 "explanation": explanation,
                 "needs_clarification": True,
-                "suggestion": response.get("suggestion")
+                "suggestion": response.get("suggestion"),
             }
         else:
             # Extract explicit before/after dates
             before = response.get("before")
             after = response.get("after")
             explanation = response.get("explanation", "")
-            
+
             if not before or not after:
-                logger.error("[FAIL] Missing before or after datetime in comparison response")
+                logger.error(
+                    "[FAIL] Missing before or after datetime in comparison response"
+                )
                 print("[FAIL] ERROR: Missing before or after datetime")
                 return None
-            
+
             result = {
                 "before": before,
                 "after": after,
                 "explanation": explanation,
-                "needs_clarification": False
+                "needs_clarification": False,
             }
-        
+
         # [SEARCH] DEBUG: Log parsed response
         logger.info(f"[SEARCH] DEBUG: Parsed BEFORE: {result['before']}")
         logger.info(f"[SEARCH] DEBUG: Parsed AFTER: {result['after']}")
@@ -4350,31 +5064,33 @@ Return ONLY a JSON object with "before", "after", and "explanation". If ambiguou
         print(f"[SEARCH] DEBUG: BEFORE: {result['before']}")
         print(f"[SEARCH] DEBUG: AFTER: {result['after']}")
         print(f"[SEARCH] DEBUG: Explanation: {result['explanation']}")
-        
+
         if result.get("needs_clarification"):
             print(f"[WARN] CLARIFICATION NEEDED: {result.get('suggestion')}")
-        
-        logger.info(f"[OK] Comparison datetime translation complete")
-        print(f"[OK] DEBUG: AGENT 2.5 SUCCESS (COMPARISON MODE)")
-        print(f"[BOT] DEBUG: =====================================")
-        
+
+        logger.info("[OK] Comparison datetime translation complete")
+        print("[OK] DEBUG: AGENT 2.5 SUCCESS (COMPARISON MODE)")
+        print("[BOT] DEBUG: =====================================")
+
         return result
-    
-    async def cloud_filtering_agent(self, query: str, collections: List[str]) -> Optional[Dict[str, Any]]:
+
+    async def cloud_filtering_agent(
+        self, query: str, collections: List[str]
+    ) -> Optional[Dict[str, Any]]:
         """
         [BOT] AGENT 2.3: GPT-powered cloud filtering agent
-        
+
         Detects EXPLICIT cloud cover mentions and builds appropriate STAC filter.
         This agent:
         1. Detects explicit cloud cover intent (clear, cloudless, cloudy, etc.)
         2. Determines appropriate threshold (25%, 50%, 75%)
         3. Checks collection support for cloud filtering
         4. Returns filter dict or None
-        
+
         Args:
             query: User's natural language query
             collections: Selected collection IDs
-        
+
         Returns:
             Dict with cloud filter or None if no explicit mention
             {
@@ -4384,25 +5100,30 @@ Return ONLY a JSON object with "before", "after", and "explanation". If ambiguou
                 "applicable_collections": ["sentinel-2-l2a"]
             }
         """
-        
+
         # [SEARCH] DEBUG: Log agent invocation
-        logger.info(f"[BOT] AGENT 2.3: cloud_filtering_agent invoked")
-        print(f"[BOT] DEBUG: ===== CLOUD FILTERING AGENT =====")
+        logger.info("[BOT] AGENT 2.3: cloud_filtering_agent invoked")
+        print("[BOT] DEBUG: ===== CLOUD FILTERING AGENT =====")
         print(f"[BOT] DEBUG: Query: {query}")
         print(f"[BOT] DEBUG: Collections: {collections}")
-        
+
         # Import PC metadata helpers for cloud filtering
-        from pc_tasks_config_loader import supports_cloud_filtering, get_cloud_cover_property
-        
+        from pc_tasks_config_loader import (
+            get_cloud_cover_property,
+            supports_cloud_filtering,
+        )
+
         # Check which collections support cloud filtering
         filterable = [c for c in collections if supports_cloud_filtering(c)]
         non_filterable = [c for c in collections if not supports_cloud_filtering(c)]
-        
+
         if not filterable:
-            logger.info(f"[CLOUD] No collections support cloud filtering: {collections}")
-            print(f"[CLOUD] DEBUG: No cloud-filterable collections")
+            logger.info(
+                f"[CLOUD] No collections support cloud filtering: {collections}"
+            )
+            print("[CLOUD] DEBUG: No cloud-filterable collections")
             return None
-        
+
         # Build GPT prompt for cloud intent detection
         cloud_prompt = f"""You are an expert at detecting cloud cover preferences in satellite imagery queries.
 
@@ -4445,58 +5166,66 @@ Response: {{"cloud_intent": "high", "threshold": 75, "reasoning": "User explicit
 Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No additional text."""
 
         try:
+            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import (
+                OpenAIChatPromptExecutionSettings,
+            )
             from semantic_kernel.functions.kernel_arguments import KernelArguments
-            from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import OpenAIChatPromptExecutionSettings
-            
+
             # Use fast model (gpt-4o-mini) for cloud intent detection
             # Cloud filtering is a simple yes/no + threshold task — perfect for fast model
             execution_settings = OpenAIChatPromptExecutionSettings(
                 service_id="chat-completion-4o",  # Fast model (gpt-4o-mini)
                 temperature=0.3,  # Lower temp for precise classification
-                max_completion_tokens=100  # Reduced tokens for simple JSON response
+                max_completion_tokens=100,  # Reduced tokens for simple JSON response
             )
-            logger.info(f"[TOOL] AGENT 2.3: Using fast model (temp=0.3, max_tokens=100)")
-            
+            logger.info("[TOOL] AGENT 2.3: Using fast model (temp=0.3, max_tokens=100)")
+
             arguments = KernelArguments(query=query, settings=execution_settings)
-            
+
             result = await asyncio.wait_for(
                 self.kernel.invoke_prompt(
                     prompt=cloud_prompt,
                     function_name="detect_cloud_intent",
                     plugin_name="cloud_agent",
-                    arguments=arguments
+                    arguments=arguments,
                 ),
-                timeout=10.0
+                timeout=10.0,
             )
-            
+
             # Extract content
-            if hasattr(result, 'value'):
-                content = str(result.value[0].content) if isinstance(result.value, list) else str(result.value)
+            if hasattr(result, "value"):
+                content = (
+                    str(result.value[0].content)
+                    if isinstance(result.value, list)
+                    else str(result.value)
+                )
             else:
                 content = str(result)
-            
+
             content = content.strip()
-            
+
             # [SEARCH] DEBUG: Log raw response
             logger.info(f"[SEARCH] DEBUG: Raw cloud agent response: {content}")
             print(f"[SEARCH] DEBUG: Raw response: {content}")
-            
+
             # Clean JSON markers
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0].strip()
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0].strip()
-            
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
             # Parse response
             response = json.loads(content)
             cloud_intent = response.get("cloud_intent")
             threshold = response.get("threshold")
             reasoning = response.get("reasoning", "")
-            
+
             # [SEARCH] DEBUG: Log parsed response
-            logger.info(f"[SEARCH] DEBUG: Cloud intent: {cloud_intent}, threshold: {threshold}")
+            logger.info(
+                f"[SEARCH] DEBUG: Cloud intent: {cloud_intent}, threshold: {threshold}"
+            )
             print(f"[SEARCH] DEBUG: Intent: {cloud_intent}, Threshold: {threshold}")
-            
+
             if cloud_intent == "none" or not threshold:
                 # [TOOL] FALLBACK: Use keyword detection if GPT returns "none" but keywords exist
                 # This catches cases like "with low cloud cover" that GPT might miss
@@ -4504,41 +5233,51 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
                 if keyword_result:
                     threshold = keyword_result["threshold"]
                     reasoning = keyword_result["reasoning"] + " (keyword fallback)"
-                    cloud_intent = "low" if threshold <= 25 else ("medium" if threshold <= 50 else "high")
-                    logger.info(f"[TOOL] FALLBACK: Keyword detection found cloud intent: {cloud_intent} ({threshold}%)")
-                    print(f"[TOOL] DEBUG: Keyword fallback triggered - threshold: {threshold}%")
+                    cloud_intent = (
+                        "low"
+                        if threshold <= 25
+                        else ("medium" if threshold <= 50 else "high")
+                    )
+                    logger.info(
+                        f"[TOOL] FALLBACK: Keyword detection found cloud intent: {cloud_intent} ({threshold}%)"
+                    )
+                    print(
+                        f"[TOOL] DEBUG: Keyword fallback triggered - threshold: {threshold}%"
+                    )
                 else:
-                    logger.info(f"[CLOUD] No explicit cloud mention -> No filter")
-                    print(f"[CLOUD] DEBUG: No cloud filtering needed")
+                    logger.info("[CLOUD] No explicit cloud mention -> No filter")
+                    print("[CLOUD] DEBUG: No cloud filtering needed")
                     return None
-            
+
             # Build cloud filter
             primary_collection = filterable[0]
             prop_name = get_cloud_cover_property(primary_collection)
-            
+
             if not prop_name:
-                logger.error(f"[FAIL] Cannot get cloud property for {primary_collection}")
+                logger.error(
+                    f"[FAIL] Cannot get cloud property for {primary_collection}"
+                )
                 return None
-            
+
             cloud_filter = {
                 "filter": {prop_name: {"lt": threshold}},
                 "threshold": threshold,
                 "reasoning": reasoning,
                 "applicable_collections": filterable,
-                "non_applicable_collections": non_filterable
+                "non_applicable_collections": non_filterable,
             }
-            
+
             logger.info(f"[OK] Cloud filter: {prop_name} < {threshold}% ({reasoning})")
-            print(f"[OK] DEBUG: AGENT 2.3 SUCCESS - Cloud filter created")
+            print("[OK] DEBUG: AGENT 2.3 SUCCESS - Cloud filter created")
             print(f"  - Property: {prop_name}")
             print(f"  - Threshold: < {threshold}%")
             print(f"  - Applies to: {filterable}")
             if non_filterable:
                 print(f"  - Cannot apply to: {non_filterable}")
-            print(f"[BOT] DEBUG: ===================================")
-            
+            print("[BOT] DEBUG: ===================================")
+
             return cloud_filter
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"[FAIL] Cloud agent JSON parse error: {e}")
             print(f"[FAIL] ERROR: JSON parse failed - {e}")
@@ -4547,16 +5286,19 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
             if keyword_result and filterable:
                 prop_name = get_cloud_cover_property(filterable[0])
                 if prop_name:
-                    logger.info(f"[TOOL] FALLBACK: Keyword detection after JSON error - threshold: {keyword_result['threshold']}%")
+                    logger.info(
+                        f"[TOOL] FALLBACK: Keyword detection after JSON error - threshold: {keyword_result['threshold']}%"
+                    )
                     return {
                         "filter": {prop_name: {"lt": keyword_result["threshold"]}},
                         "threshold": keyword_result["threshold"],
-                        "reasoning": keyword_result["reasoning"] + " (keyword fallback after JSON error)",
+                        "reasoning": keyword_result["reasoning"]
+                        + " (keyword fallback after JSON error)",
                         "applicable_collections": filterable,
-                        "non_applicable_collections": non_filterable
+                        "non_applicable_collections": non_filterable,
                     }
             return None
-            
+
         except Exception as e:
             logger.error(f"[FAIL] Cloud filtering agent failed: {e}")
             print(f"[FAIL] ERROR: Cloud agent failed - {e}")
@@ -4565,17 +5307,22 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
             if keyword_result and filterable:
                 prop_name = get_cloud_cover_property(filterable[0])
                 if prop_name:
-                    logger.info(f"[TOOL] FALLBACK: Keyword detection after GPT error - threshold: {keyword_result['threshold']}%")
+                    logger.info(
+                        f"[TOOL] FALLBACK: Keyword detection after GPT error - threshold: {keyword_result['threshold']}%"
+                    )
                     return {
                         "filter": {prop_name: {"lt": keyword_result["threshold"]}},
                         "threshold": keyword_result["threshold"],
-                        "reasoning": keyword_result["reasoning"] + " (keyword fallback after GPT error)",
+                        "reasoning": keyword_result["reasoning"]
+                        + " (keyword fallback after GPT error)",
                         "applicable_collections": filterable,
-                        "non_applicable_collections": non_filterable
+                        "non_applicable_collections": non_filterable,
                     }
             return None
-    
-    async def resolve_location_to_bbox(self, location_name: str, location_type: str = "region") -> Optional[List[float]]:
+
+    async def resolve_location_to_bbox(
+        self, location_name: str, location_type: str = "region"
+    ) -> Optional[List[float]]:
         """
         Use consolidated EnhancedLocationResolver.
 
@@ -4587,132 +5334,153 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
         Returns: [west, south, east, north] bounding box or None
         """
         logger.info("=" * 80)
-        logger.info(f"� LOCATION RESOLUTION INITIATED")
+        logger.info("� LOCATION RESOLUTION INITIATED")
         logger.info("=" * 80)
         logger.info(f"[SEARCH] Location Name: '{location_name}'")
         logger.info(f"[TAG]  Location Type: {location_type}")
-        
+
         if not location_name:
             logger.warning("[WARN] No location name provided - skipping resolution")
             logger.info("=" * 80)
             return None
-        
+
         try:
             # Use the consolidated location resolver
-            bbox = await self.location_resolver.resolve_location_to_bbox(location_name, location_type)
-            
+            bbox = await self.location_resolver.resolve_location_to_bbox(
+                location_name, location_type
+            )
+
             if bbox:
-                logger.info(f"[OK] LOCATION RESOLVED SUCCESSFULLY")
+                logger.info("[OK] LOCATION RESOLVED SUCCESSFULLY")
                 logger.info(f"[PIN] Location: {location_name}")
-                logger.info(f"[MAP]  BBox: [{bbox[0]:.4f}, {bbox[1]:.4f}, {bbox[2]:.4f}, {bbox[3]:.4f}]")
-                logger.info(f"[MAP]  Format: [west={bbox[0]:.4f}, south={bbox[1]:.4f}, east={bbox[2]:.4f}, north={bbox[3]:.4f}]")
+                logger.info(
+                    f"[MAP]  BBox: [{bbox[0]:.4f}, {bbox[1]:.4f}, {bbox[2]:.4f}, {bbox[3]:.4f}]"
+                )
+                logger.info(
+                    f"[MAP]  Format: [west={bbox[0]:.4f}, south={bbox[1]:.4f}, east={bbox[2]:.4f}, north={bbox[3]:.4f}]"
+                )
                 logger.info("=" * 80)
                 # Cache the result for performance
                 self.location_cache.set(location_name, location_type, bbox)
                 return bbox
             else:
-                logger.warning(f"[FAIL] LOCATION RESOLUTION FAILED")
+                logger.warning("[FAIL] LOCATION RESOLUTION FAILED")
                 logger.warning(f"[PIN] Location: {location_name}")
                 logger.warning(f"[TAG]  Type: {location_type}")
-                logger.warning(f"ℹ️  All resolution strategies exhausted")
+                logger.warning("ℹ️  All resolution strategies exhausted")
                 logger.info("=" * 80)
                 return None
-                
+
         except Exception as e:
-            logger.error(f"[FAIL] LOCATION RESOLUTION ERROR")
+            logger.error("[FAIL] LOCATION RESOLUTION ERROR")
             logger.error(f"[PIN] Location: {location_name}")
             logger.error(f"[BUG] Exception: {type(e).__name__}: {str(e)}")
             logger.error("=" * 80)
             return None
-    
+
     def _validate_bbox(self, bbox: List[float]) -> bool:
         """
         Validate bounding box coordinates
-        
+
         Args:
             bbox: [west, south, east, north]
-            
+
         Returns:
             True if valid, False otherwise
         """
         if not bbox or len(bbox) != 4:
             logger.warning(f"[FAIL] Invalid bbox format: {bbox}")
             return False
-        
+
         west, south, east, north = bbox
-        
+
         # Check for None or NaN values
-        if any(coord is None or coord != coord for coord in bbox):  # coord != coord checks for NaN
+        if any(
+            coord is None or coord != coord for coord in bbox
+        ):  # coord != coord checks for NaN
             logger.warning(f"[FAIL] Bbox contains None or NaN: {bbox}")
             return False
-        
+
         # Validate coordinate ranges
         if not (-180 <= west <= 180 and -180 <= east <= 180):
             logger.warning(f"[FAIL] Invalid longitude range: west={west}, east={east}")
             return False
-        
+
         if not (-90 <= south <= 90 and -90 <= north <= 90):
-            logger.warning(f"[FAIL] Invalid latitude range: south={south}, north={north}")
+            logger.warning(
+                f"[FAIL] Invalid latitude range: south={south}, north={north}"
+            )
             return False
-        
+
         # Ensure west < east and south < north (handle dateline crossing)
         if west >= east and not (west > 0 and east < 0):  # Allow dateline crossing
             logger.warning(f"[FAIL] Invalid bbox: west ({west}) >= east ({east})")
             return False
-        
+
         if south >= north:
             logger.warning(f"[FAIL] Invalid bbox: south ({south}) >= north ({north})")
             return False
-        
+
         logger.debug(f"[OK] Bbox validation passed: {bbox}")
         return True
-    
+
     async def _resolve_via_nominatim(self, location_name: str) -> Optional[List[float]]:
         """Use Nominatim (OpenStreetMap) API as fallback"""
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
                 url = "https://nominatim.openstreetmap.org/search"
                 params = {
                     "q": location_name,
                     "format": "json",
                     "limit": 1,
-                    "addressdetails": 1
+                    "addressdetails": 1,
                 }
                 headers = {"User-Agent": "OpenGeoAI/1.0"}
-                
+
                 timeout = aiohttp.ClientTimeout(total=10)
-                async with session.get(url, params=params, headers=headers, timeout=timeout) as response:
+                async with session.get(
+                    url, params=params, headers=headers, timeout=timeout
+                ) as response:
                     if response.status == 200:
                         data = await response.json()
                         if data:
                             result = data[0]
                             lat = float(result["lat"])
                             lon = float(result["lon"])
-                            
+
                             # Convert to bounding box (add small buffer)
                             buffer = 0.1  # degrees
-                            bbox = [lon - buffer, lat - buffer, lon + buffer, lat + buffer]
-                            
-                            logger.info(f"[MAP] Nominatim resolved {location_name}: {bbox}")
+                            bbox = [
+                                lon - buffer,
+                                lat - buffer,
+                                lon + buffer,
+                                lat + buffer,
+                            ]
+
+                            logger.info(
+                                f"[MAP] Nominatim resolved {location_name}: {bbox}"
+                            )
                             return bbox
         except Exception as e:
             logger.warning(f"Nominatim failed for {location_name}: {e}")
         return None
-    
+
     async def _resolve_via_mapbox(self, location_name: str) -> Optional[List[float]]:
         """Use Mapbox Geocoding API as fallback"""
         mapbox_token = os.getenv("MAPBOX_ACCESS_TOKEN")
         if not mapbox_token:
             logger.info("Mapbox API token not available, skipping Mapbox resolution")
             return None
-            
+
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
                 url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{location_name}.json"
                 params = {"access_token": mapbox_token, "limit": 1}
-                
+
                 timeout = aiohttp.ClientTimeout(total=10)
                 async with session.get(url, params=params, timeout=timeout) as response:
                     if response.status == 200:
@@ -4726,26 +5494,39 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
                                 coords = feature["geometry"]["coordinates"]
                                 lon, lat = coords[0], coords[1]
                                 buffer = 0.1
-                                bbox = [lon - buffer, lat - buffer, lon + buffer, lat + buffer]
-                            
-                            logger.info(f"[MAP] Mapbox resolved {location_name}: {bbox}")
+                                bbox = [
+                                    lon - buffer,
+                                    lat - buffer,
+                                    lon + buffer,
+                                    lat + buffer,
+                                ]
+
+                            logger.info(
+                                f"[MAP] Mapbox resolved {location_name}: {bbox}"
+                            )
                             return bbox
         except Exception as e:
             logger.warning(f"Mapbox failed for {location_name}: {e}")
         return None
-    
-    async def _resolve_via_semantic_kernel(self, location_name: str, location_type: str) -> Optional[List[float]]:
+
+    async def _resolve_via_semantic_kernel(
+        self, location_name: str, location_type: str
+    ) -> Optional[List[float]]:
         """Use Semantic Kernel with enhanced strategies for location resolution"""
-        
-        logger.info(f"[TOOL] SEMANTIC KERNEL DEBUG: Starting location resolution for '{location_name}'")
-        
+
+        logger.info(
+            f"[TOOL] SEMANTIC KERNEL DEBUG: Starting location resolution for '{location_name}'"
+        )
+
         # Ensure kernel is initialized
         await self._ensure_kernel_initialized()
-        
+
         if not self._kernel_initialized:
-            logger.error(f"[FAIL] Semantic Kernel not initialized for location resolution: {location_name}")
+            logger.error(
+                f"[FAIL] Semantic Kernel not initialized for location resolution: {location_name}"
+            )
             return None
-        
+
         try:
             # [TARGET] PURE API-BASED location resolution prompt (NO hardcoded coordinates)
             location_prompt = f"""You are a geographic expert with access to comprehensive global geographic knowledge. 
@@ -4773,139 +5554,178 @@ Location to analyze: {location_name}"""
             llm_api_key = self.llm_api_key
             model_name = self.model_name
 
-            headers = {
-                "Content-Type": "application/json",
-                "api-key": llm_api_key
-            }
-            
+            headers = {"Content-Type": "application/json", "api-key": llm_api_key}
+
             # [SYNC] Strategy 1: JSON mode with pure geographic knowledge
             payload_json = {
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a geographic expert with comprehensive global knowledge. Return ONLY valid JSON with accurate bounding box coordinates for any requested location worldwide."
+                        "content": "You are a geographic expert with comprehensive global knowledge. Return ONLY valid JSON with accurate bounding box coordinates for any requested location worldwide.",
                     },
                     {
                         "role": "user",
-                        "content": f"Provide accurate geographic bounding box coordinates for: {location_name}\n\nFormat: {{\"bbox\": [west_longitude, south_latitude, east_longitude, north_latitude], \"confidence\": confidence_score}}\n\nUse your geographic knowledge to determine precise coordinates."
-                    }
+                        "content": f'Provide accurate geographic bounding box coordinates for: {location_name}\n\nFormat: {{"bbox": [west_longitude, south_latitude, east_longitude, north_latitude], "confidence": confidence_score}}\n\nUse your geographic knowledge to determine precise coordinates.',
+                    },
                 ],
                 "max_completion_tokens": 150,
                 "temperature": 0.0,
-                "response_format": {"type": "json_object"}
+                "response_format": {"type": "json_object"},
             }
-            
-            # [SYNC] Strategy 2: Simple structured prompt  
+
+            # [SYNC] Strategy 2: Simple structured prompt
             payload_simple = {
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": location_prompt
-                    }
-                ],
+                "messages": [{"role": "user", "content": location_prompt}],
                 "max_completion_tokens": 100,
-                "temperature": 0.0
+                "temperature": 0.0,
             }
-            
+
             strategies = [
                 ("JSON Mode", payload_json),
-                ("Simple Prompt", payload_simple)
+                ("Simple Prompt", payload_simple),
             ]
-            
+
             async with aiohttp.ClientSession() as session:
                 url = f"{llm_base_url}/openai/deployments/{model_name}/chat/completions?api-version=2024-06-01"
                 timeout = aiohttp.ClientTimeout(total=30)
-                
+
                 # [SYNC] Try multiple strategies in order
                 for strategy_name, payload in strategies:
                     try:
-                        logger.info(f"[SYNC] Trying location resolution strategy: {strategy_name} for {location_name}")
-                        
-                        async with session.post(url, headers=headers, json=payload, timeout=timeout) as response:
-                            logger.info(f"[WEB] response status: {response.status} for {strategy_name}")
-                            
+                        logger.info(
+                            f"[SYNC] Trying location resolution strategy: {strategy_name} for {location_name}"
+                        )
+
+                        async with session.post(
+                            url, headers=headers, json=payload, timeout=timeout
+                        ) as response:
+                            logger.info(
+                                f"[WEB] response status: {response.status} for {strategy_name}"
+                            )
+
                             if response.status == 200:
                                 result = await response.json()
-                                
+
                                 # Enhanced response processing
                                 if "choices" in result and result["choices"]:
                                     content = result["choices"][0]["message"]["content"]
-                                    logger.info(f"[SEARCH] ({strategy_name}): '{content}'")
-                                    
+                                    logger.info(
+                                        f"[SEARCH] ({strategy_name}): '{content}'"
+                                    )
+
                                     # Check if response is empty
                                     if not content or content.strip() == "":
-                                        logger.warning(f"[WARN] Empty response for {location_name} with {strategy_name}")
+                                        logger.warning(
+                                            f"[WARN] Empty response for {location_name} with {strategy_name}"
+                                        )
                                         continue  # Try next strategy
-                                        
+
                                     # Enhanced JSON parsing
                                     try:
                                         # Clean up any markdown formatting
                                         cleaned_content = content.strip()
-                                        if '```json' in cleaned_content:
-                                            cleaned_content = cleaned_content.split('```json')[1].split('```')[0]
-                                        elif '```' in cleaned_content:
-                                            cleaned_content = cleaned_content.split('```')[1].split('```')[0]
-                                        
+                                        if "```json" in cleaned_content:
+                                            cleaned_content = cleaned_content.split(
+                                                "```json"
+                                            )[1].split("```")[0]
+                                        elif "```" in cleaned_content:
+                                            cleaned_content = cleaned_content.split(
+                                                "```"
+                                            )[1].split("```")[0]
+
                                         cleaned_content = cleaned_content.strip()
-                                        logger.info(f"[CLEAN] Cleaned content: '{cleaned_content}'")
-                                        
+                                        logger.info(
+                                            f"[CLEAN] Cleaned content: '{cleaned_content}'"
+                                        )
+
                                         if not cleaned_content:
-                                            logger.warning(f"[WARN] Content empty after cleaning for {location_name} with {strategy_name}")
+                                            logger.warning(
+                                                f"[WARN] Content empty after cleaning for {location_name} with {strategy_name}"
+                                            )
                                             continue  # Try next strategy
-                                        
+
                                         location_data = json.loads(cleaned_content)
-                                        bbox = location_data.get('bbox')
-                                        confidence = location_data.get('confidence', 0.0)
-                                        
-                                        logger.info(f"[SEARCH] Parsed JSON - bbox: {bbox}, confidence: {confidence}")
-                                        
+                                        bbox = location_data.get("bbox")
+                                        confidence = location_data.get(
+                                            "confidence", 0.0
+                                        )
+
+                                        logger.info(
+                                            f"[SEARCH] Parsed JSON - bbox: {bbox}, confidence: {confidence}"
+                                        )
+
                                         if bbox and len(bbox) == 4 and confidence > 0.5:
                                             west, south, east, north = bbox
-                                            
+
                                             # Validate coordinates
-                                            if (-180 <= west <= 180 and -180 <= east <= 180 and 
-                                                -90 <= south <= 90 and -90 <= north <= 90 and
-                                                west < east and south < north):
-                                                
-                                                logger.info(f"[OK] Successfully resolved {location_name}: {bbox} (confidence: {confidence:.2f}, strategy: {strategy_name})")
+                                            if (
+                                                -180 <= west <= 180
+                                                and -180 <= east <= 180
+                                                and -90 <= south <= 90
+                                                and -90 <= north <= 90
+                                                and west < east
+                                                and south < north
+                                            ):
+
+                                                logger.info(
+                                                    f"[OK] Successfully resolved {location_name}: {bbox} (confidence: {confidence:.2f}, strategy: {strategy_name})"
+                                                )
                                                 return bbox
                                             else:
-                                                logger.warning(f"[WARN] Invalid coordinates for {location_name}: {bbox} (strategy: {strategy_name})")
+                                                logger.warning(
+                                                    f"[WARN] Invalid coordinates for {location_name}: {bbox} (strategy: {strategy_name})"
+                                                )
                                         else:
-                                            logger.warning(f"[WARN] Low confidence or invalid bbox for {location_name}: {location_data} (strategy: {strategy_name})")
-                                            
+                                            logger.warning(
+                                                f"[WARN] Low confidence or invalid bbox for {location_name}: {location_data} (strategy: {strategy_name})"
+                                            )
+
                                     except json.JSONDecodeError as e:
-                                        logger.error(f"[FAIL] Failed to parse Semantic Kernel response for {location_name} with {strategy_name}: '{cleaned_content}'")
+                                        logger.error(
+                                            f"[FAIL] Failed to parse Semantic Kernel response for {location_name} with {strategy_name}: '{cleaned_content}'"
+                                        )
                                         logger.error(f"JSON error: {e}")
                                         continue  # Try next strategy
                                 else:
-                                    logger.warning(f"[WARN] No choices in Semantic Kernel response for {location_name} with {strategy_name}")
+                                    logger.warning(
+                                        f"[WARN] No choices in Semantic Kernel response for {location_name} with {strategy_name}"
+                                    )
                             else:
                                 error_text = await response.text()
-                                logger.error(f"[FAIL] Semantic Kernel API error {response.status} for {strategy_name}: {error_text}")
+                                logger.error(
+                                    f"[FAIL] Semantic Kernel API error {response.status} for {strategy_name}: {error_text}"
+                                )
                                 continue  # Try next strategy
-                                
+
                     except asyncio.TimeoutError:
-                        logger.error(f"[TIME] Semantic Kernel timeout resolving {location_name} with {strategy_name}")
+                        logger.error(
+                            f"[TIME] Semantic Kernel timeout resolving {location_name} with {strategy_name}"
+                        )
                         continue  # Try next strategy
                     except Exception as e:
-                        logger.error(f"[FAIL] Semantic Kernel error resolving {location_name} with {strategy_name}: {e}")
+                        logger.error(
+                            f"[FAIL] Semantic Kernel error resolving {location_name} with {strategy_name}: {e}"
+                        )
                         continue  # Try next strategy
-                
+
                 # All strategies failed
-                logger.error(f"[FAIL] ALL Semantic Kernel strategies failed for {location_name}")
-            
+                logger.error(
+                    f"[FAIL] ALL Semantic Kernel strategies failed for {location_name}"
+                )
+
         except Exception as e:
-            logger.error(f"[FAIL] Critical error in Semantic Kernel resolution for {location_name}: {e}")
-        
+            logger.error(
+                f"[FAIL] Critical error in Semantic Kernel resolution for {location_name}: {e}"
+            )
+
         return None
-    
+
     # No more predefined regions or Nominatim fallbacks - pure Semantic Kernel approach
-    
+
     def select_collections(self, entities: Dict[str, Any]) -> List[str]:
         """
         [LAUNCH] ENHANCED: Dynamic collection selection using collection profiles
-        
+
         This method now dynamically maps queries to collections using:
         1. Explicit satellite platform detection (HIGHEST PRIORITY)
         2. Specific data type detection (fire, elevation, etc.)
@@ -4913,103 +5733,180 @@ Location to analyze: {location_name}"""
         4. Collection profiles metadata (if available)
         5. Fallback to static mappings
         """
-        
+
         collections = []
         query_text = entities.get("original_query", "").lower()
         analysis_intent = entities.get("analysis_intent", {}).get("type", "")
         analysis_intent = entities.get("analysis_intent", {}).get("type", "")
-        
+
         # [FIRE] EXPLICIT DATASET NAME DETECTION (HIGHEST PRIORITY - before platform detection)
         # These are specific named datasets that should take precedence over general platform detection
-        if any(keyword in query_text for keyword in ["mtbs", "burn severity", "monitoring trends burn severity"]):
+        if any(
+            keyword in query_text
+            for keyword in ["mtbs", "burn severity", "monitoring trends burn severity"]
+        ):
             logger.info(f"[FIRE] MTBS DATASET DETECTED in query: {query_text}")
             return ["mtbs"]
-        
-        if any(keyword in query_text for keyword in ["3dep", "lidar", "height above ground", "hag"]):
+
+        if any(
+            keyword in query_text
+            for keyword in ["3dep", "lidar", "height above ground", "hag"]
+        ):
             logger.info(f"[MTN] 3DEP LIDAR DATASET DETECTED in query: {query_text}")
             return ["3dep-lidar-hag"]
-        
-        if any(keyword in query_text for keyword in ["usda", "cdl", "cropland data layer"]):
+
+        if any(
+            keyword in query_text for keyword in ["usda", "cdl", "cropland data layer"]
+        ):
             logger.info(f"[CROP] USDA CDL DATASET DETECTED in query: {query_text}")
             return ["usda-cdl"]
-        
+
         if any(keyword in query_text for keyword in ["jrc", "global surface water"]):
-            logger.info(f"[WAVE] JRC Global Surface Water DATASET DETECTED in query: {query_text}")
+            logger.info(
+                f"[WAVE] JRC Global Surface Water DATASET DETECTED in query: {query_text}"
+            )
             return ["jrc-gsw"]
-        
-        if any(keyword in query_text for keyword in ["chloris", "biomass", "woody biomass"]):
-            logger.info(f"[TREE] Chloris Biomass DATASET DETECTED in query: {query_text}")
+
+        if any(
+            keyword in query_text for keyword in ["chloris", "biomass", "woody biomass"]
+        ):
+            logger.info(
+                f"[TREE] Chloris Biomass DATASET DETECTED in query: {query_text}"
+            )
             return ["chloris-biomass"]
-        
-        if any(keyword in query_text for keyword in ["sea surface temperature", "sst", "ocean temperature"]):
-            logger.info(f"[WAVE] Sea Surface Temperature DATASET DETECTED in query: {query_text}")
+
+        if any(
+            keyword in query_text
+            for keyword in ["sea surface temperature", "sst", "ocean temperature"]
+        ):
+            logger.info(
+                f"[WAVE] Sea Surface Temperature DATASET DETECTED in query: {query_text}"
+            )
             return ["noaa-cdr-sea-surface-temperature-whoi"]
-        
+
         if any(keyword in query_text for keyword in ["alos palsar", "palsar"]):
             logger.info(f"[SIGNAL] ALOS PALSAR DATASET DETECTED in query: {query_text}")
             return ["alos-palsar-mosaic"]
-        
-        if any(keyword in query_text for keyword in ["buildings", "building footprints", "ms-buildings"]):
-            logger.info(f"[OFFICE] MS Buildings DATASET DETECTED in query: {query_text}")
+
+        if any(
+            keyword in query_text
+            for keyword in ["buildings", "building footprints", "ms-buildings"]
+        ):
+            logger.info(
+                f"[OFFICE] MS Buildings DATASET DETECTED in query: {query_text}"
+            )
             return ["ms-buildings"]
-        
-        if any(keyword in query_text for keyword in ["alos dem", "alos world 3d", "alos-dem"]):
+
+        if any(
+            keyword in query_text
+            for keyword in ["alos dem", "alos world 3d", "alos-dem"]
+        ):
             logger.info(f"[MTN] ALOS DEM DATASET DETECTED in query: {query_text}")
             return ["alos-dem"]
-        
+
         # [SAT] EXPLICIT SATELLITE PLATFORM DETECTION (SECOND PRIORITY)
-        
+
         # HLS must come BEFORE Landsat since "Harmonized Landsat Sentinel" contains "landsat"
-        if any(keyword in query_text for keyword in ["hls", "harmonized landsat sentinel", "harmonized landsat", "hls2"]):
+        if any(
+            keyword in query_text
+            for keyword in [
+                "hls",
+                "harmonized landsat sentinel",
+                "harmonized landsat",
+                "hls2",
+            ]
+        ):
             logger.info(f"[SAT] HLS PLATFORM DETECTED in query: {query_text}")
             if "s30" in query_text:
                 return ["hls2-s30"]
             if "l30" in query_text:
                 return ["hls2-l30"]
             return ["hls2-s30", "hls2-l30"]  # Both if unspecified
-        
+
         if "landsat" in query_text:
             logger.info(f"[SAT] LANDSAT PLATFORM DETECTED in query: {query_text}")
             # Check for Level 1 vs Level 2
-            if any(keyword in query_text for keyword in ["level 1", "l1", "c2 l1", "collection 2 level 1"]):
+            if any(
+                keyword in query_text
+                for keyword in ["level 1", "l1", "c2 l1", "collection 2 level 1"]
+            ):
                 return ["landsat-c2-l1"]
             return ["landsat-c2-l2"]
-        
-        if "sentinel-2" in query_text or ("sentinel" in query_text and "sar" not in query_text and "radar" not in query_text):
-            logger.info(f"[SAT] SENTINEL-2 OPTICAL PLATFORM DETECTED in query: {query_text}")
+
+        if "sentinel-2" in query_text or (
+            "sentinel" in query_text
+            and "sar" not in query_text
+            and "radar" not in query_text
+        ):
+            logger.info(
+                f"[SAT] SENTINEL-2 OPTICAL PLATFORM DETECTED in query: {query_text}"
+            )
             return ["sentinel-2-l2a"]
-        
-        if "sentinel-1" in query_text or ("sentinel" in query_text and any(keyword in query_text for keyword in ["sar", "radar", "rtc", "radiometrically terrain corrected"])):
-            logger.info(f"[SAT] SENTINEL-1 SAR PLATFORM DETECTED in query: {query_text}")
+
+        if "sentinel-1" in query_text or (
+            "sentinel" in query_text
+            and any(
+                keyword in query_text
+                for keyword in [
+                    "sar",
+                    "radar",
+                    "rtc",
+                    "radiometrically terrain corrected",
+                ]
+            )
+        ):
+            logger.info(
+                f"[SAT] SENTINEL-1 SAR PLATFORM DETECTED in query: {query_text}"
+            )
             # Check for RTC (Radiometrically Terrain Corrected) vs GRD
-            if any(keyword in query_text for keyword in ["rtc", "radiometrically terrain corrected"]):
+            if any(
+                keyword in query_text
+                for keyword in ["rtc", "radiometrically terrain corrected"]
+            ):
                 return ["sentinel-1-rtc"]
             return ["sentinel-1-grd"]
-        
+
         if "modis" in query_text:
             logger.info(f"[SAT] MODIS PLATFORM DETECTED in query: {query_text}")
             # Context-specific MODIS collections
-            if any(fire_word in query_text for fire_word in ["fire", "thermal", "anomal", "heat", "burn"]):
+            if any(
+                fire_word in query_text
+                for fire_word in ["fire", "thermal", "anomal", "heat", "burn"]
+            ):
                 return ["modis-14A1-061", "modis-14A2-061"]
             elif any(snow_word in query_text for snow_word in ["snow", "snow cover"]):
                 return ["modis-10A1-061"]
-            elif any(npp_word in query_text for npp_word in ["npp", "net primary production", "primary production"]):
+            elif any(
+                npp_word in query_text
+                for npp_word in ["npp", "net primary production", "primary production"]
+            ):
                 return ["modis-17A3HGF-061"]
-            elif any(veg_word in query_text for veg_word in ["vegetation", "ndvi", "greenness", "vegetation indices"]):
+            elif any(
+                veg_word in query_text
+                for veg_word in [
+                    "vegetation",
+                    "ndvi",
+                    "greenness",
+                    "vegetation indices",
+                ]
+            ):
                 return ["modis-13Q1-061", "modis-13A1-061"]
-            elif any(brdf_word in query_text for brdf_word in ["brdf", "nbar", "nadir", "adjusted reflectance"]):
+            elif any(
+                brdf_word in query_text
+                for brdf_word in ["brdf", "nbar", "nadir", "adjusted reflectance"]
+            ):
                 return ["modis-43A4-061"]
             else:
                 return ["modis-09A1-061"]  # General MODIS optical
-        
+
         if "aster" in query_text:
             logger.info(f"[SAT] ASTER PLATFORM DETECTED in query: {query_text}")
             return ["aster-l1t"]
-        
+
         if "goes" in query_text:
             logger.info(f"[SAT] GOES PLATFORM DETECTED in query: {query_text}")
             return ["goes-cmi"]
-        
+
         if any(keyword in query_text for keyword in ["hls", "harmonized"]):
             logger.info(f"[SAT] HLS PLATFORM DETECTED in query: {query_text}")
             # Check for specific S30 or L30
@@ -5018,251 +5915,410 @@ Location to analyze: {location_name}"""
             elif "l30" in query_text:
                 return ["hls2-l30"]
             return ["hls2-s30", "hls2-l30"]  # Both if unspecified
-        
+
         if "naip" in query_text or "high resolution" in query_text:
             logger.info(f"[SAT] NAIP HIGH-RES PLATFORM DETECTED in query: {query_text}")
             return ["naip"]
-        
+
         # [CROP] EXPLICIT DATASET NAME DETECTION (Add specific dataset keywords)
-        if any(keyword in query_text for keyword in ["mtbs", "burn severity", "monitoring trends burn severity"]):
+        if any(
+            keyword in query_text
+            for keyword in ["mtbs", "burn severity", "monitoring trends burn severity"]
+        ):
             logger.info(f"[FIRE] MTBS DATASET DETECTED in query: {query_text}")
             return ["mtbs"]
-        
-        if any(keyword in query_text for keyword in ["usda", "cdl", "cropland data layer", "cropland"]):
+
+        if any(
+            keyword in query_text
+            for keyword in ["usda", "cdl", "cropland data layer", "cropland"]
+        ):
             logger.info(f"[CROP] USDA CDL DATASET DETECTED in query: {query_text}")
             return ["usda-cdl"]
-        
-        if any(keyword in query_text for keyword in ["jrc", "global surface water", "surface water"]):
-            logger.info(f"[WAVE] JRC Global Surface Water DATASET DETECTED in query: {query_text}")
+
+        if any(
+            keyword in query_text
+            for keyword in ["jrc", "global surface water", "surface water"]
+        ):
+            logger.info(
+                f"[WAVE] JRC Global Surface Water DATASET DETECTED in query: {query_text}"
+            )
             return ["jrc-gsw"]
-        
-        if any(keyword in query_text for keyword in ["sea surface temperature", "sst", "ocean temperature"]):
-            logger.info(f"[TEMP] Sea Surface Temperature DATASET DETECTED in query: {query_text}")
+
+        if any(
+            keyword in query_text
+            for keyword in ["sea surface temperature", "sst", "ocean temperature"]
+        ):
+            logger.info(
+                f"[TEMP] Sea Surface Temperature DATASET DETECTED in query: {query_text}"
+            )
             return ["noaa-cdr-sea-surface-temperature-whoi"]
-        
-        if any(keyword in query_text for keyword in ["chloris", "biomass", "woody biomass"]):
-            logger.info(f"[TREE] Chloris Biomass DATASET DETECTED in query: {query_text}")
+
+        if any(
+            keyword in query_text for keyword in ["chloris", "biomass", "woody biomass"]
+        ):
+            logger.info(
+                f"[TREE] Chloris Biomass DATASET DETECTED in query: {query_text}"
+            )
             return ["chloris-biomass"]
-        
+
         # 3DEP/HAG must come BEFORE buildings ("building location" contains "building")
-        if any(keyword in query_text for keyword in ["3dep", "lidar", "height above ground", "hag"]):
-            logger.info(f"[SIGNAL] USGS 3DEP Lidar DATASET DETECTED in query: {query_text}")
+        if any(
+            keyword in query_text
+            for keyword in ["3dep", "lidar", "height above ground", "hag"]
+        ):
+            logger.info(
+                f"[SIGNAL] USGS 3DEP Lidar DATASET DETECTED in query: {query_text}"
+            )
             return ["3dep-lidar-hag"]
-        
-        if any(keyword in query_text for keyword in ["buildings", "building footprints"]):
-            logger.info(f"[OFFICE] Building Footprints DATASET DETECTED in query: {query_text}")
+
+        if any(
+            keyword in query_text for keyword in ["buildings", "building footprints"]
+        ):
+            logger.info(
+                f"[OFFICE] Building Footprints DATASET DETECTED in query: {query_text}"
+            )
             return ["ms-buildings"]
-        
-        if any(keyword in query_text for keyword in ["alos world 3d", "alos dem"]) and "palsar" not in query_text:
+
+        if (
+            any(keyword in query_text for keyword in ["alos world 3d", "alos dem"])
+            and "palsar" not in query_text
+        ):
             logger.info(f"[MTN] ALOS World 3D DATASET DETECTED in query: {query_text}")
             return ["alos-dem"]
-        
+
         if any(keyword in query_text for keyword in ["palsar", "alos palsar"]):
             logger.info(f"[SIGNAL] ALOS PALSAR DATASET DETECTED in query: {query_text}")
             return ["alos-palsar-mosaic"]
-        
+
         if "worldcover" in query_text or "esa world cover" in query_text:
-            logger.info(f"[GLOBE] ESA WorldCover DATASET DETECTED in query: {query_text}")
+            logger.info(
+                f"[GLOBE] ESA WorldCover DATASET DETECTED in query: {query_text}"
+            )
             return ["esa-worldcover"]
-        
+
         if "cop-dem" in query_text or "copernicus dem" in query_text:
             logger.info(f"[MTN] Copernicus DEM DATASET DETECTED in query: {query_text}")
             return ["cop-dem-glo-30"]
-        
+
         if "nasadem" in query_text:
             logger.info(f"[MTN] NASADEM DATASET DETECTED in query: {query_text}")
             return ["nasadem"]
-        
+
         if "daymet" in query_text:
             logger.info(f"[TEMP] Daymet DATASET DETECTED in query: {query_text}")
             return ["daymet-daily-na"]
-        
+
         if "era5" in query_text:
             logger.info(f"[TEMP] ERA5 DATASET DETECTED in query: {query_text}")
             if "land" in query_text:
                 return ["era5-pds"]
             return ["era5-pds"]
-        
+
         if any(keyword in query_text for keyword in ["viirs", "viirs fire"]):
             logger.info(f"[FIRE] VIIRS DATASET DETECTED in query: {query_text}")
             return ["modis-14A1-061"]
-        
+
         if "io-lulc" in query_text or "io land cover" in query_text:
-            logger.info(f"[GLOBE] IO Land Cover DATASET DETECTED in query: {query_text}")
+            logger.info(
+                f"[GLOBE] IO Land Cover DATASET DETECTED in query: {query_text}"
+            )
             return ["io-lulc-annual-v02"]
-        
+
         if "lcmap" in query_text or "usgs land change" in query_text:
             logger.info(f"[GLOBE] LCMAP DATASET DETECTED in query: {query_text}")
             return ["usgs-lcmap-conus-v13"]
-        
+
         if "sentinel-5p" in query_text or "tropomi" in query_text:
             logger.info(f"[WIND] Sentinel-5P DATASET DETECTED in query: {query_text}")
             return ["sentinel-2-l2a"]
-        
+
         # [SAT] ENHANCED SATELLITE DATA DETECTION (includes various satellite data requests)
         satellite_keywords = [
-            "satellite map", "satellite imagery", "satellite data", "satellite image",
-            "optical imagery", "rgb", "true color", "earth observation", "remote sensing"
+            "satellite map",
+            "satellite imagery",
+            "satellite data",
+            "satellite image",
+            "optical imagery",
+            "rgb",
+            "true color",
+            "earth observation",
+            "remote sensing",
         ]
         if any(keyword in query_text for keyword in satellite_keywords):
             logger.info(f"[SAT] Detected satellite data query: {query_text}")
             # Prioritize best satellite collections: Landsat (proven working) + Sentinel-2
-            return self._get_dynamic_collections_by_category("optical") or ["landsat-c2-l2", "sentinel-2-l2a", "naip"]
-        
+            return self._get_dynamic_collections_by_category("optical") or [
+                "landsat-c2-l2",
+                "sentinel-2-l2a",
+                "naip",
+            ]
+
         # [FIRE] MODIS SPECIFIC: Check for MODIS keywords first (highest priority)
         if "modis" in query_text:
             logger.info(f"[FIRE] MODIS SPECIFIC DETECTED in query: {query_text}")
-            if any(fire_word in query_text for fire_word in ["fire", "thermal", "anomal", "heat", "burn"]):
-                logger.info("[FIRE] MODIS fire/thermal detected - using MODIS fire collections")
+            if any(
+                fire_word in query_text
+                for fire_word in ["fire", "thermal", "anomal", "heat", "burn"]
+            ):
+                logger.info(
+                    "[FIRE] MODIS fire/thermal detected - using MODIS fire collections"
+                )
                 return ["modis-14A1-061", "modis-14A2-061", "modis-64A1-061"]
             elif "ndvi" in query_text:
                 logger.info("[LEAF] MODIS NDVI specifically detected")
-                return ["modis-13Q1-061", "modis-13A1-061"]  # Only NDVI collections for NDVI queries
-            elif any(veg_word in query_text for veg_word in ["vegetation", "greenness", "leaf"]):
+                return [
+                    "modis-13Q1-061",
+                    "modis-13A1-061",
+                ]  # Only NDVI collections for NDVI queries
+            elif any(
+                veg_word in query_text
+                for veg_word in ["vegetation", "greenness", "leaf"]
+            ):
                 logger.info("[LEAF] MODIS vegetation detected")
-                return ["modis-13Q1-061", "modis-13A1-061", "modis-15A2H-061", "modis-17A2H-061"]
-            elif any(temp_word in query_text for temp_word in ["temperature", "lst", "surface temperature"]):
+                return [
+                    "modis-13Q1-061",
+                    "modis-13A1-061",
+                    "modis-15A2H-061",
+                    "modis-17A2H-061",
+                ]
+            elif any(
+                temp_word in query_text
+                for temp_word in ["temperature", "lst", "surface temperature"]
+            ):
                 logger.info("[TEMP] MODIS land surface temperature detected")
                 return ["modis-11A1-061"]
-            elif any(snow_word in query_text for snow_word in ["snow", "ice", "snow cover"]):
+            elif any(
+                snow_word in query_text for snow_word in ["snow", "ice", "snow cover"]
+            ):
                 logger.info("[SNOW] MODIS snow/ice detected")
                 return ["modis-10A1-061", "modis-10A2-061"]
-            elif any(reflectance_word in query_text for reflectance_word in ["reflectance", "surface reflectance", "optical"]):
+            elif any(
+                reflectance_word in query_text
+                for reflectance_word in [
+                    "reflectance",
+                    "surface reflectance",
+                    "optical",
+                ]
+            ):
                 logger.info("[GLOBE] MODIS surface reflectance detected")
                 return ["modis-09A1-061", "modis-09Q1-061"]
             else:
-                logger.info("[FIRE] General MODIS query - defaulting to fire collections")
+                logger.info(
+                    "[FIRE] General MODIS query - defaulting to fire collections"
+                )
                 return ["modis-14A1-061", "modis-14A2-061", "modis-64A1-061"]
-        
+
         # [FIRE] THERMAL: Check for thermal infrared keywords (Landsat specific)
-        if any(thermal_word in query_text for thermal_word in ["thermal", "infrared", "lwir"]) and "landsat" in query_text:
-            logger.info(f"[FIRE] LANDSAT THERMAL INFRARED DETECTED in query: {query_text}")
+        if (
+            any(
+                thermal_word in query_text
+                for thermal_word in ["thermal", "infrared", "lwir"]
+            )
+            and "landsat" in query_text
+        ):
+            logger.info(
+                f"[FIRE] LANDSAT THERMAL INFRARED DETECTED in query: {query_text}"
+            )
             return ["landsat-c2-l2"]
-        
+
         # [MTN] ELEVATION/DEM: Check for elevation keywords (highest priority after thermal)
-        elevation_keywords = ["elevation", "dem", "topography", "terrain", "altitude", "height", "slope", "contour"]
+        elevation_keywords = [
+            "elevation",
+            "dem",
+            "topography",
+            "terrain",
+            "altitude",
+            "height",
+            "slope",
+            "contour",
+        ]
         if any(elev_word in query_text for elev_word in elevation_keywords):
             logger.info(f"[MTN] ELEVATION/DEM DETECTED in query: {query_text}")
-            return self._get_dynamic_collections_by_category("elevation") or ["cop-dem-glo-30", "cop-dem-glo-90", "nasadem"]
-        
+            return self._get_dynamic_collections_by_category("elevation") or [
+                "cop-dem-glo-30",
+                "cop-dem-glo-90",
+                "nasadem",
+            ]
+
         # [FIRE] FIRE/WILDFIRE detection (non-MODIS)
-        if any(keyword in query_text for keyword in ["fire", "wildfire", "burn"]) and "modis" not in query_text:
+        if (
+            any(keyword in query_text for keyword in ["fire", "wildfire", "burn"])
+            and "modis" not in query_text
+        ):
             logger.info(f"[FIRE] General fire detection (non-MODIS): {query_text}")
-            return self._get_dynamic_collections_by_category("fire") or ["modis-14A1-061", "modis-14A2-061"]
-        
-        # [WAVE] WATER/FLOOD detection  
-        if any(keyword in query_text for keyword in ["flood", "water", "inundation", "hurricane"]):
-            return self._get_dynamic_collections_by_category("sar") or ["sentinel-1-grd", "sentinel-2-l2a"]
-        
+            return self._get_dynamic_collections_by_category("fire") or [
+                "modis-14A1-061",
+                "modis-14A2-061",
+            ]
+
+        # [WAVE] WATER/FLOOD detection
+        if any(
+            keyword in query_text
+            for keyword in ["flood", "water", "inundation", "hurricane"]
+        ):
+            return self._get_dynamic_collections_by_category("sar") or [
+                "sentinel-1-grd",
+                "sentinel-2-l2a",
+            ]
+
         # [LEAF] NDVI SPECIFIC detection (highest priority for NDVI queries)
         if "ndvi" in query_text:
             logger.info(f"[LEAF] NDVI SPECIFIC DETECTED in query: {query_text}")
-            return ["modis-13Q1-061", "modis-13A1-061"]  # Only NDVI collections for NDVI queries
-        
+            return [
+                "modis-13Q1-061",
+                "modis-13A1-061",
+            ]  # Only NDVI collections for NDVI queries
+
         # [LEAF] VEGETATION detection (general vegetation analysis)
-        if any(keyword in query_text for keyword in ["vegetation", "forest", "agriculture", "crop"]):
-            collections = self._get_dynamic_collections_by_category("vegetation") or ["sentinel-2-l2a", "landsat-c2-l2", "modis-13Q1-061"]
+        if any(
+            keyword in query_text
+            for keyword in ["vegetation", "forest", "agriculture", "crop"]
+        ):
+            collections = self._get_dynamic_collections_by_category("vegetation") or [
+                "sentinel-2-l2a",
+                "landsat-c2-l2",
+                "modis-13Q1-061",
+            ]
             return self._prioritize_featured_collections(collections)
-        
+
         # [TEMP] CLIMATE/WEATHER detection
-        if any(keyword in query_text for keyword in ["climate", "weather", "temperature", "precipitation", "rain"]):
-            collections = self._get_dynamic_collections_by_category("climate") or ["era5-pds", "daymet-daily-na"]
+        if any(
+            keyword in query_text
+            for keyword in [
+                "climate",
+                "weather",
+                "temperature",
+                "precipitation",
+                "rain",
+            ]
+        ):
+            collections = self._get_dynamic_collections_by_category("climate") or [
+                "era5-pds",
+                "daymet-daily-na",
+            ]
             return self._prioritize_featured_collections(collections)
-        
+
         # [WAVE] OCEAN detection
-        if any(keyword in query_text for keyword in ["ocean", "sea", "marine", "coastal"]):
-            collections = self._get_dynamic_collections_by_category("ocean") or ["sentinel-2-l2a"]
+        if any(
+            keyword in query_text for keyword in ["ocean", "sea", "marine", "coastal"]
+        ):
+            collections = self._get_dynamic_collections_by_category("ocean") or [
+                "sentinel-2-l2a"
+            ]
             return self._prioritize_featured_collections(collections)
-        
+
         # [SNOW] SNOW/ICE detection
         if any(keyword in query_text for keyword in ["snow", "ice", "glacier"]):
-            collections = self._get_dynamic_collections_by_category("snow") or ["modis-10A1-061"]
+            collections = self._get_dynamic_collections_by_category("snow") or [
+                "modis-10A1-061"
+            ]
             return self._prioritize_featured_collections(collections)
-        
+
         # [WIND] AIR QUALITY detection
-        if any(keyword in query_text for keyword in ["air quality", "pollution", "emission", "aerosol"]):
-            collections = self._get_dynamic_collections_by_category("air_quality") or ["tropomi-no2"]
+        if any(
+            keyword in query_text
+            for keyword in ["air quality", "pollution", "emission", "aerosol"]
+        ):
+            collections = self._get_dynamic_collections_by_category("air_quality") or [
+                "tropomi-no2"
+            ]
             return self._prioritize_featured_collections(collections)
-        
+
         # [GLOBE] DEFAULT TO SATELLITE IMAGERY for general geographic queries
-        logger.info(f"[SAT] No specific data type detected - defaulting to satellite imagery for query: {query_text}")
-        collections = self._get_dynamic_collections_by_category("optical") or ["landsat-c2-l2", "sentinel-2-l2a", "naip"]
+        logger.info(
+            f"[SAT] No specific data type detected - defaulting to satellite imagery for query: {query_text}"
+        )
+        collections = self._get_dynamic_collections_by_category("optical") or [
+            "landsat-c2-l2",
+            "sentinel-2-l2a",
+            "naip",
+        ]
         return self._prioritize_featured_collections(collections)
-    
+
     def _prioritize_featured_collections(self, collections: List[str]) -> List[str]:
         """
         [STAR] Prioritize Featured Datasets for optimal rendering quality
-        
+
         Sorts collections to put Featured Datasets first, ensuring:
         - Better rendering quality (95-100% vs 60-80%)
         - Faster tile selection
         - More vivid and accurate visualization
-        
+
         Args:
             collections: List of collection IDs to prioritize
-            
+
         Returns:
             Sorted list with featured collections first
         """
         if not FEATURED_COLLECTIONS:
             return collections
-        
+
         # Separate featured from non-featured
         featured = [c for c in collections if c in FEATURED_COLLECTIONS]
         non_featured = [c for c in collections if c not in FEATURED_COLLECTIONS]
-        
+
         # Featured collections first, then non-featured
         prioritized = featured + non_featured
-        
+
         if featured:
-            logger.info(f"[STAR] Prioritized {len(featured)} featured collections: {featured}")
+            logger.info(
+                f"[STAR] Prioritized {len(featured)} featured collections: {featured}"
+            )
             if non_featured:
-                logger.info(f"[CHART] Also included {len(non_featured)} non-featured collections: {non_featured}")
-        
+                logger.info(
+                    f"[CHART] Also included {len(non_featured)} non-featured collections: {non_featured}"
+                )
+
         return prioritized
-    
-    def _get_dynamic_collections_by_category(self, category: str) -> Optional[List[str]]:
+
+    def _get_dynamic_collections_by_category(
+        self, category: str
+    ) -> Optional[List[str]]:
         """
         [TARGET] Dynamic collection selection using collection profiles
-        
+
         Args:
             category: Category to search for (optical, sar, elevation, etc.)
-            
+
         Returns:
             List of collection IDs matching the category
         """
         if not PC_METADATA_AVAILABLE:
-            logger.debug(f"PC metadata not available, using static mapping for {category}")
+            logger.debug(
+                f"PC metadata not available, using static mapping for {category}"
+            )
             return None
-        
+
         matching_collections = []
         metadata = load_pc_metadata()
-        
+
         # Search through PC metadata to find matching categories
-        for cat_group in metadata.get('categories', []):
-            cat_name = cat_group.get('name', '').lower()
-            
+        for cat_group in metadata.get("categories", []):
+            cat_name = cat_group.get("name", "").lower()
+
             # Map category names to PC metadata category names
             category_mapping = {
-                'optical': 'optical satellite imagery',
-                'sar': 'radar',
-                'radar': 'radar',
-                'elevation': 'elevation & terrain',
-                'dem': 'elevation & terrain',
-                'land_cover': 'land cover & use',
-                'weather': 'weather & climate',
-                'climate': 'weather & climate',
-                'modis': 'modis products'
+                "optical": "optical satellite imagery",
+                "sar": "radar",
+                "radar": "radar",
+                "elevation": "elevation & terrain",
+                "dem": "elevation & terrain",
+                "land_cover": "land cover & use",
+                "weather": "weather & climate",
+                "climate": "weather & climate",
+                "modis": "modis products",
             }
-            
+
             target_category = category_mapping.get(category.lower(), category.lower())
-            
+
             if target_category in cat_name or category.lower() in cat_name:
-                for coll in cat_group.get('collections', []):
-                    matching_collections.append(coll.get('id'))
-        
+                for coll in cat_group.get("collections", []):
+                    matching_collections.append(coll.get("id"))
+
         if matching_collections:
-            logger.info(f"[OK] PC metadata found {len(matching_collections)} collections for {category}: {matching_collections[:5]}")
+            logger.info(
+                f"[OK] PC metadata found {len(matching_collections)} collections for {category}: {matching_collections[:5]}"
+            )
             return matching_collections[:5]  # Limit to top 5 collections
         else:
             logger.debug(f"No collections found for category: {category}")
@@ -5270,25 +6326,46 @@ Location to analyze: {location_name}"""
             collections = ["landsat-c2-l2"]  # Only Landsat for thermal infrared
             logger.info(f"[FIRE] Selected thermal collections: {collections}")
             return collections[:3]  # Early return for thermal infrared
-        
+
         # [MTN] ELEVATION/DEM: Check for elevation keywords first (highest priority after thermal)
-        elevation_keywords = ["elevation", "dem", "topography", "terrain", "altitude", "height", "slope", "contour"]
+        elevation_keywords = [
+            "elevation",
+            "dem",
+            "topography",
+            "terrain",
+            "altitude",
+            "height",
+            "slope",
+            "contour",
+        ]
         lidar_keywords = ["lidar", "point cloud", "bare earth", "height above ground"]
-        
+
         if any(elev_word in query_text for elev_word in elevation_keywords):
             logger.info(f"[MTN] ELEVATION/DEM DETECTED in query: {query_text}")
-            
+
             # Check if LiDAR-specific request
             if any(lidar_word in query_text for lidar_word in lidar_keywords):
-                logger.info(f"[SIGNAL] LiDAR-specific request detected")
-                collections = ["3dep-lidar-dtm", "3dep-lidar-dsm", "3dep-lidar-classification", "3dep-lidar-hag", "cop-dem-glo-30"]
+                logger.info("[SIGNAL] LiDAR-specific request detected")
+                collections = [
+                    "3dep-lidar-dtm",
+                    "3dep-lidar-dsm",
+                    "3dep-lidar-classification",
+                    "3dep-lidar-hag",
+                    "cop-dem-glo-30",
+                ]
             else:
                 # All 11 elevation collections available
-                collections = ["cop-dem-glo-30", "cop-dem-glo-90", "3dep-seamless", "3dep-lidar-dtm", "nasadem"]
-            
+                collections = [
+                    "cop-dem-glo-30",
+                    "cop-dem-glo-90",
+                    "3dep-seamless",
+                    "3dep-lidar-dtm",
+                    "nasadem",
+                ]
+
             logger.info(f"[MTN] Selected elevation collections: {collections}")
             return collections[:5]  # Return up to 5 elevation options
-        
+
         # Match to comprehensive collection categories and subcategories
         for category, config in self.collection_mappings.items():
             # Check subcategory names as keywords (e.g., "thermal_infrared", "wildfire", etc.)
@@ -5296,7 +6373,9 @@ Location to analyze: {location_name}"""
                 # Convert subcategory name to searchable keywords
                 subcategory_keywords = subcategory.replace("_", " ").split()
                 if any(keyword in query_text for keyword in subcategory_keywords):
-                    logger.debug(f"Found {category}->{subcategory} match for keywords: {subcategory_keywords}")
+                    logger.debug(
+                        f"Found {category}->{subcategory} match for keywords: {subcategory_keywords}"
+                    )
                     if isinstance(subcollections, list):
                         collections.extend(subcollections)
                     elif isinstance(subcollections, dict):
@@ -5307,30 +6386,34 @@ Location to analyze: {location_name}"""
                     break
             if collections:  # If we found a match, stop searching
                 break
-        
+
         # Handle specific damage indicators and refinements
         damage_indicators = entities.get("damage_indicators", {})
-        
+
         if damage_indicators.get("blue_tarp"):
             # Very high resolution needed - prioritize
             collections = ["naip", "sentinel-2-l2a"] + collections
-        
+
         if damage_indicators.get("flooding"):
             # SAR is critical for flood detection
             if "sentinel-1-grd" not in collections:
                 collections.insert(0, "sentinel-1-grd")
-        
+
         if damage_indicators.get("fire_damage"):
             # Thermal detection is key
             thermal_collections = ["modis-14A1-061", "modis-14A2-061", "modis-64A1-061"]
             collections = thermal_collections + collections
-        
+
         # Analysis intent refinements for high-resolution needs
-        if analysis_intent in ["impact_assessment", "damage_analysis", "detailed_monitoring"]:
+        if analysis_intent in [
+            "impact_assessment",
+            "damage_analysis",
+            "detailed_monitoring",
+        ]:
             # Ensure high-resolution optical data is available
             if not any(col in collections for col in ["sentinel-2-l2a", "naip"]):
                 collections.insert(0, "sentinel-2-l2a")
-        
+
         # Remove duplicates while preserving priority order
         seen = set()
         unique_collections = []
@@ -5338,149 +6421,169 @@ Location to analyze: {location_name}"""
             if collection not in seen:
                 seen.add(collection)
                 unique_collections.append(collection)
-        
+
         # Default collections if none selected
         if not unique_collections:
             unique_collections = ["sentinel-2-l2a", "landsat-c2-l2"]
-        
+
         # Limit to reasonable number for performance
         return unique_collections[:3]
-    
-    def _calculate_spatial_overlap(self, bbox1: List[float], bbox2: List[float]) -> float:
+
+    def _calculate_spatial_overlap(
+        self, bbox1: List[float], bbox2: List[float]
+    ) -> float:
         """Calculate the percentage overlap between two bounding boxes
-        
+
         This is critical for spatial filtering: we want to know if a tile/image (bbox2)
         is meaningfully inside the requested region (bbox1).
-        
-        KEY FIX: Calculate overlap as percentage of the TILE area (bbox2), not the 
-        requested region (bbox1). Otherwise, a tile fully inside California shows only 
+
+        KEY FIX: Calculate overlap as percentage of the TILE area (bbox2), not the
+        requested region (bbox1). Otherwise, a tile fully inside California shows only
         2-3% overlap because California is huge compared to a single tile!
-        
+
         Args:
             bbox1: [west, south, east, north] - requested region (e.g., California)
             bbox2: [west, south, east, north] - STAC result bbox (e.g., HLS tile)
-            
+
         Returns:
             Float between 0.0-1.0 representing what fraction of the TILE overlaps the requested region
         """
         if not bbox1 or not bbox2 or len(bbox1) != 4 or len(bbox2) != 4:
             return 0.0
-            
+
         # Calculate intersection bounds
         west = max(bbox1[0], bbox2[0])
-        south = max(bbox1[1], bbox2[1]) 
+        south = max(bbox1[1], bbox2[1])
         east = min(bbox1[2], bbox2[2])
         north = min(bbox1[3], bbox2[3])
-        
+
         # No overlap if intersection is invalid
         if west >= east or south >= north:
             return 0.0
-            
+
         # Calculate areas
         intersection_area = (east - west) * (north - south)
-        tile_area = (bbox2[2] - bbox2[0]) * (bbox2[3] - bbox2[1])  # FIX: Use tile area, not requested area
-        
+        tile_area = (bbox2[2] - bbox2[0]) * (
+            bbox2[3] - bbox2[1]
+        )  # FIX: Use tile area, not requested area
+
         if tile_area <= 0:
             return 0.0
-            
+
         # Return overlap as percentage of TILE area (what fraction of the tile is inside the requested region)
         overlap = intersection_area / tile_area
         return min(overlap, 1.0)  # Cap at 100%
-    
-    def _filter_stac_results_by_spatial_overlap(self, stac_results: Dict[str, Any], 
-                                               requested_bbox: Optional[List[float]], 
-                                               min_overlap: float = 0.1) -> Dict[str, Any]:
+
+    def _filter_stac_results_by_spatial_overlap(
+        self,
+        stac_results: Dict[str, Any],
+        requested_bbox: Optional[List[float]],
+        min_overlap: float = 0.1,
+    ) -> Dict[str, Any]:
         """Filter STAC results to only include those with meaningful spatial overlap
-        
+
         Args:
             stac_results: STAC API response with features
             requested_bbox: The user's requested geographic region
             min_overlap: Minimum overlap percentage (0.1 = 10%)
-            
+
         Returns:
             Filtered STAC results with only relevant features
         """
-        if not requested_bbox or not stac_results.get('features'):
+        if not requested_bbox or not stac_results.get("features"):
             return stac_results
-            
-        logger.info(f"[SEARCH] Filtering STAC results for spatial overlap with {requested_bbox}")
-        
+
+        logger.info(
+            f"[SEARCH] Filtering STAC results for spatial overlap with {requested_bbox}"
+        )
+
         filtered_features = []
-        total_features = len(stac_results['features'])
-        
-        for feature in stac_results['features']:
-            feature_bbox = feature.get('bbox')
+        total_features = len(stac_results["features"])
+
+        for feature in stac_results["features"]:
+            feature_bbox = feature.get("bbox")
             if not feature_bbox:
                 continue
-                
+
             overlap = self._calculate_spatial_overlap(requested_bbox, feature_bbox)
-            
+
             if overlap >= min_overlap:
-                logger.debug(f"[OK] Including feature {feature.get('id', 'unknown')} with {overlap:.1%} overlap")
+                logger.debug(
+                    f"[OK] Including feature {feature.get('id', 'unknown')} with {overlap:.1%} overlap"
+                )
                 filtered_features.append(feature)
             else:
-                logger.debug(f"[FAIL] Filtering out feature {feature.get('id', 'unknown')} with {overlap:.1%} overlap")
-        
+                logger.debug(
+                    f"[FAIL] Filtering out feature {feature.get('id', 'unknown')} with {overlap:.1%} overlap"
+                )
+
         filtered_count = len(filtered_features)
-        logger.info(f"[TARGET] Spatial filtering: {filtered_count}/{total_features} features kept (min {min_overlap:.1%} overlap)")
-        
+        logger.info(
+            f"[TARGET] Spatial filtering: {filtered_count}/{total_features} features kept (min {min_overlap:.1%} overlap)"
+        )
+
         # Create filtered results
         filtered_results = dict(stac_results)
-        filtered_results['features'] = filtered_features
-        
+        filtered_results["features"] = filtered_features
+
         return filtered_results
-    
-    def _filter_stac_results_by_cloud_cover(self, stac_results: Dict[str, Any], 
-                                            max_cloud_cover: Optional[int] = None,
-                                            collection_id: Optional[str] = None) -> Dict[str, Any]:
+
+    def _filter_stac_results_by_cloud_cover(
+        self,
+        stac_results: Dict[str, Any],
+        max_cloud_cover: Optional[int] = None,
+        collection_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Client-side cloud cover filtering as a safety net.
-        
+
         Even if STAC API accepts the cloud cover filter in the query, some collections
         might ignore it or use different property names. This ensures we always filter
         results to match user's cloud cover intent.
-        
+
         Uses collection_profiles to intelligently determine the correct property name
         for each collection, avoiding blind trial-and-error.
-        
+
         Args:
             stac_results: STAC API response with features
             max_cloud_cover: Maximum cloud cover percentage (0-100), None to skip filtering
             collection_id: Optional collection ID to lookup correct property name
-            
+
         Returns:
             Filtered STAC results with only features meeting cloud cover requirement
         """
-        if max_cloud_cover is None or not stac_results.get('features'):
+        if max_cloud_cover is None or not stac_results.get("features"):
             return stac_results
-        
+
         logger.info(f"[CLOUD] Client-side cloud cover filtering: ≤{max_cloud_cover}%")
-        
+
         # Import PC metadata helper for cloud property
         from pc_tasks_config_loader import get_cloud_cover_property
-        
+
         # Build prioritized list of property names to check
         property_names_to_try = []
-        
+
         # If collection specified, try its specific property name first
         if collection_id:
             collection_prop = get_cloud_cover_property(collection_id)
             if collection_prop:
                 property_names_to_try.append(collection_prop)
-                logger.debug(f"ℹ️ Collection {collection_id} uses property: {collection_prop}")
-        
+                logger.debug(
+                    f"ℹ️ Collection {collection_id} uses property: {collection_prop}"
+                )
+
         # Add common variants as fallback
-        for prop in ['eo:cloud_cover', 'cloud_cover', 'cloudCover', 'CLOUD_COVER']:
+        for prop in ["eo:cloud_cover", "cloud_cover", "cloudCover", "CLOUD_COVER"]:
             if prop not in property_names_to_try:
                 property_names_to_try.append(prop)
-        
+
         filtered_features = []
-        total_features = len(stac_results['features'])
+        total_features = len(stac_results["features"])
         cloud_covers = []
-        
-        for feature in stac_results['features']:
-            props = feature.get('properties', {})
-            
+
+        for feature in stac_results["features"]:
+            props = feature.get("properties", {})
+
             # Try property names in priority order
             cloud_cover = None
             found_property = None
@@ -5489,117 +6592,162 @@ Location to analyze: {location_name}"""
                     cloud_cover = props[prop_name]
                     found_property = prop_name
                     break
-            
+
             # If no cloud cover metadata, assume it passes (SAR, DEM, etc. don't have cloud cover)
             if cloud_cover is None:
-                logger.debug(f"ℹ️ No cloud cover metadata for feature {feature.get('id', 'unknown')}, including by default")
+                logger.debug(
+                    f"ℹ️ No cloud cover metadata for feature {feature.get('id', 'unknown')}, including by default"
+                )
                 filtered_features.append(feature)
                 continue
-            
+
             cloud_covers.append(cloud_cover)
-            
+
             # Filter based on threshold
             if cloud_cover <= max_cloud_cover:
-                logger.debug(f"[OK] Including feature {feature.get('id', 'unknown')} with {cloud_cover}% cloud cover")
+                logger.debug(
+                    f"[OK] Including feature {feature.get('id', 'unknown')} with {cloud_cover}% cloud cover"
+                )
                 filtered_features.append(feature)
             else:
-                logger.debug(f"[FAIL] Filtering out feature {feature.get('id', 'unknown')} with {cloud_cover}% cloud cover (exceeds {max_cloud_cover}%)")
-        
+                logger.debug(
+                    f"[FAIL] Filtering out feature {feature.get('id', 'unknown')} with {cloud_cover}% cloud cover (exceeds {max_cloud_cover}%)"
+                )
+
         filtered_count = len(filtered_features)
-        
+
         # Log statistics
         if cloud_covers:
             avg_cloud = sum(cloud_covers) / len(cloud_covers)
             min_cloud = min(cloud_covers)
             max_cloud = max(cloud_covers)
-            logger.info(f"[CLOUD] Cloud cover stats: avg={avg_cloud:.1f}%, min={min_cloud:.1f}%, max={max_cloud:.1f}%")
-        
-        logger.info(f"[TARGET] Cloud cover filtering: {filtered_count}/{total_features} features kept (≤{max_cloud_cover}%)")
-        
+            logger.info(
+                f"[CLOUD] Cloud cover stats: avg={avg_cloud:.1f}%, min={min_cloud:.1f}%, max={max_cloud:.1f}%"
+            )
+
+        logger.info(
+            f"[TARGET] Cloud cover filtering: {filtered_count}/{total_features} features kept (≤{max_cloud_cover}%)"
+        )
+
         # Create filtered results
         filtered_results = dict(stac_results)
-        filtered_results['features'] = filtered_features
-        
+        filtered_results["features"] = filtered_features
+
         return filtered_results
 
-    async def _detect_cloud_cover_intent(self, query_text: str) -> Optional[Dict[str, Any]]:
+    async def _detect_cloud_cover_intent(
+        self, query_text: str
+    ) -> Optional[Dict[str, Any]]:
         """
         Detect EXPLICIT cloud cover mentions in user query.
-        
+
         ONLY returns a threshold if user explicitly mentions cloud cover terms.
         Does NOT infer cloud preferences from urgency, disaster type, or analysis intent.
-        
+
         Returns:
             Dict with threshold and reasoning if explicit cloud mention found, None otherwise
             - threshold: int (0-100, percentage for eo:cloud_cover filter)
             - reasoning: str (explanation)
         """
-        
+
         query_lower = query_text.lower()
-        
+
         # EXPLICIT low cloud / clear sky requests -> 25% or less
-        if any(term in query_lower for term in [
-            'low cloud', 'no cloud', 'clear', 'cloudless', 
-            'minimal cloud', 'cloud-free', 'without clouds',
-            'clear sky', 'clear skies', 'no clouds'
-        ]):
+        if any(
+            term in query_lower
+            for term in [
+                "low cloud",
+                "no cloud",
+                "clear",
+                "cloudless",
+                "minimal cloud",
+                "cloud-free",
+                "without clouds",
+                "clear sky",
+                "clear skies",
+                "no clouds",
+            ]
+        ):
             return {
-                "threshold": 25, 
-                "reasoning": "User explicitly requested low cloud/clear imagery"
+                "threshold": 25,
+                "reasoning": "User explicitly requested low cloud/clear imagery",
             }
-        
+
         # EXPLICIT medium cloud requests -> around 50%
-        elif any(term in query_lower for term in [
-            'medium cloud', 'some cloud', 'partly cloudy', 
-            'moderate cloud', 'partial cloud', 'some clouds'
-        ]):
+        elif any(
+            term in query_lower
+            for term in [
+                "medium cloud",
+                "some cloud",
+                "partly cloudy",
+                "moderate cloud",
+                "partial cloud",
+                "some clouds",
+            ]
+        ):
             return {
-                "threshold": 50, 
-                "reasoning": "User explicitly requested medium cloud coverage"
+                "threshold": 50,
+                "reasoning": "User explicitly requested medium cloud coverage",
             }
-        
+
         # EXPLICIT high cloud / cloudy requests -> 75% or more
-        elif any(term in query_lower for term in [
-            'cloudy', 'overcast', 'high cloud', 'heavy cloud',
-            'with clouds', 'lots of clouds', 'very cloudy'
-        ]):
+        elif any(
+            term in query_lower
+            for term in [
+                "cloudy",
+                "overcast",
+                "high cloud",
+                "heavy cloud",
+                "with clouds",
+                "lots of clouds",
+                "very cloudy",
+            ]
+        ):
             return {
-                "threshold": 75, 
-                "reasoning": "User explicitly requested high cloud/cloudy imagery"
+                "threshold": 75,
+                "reasoning": "User explicitly requested high cloud/cloudy imagery",
             }
-        
+
         # NO explicit cloud mention -> return None (do not add cloud filter)
         else:
             return None
-    
-    async def translate_query(self, natural_query: str, pin_location: Optional[Dict[str, float]] = None, session_bbox: Optional[List[float]] = None, skip_intent_classification: bool = False, pre_classified_intent: Optional[str] = None) -> Dict[str, Any]:
+
+    async def translate_query(
+        self,
+        natural_query: str,
+        pin_location: Optional[Dict[str, float]] = None,
+        session_bbox: Optional[List[float]] = None,
+        skip_intent_classification: bool = False,
+        pre_classified_intent: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Main translation method with comprehensive error handling and GEOINT routing.
-        
+
         Location Priority Logic:
         1. If query contains explicit location -> Agent 2 extracts it, use that bbox
         2. If pin_location provided AND query has NO new location -> Use pin coordinates
         3. If no location in query AND session_bbox provided -> Use session_bbox (fallback)
         4. If no location anywhere -> Return LOCATION_REQUIRED error
-        
+
         Args:
             natural_query: User's natural language query
             pin_location: Optional pin coordinates {'lat': float, 'lng': float}
             session_bbox: Optional session's last bbox [west, south, east, north] as fallback
-        
+
         Returns:
             Dictionary with STAC parameters and processing metadata
         """
-        
+
         # ============================================================================
         # 🆔 SESSION TRACKING - Generate unique ID for this query session
         # ============================================================================
         import uuid
         from datetime import datetime
+
         session_id = str(uuid.uuid4())[:8]  # Short UUID for readability
         session_timestamp = datetime.utcnow().isoformat()
         self.current_session_id = session_id  # Store for use in all agents
-        
+
         logger.info("=" * 80)
         logger.info(f"🆔 SESSION START: {session_id}")
         logger.info(f"[TIME] Timestamp: {session_timestamp}")
@@ -5607,23 +6755,27 @@ Location to analyze: {location_name}"""
         if session_bbox:
             logger.info(f"[PIN] Session bbox fallback available: {session_bbox}")
         logger.info("=" * 80)
-        
+
         # [SEARCH] PIPELINE LOG: Query Input
-        log_pipeline_step(session_id, "QUERY", "INPUT", {
-            "query": natural_query,
-            "pin_location": pin_location,
-            "session_bbox": session_bbox
-        })
-        
+        log_pipeline_step(
+            session_id,
+            "QUERY",
+            "INPUT",
+            {
+                "query": natural_query,
+                "pin_location": pin_location,
+                "session_bbox": session_bbox,
+            },
+        )
+
         # ============================================================================
         # [TIME] TIMING INSTRUMENTATION - Track query processing time
         # ============================================================================
-        import time
         start_total = time.perf_counter()
-        
+
         # Initialize analysis variable at the start to prevent scope issues
         analysis = {"needs_clarification": False, "quality_score": 0.8}
-        
+
         try:
             # ========================================================================
             # [LAUNCH] PERFORMANCE OPTIMIZATION: Parallel Classification and Collection Mapping
@@ -5631,156 +6783,196 @@ Location to analyze: {location_name}"""
             # These two agents are independent - classification determines intent,
             # collection mapping determines data sources. Running them in parallel
             # reduces latency by ~50%
-            logger.info("[LAUNCH] Running classification and collection mapping IN PARALLEL...")
-            
+            logger.info(
+                "[LAUNCH] Running classification and collection mapping IN PARALLEL..."
+            )
+
             start_parallel = time.perf_counter()
-            
+
             # [SEARCH] PIPELINE LOG: Classification Input
             log_pipeline_step(session_id, "INTENT", "INPUT", {"query": natural_query})
-            log_pipeline_step(session_id, "COLLECTION", "INPUT", {"query": natural_query})
-            
+            log_pipeline_step(
+                session_id, "COLLECTION", "INPUT", {"query": natural_query}
+            )
+
             # ============================================================================
             # [LAUNCH] OPTIMIZATION: Skip classification if already done by UnifiedRouter
             # ============================================================================
             if skip_intent_classification and pre_classified_intent:
-                logger.info(f"[FAST] SKIP: Using pre-classified intent: {pre_classified_intent}")
+                logger.info(
+                    f"[FAST] SKIP: Using pre-classified intent: {pre_classified_intent}"
+                )
                 classification = {
                     "intent_type": pre_classified_intent,
                     "modules": ["stac_search"],
                     "confidence": 0.95,
-                    "skip_classification": True
+                    "skip_classification": True,
                 }
                 # Only run collection mapping
                 collections = await self.collection_mapping_agent(natural_query)
             else:
                 classification_task = self.classify_query_intent_unified(natural_query)
                 collection_task = self.collection_mapping_agent(natural_query)
-                
+
                 classification, collections = await asyncio.gather(
-                    classification_task,
-                    collection_task
+                    classification_task, collection_task
                 )
             elapsed_parallel = time.perf_counter() - start_parallel
             elapsed_parallel_ms = elapsed_parallel * 1000
-            
+
             # [SEARCH] PIPELINE LOG: Classification & Collection Outputs
-            log_pipeline_step(session_id, "INTENT", "OUTPUT", {
-                "intent_type": classification.get('intent_type'),
-                "modules": classification.get('modules', []),
-                "confidence": classification.get('confidence')
-            }, elapsed_parallel_ms)
-            
-            log_pipeline_step(session_id, "COLLECTION", "OUTPUT", {
-                "collections": collections,
-                "count": len(collections)
-            }, elapsed_parallel_ms)
-            
+            log_pipeline_step(
+                session_id,
+                "INTENT",
+                "OUTPUT",
+                {
+                    "intent_type": classification.get("intent_type"),
+                    "modules": classification.get("modules", []),
+                    "confidence": classification.get("confidence"),
+                },
+                elapsed_parallel_ms,
+            )
+
+            log_pipeline_step(
+                session_id,
+                "COLLECTION",
+                "OUTPUT",
+                {"collections": collections, "count": len(collections)},
+                elapsed_parallel_ms,
+            )
+
             logger.info(f"[OK] PARALLEL PHASE 1 complete in {elapsed_parallel:.2f}s:")
-            logger.info(f"   - Classification: intent_type={classification.get('intent_type')}, modules={classification.get('modules', [])}")
+            logger.info(
+                f"   - Classification: intent_type={classification.get('intent_type')}, modules={classification.get('modules', [])}"
+            )
             num_collections = len(collections)
             logger.info(f"   - Collections: Selected {num_collections} collection(s)")
             logger.info(f"[TIME] TIMING - Parallel Phase: {elapsed_parallel:.2f}s")
-            
+
             # ========================================================================
             # [BOT] AGENT 2: Build STAC query with collection-specific rules
             # ========================================================================
-            
+
             # AGENT 2: Build STAC query with collection-specific rules
             logger.info("[BOT] Starting AGENT 2: STAC Query Building")
             start_stac_build = time.perf_counter()
-            
+
             # [SEARCH] PIPELINE LOG: STAC Query Building Input
-            log_pipeline_step(session_id, "STAC_QUERY", "INPUT", {
-                "query": natural_query,
-                "collections": collections
-            })
-            
+            log_pipeline_step(
+                session_id,
+                "STAC_QUERY",
+                "INPUT",
+                {"query": natural_query, "collections": collections},
+            )
+
             stac_query = await self.build_stac_query_agent(natural_query, collections)
             elapsed_stac_build = time.perf_counter() - start_stac_build
             elapsed_stac_build_ms = elapsed_stac_build * 1000
-            
+
             # [SEARCH] PIPELINE LOG: STAC Query Building Output
-            log_pipeline_step(session_id, "STAC_QUERY", "OUTPUT", {
-                "bbox": stac_query.get("bbox"),
-                "location_name": stac_query.get("location_name"),
-                "datetime": stac_query.get("datetime"),
-                "collections": stac_query.get("collections"),
-                "filters": stac_query.get("filter")
-            }, elapsed_stac_build_ms)
-            
-            logger.info(f"[OK] AGENT 2 complete: Built STAC query")
-            logger.info(f"[TIME] TIMING - STAC Query Building: {elapsed_stac_build:.2f}s")
-            
+            log_pipeline_step(
+                session_id,
+                "STAC_QUERY",
+                "OUTPUT",
+                {
+                    "bbox": stac_query.get("bbox"),
+                    "location_name": stac_query.get("location_name"),
+                    "datetime": stac_query.get("datetime"),
+                    "collections": stac_query.get("collections"),
+                    "filters": stac_query.get("filter"),
+                },
+                elapsed_stac_build_ms,
+            )
+
+            logger.info("[OK] AGENT 2 complete: Built STAC query")
+            logger.info(
+                f"[TIME] TIMING - STAC Query Building: {elapsed_stac_build:.2f}s"
+            )
+
             # ========================================================================
             # Extract bbox and location_name from Agent 2's response
             # ========================================================================
-            
+
             bbox = stac_query.get("bbox")
             location_name = stac_query.get("location_name")  # Agent 2 now provides this
-            
+
             # [SEARCH] PIPELINE LOG: Location Resolution
-            log_pipeline_step(session_id, "LOCATION", "OUTPUT", {
-                "location_name": location_name,
-                "bbox": bbox,
-                "source": "pin" if pin_location else "query"
-            })
-            
+            log_pipeline_step(
+                session_id,
+                "LOCATION",
+                "OUTPUT",
+                {
+                    "location_name": location_name,
+                    "bbox": bbox,
+                    "source": "pin" if pin_location else "query",
+                },
+            )
+
             # === PIN LOCATION PRIORITY LOGIC ===
-            query_has_location = (bbox is not None)
-            
+            query_has_location = bbox is not None
+
             if pin_location and query_has_location:
                 # User specified NEW location in query -> clear pin, use query location
-                logger.info(f"[WARN] New location detected in query - pin will be overridden")
-                logger.info(f"[PIN] Using query location instead of pin")
+                logger.info(
+                    "[WARN] New location detected in query - pin will be overridden"
+                )
+                logger.info("[PIN] Using query location instead of pin")
                 pin_location = None  # Clear pin
-            
+
             if pin_location:
                 # Pin is active and no new location in query -> use pin coordinates
-                lat = pin_location['lat']
-                lng = pin_location['lng']
+                lat = pin_location["lat"]
+                lng = pin_location["lng"]
                 location_name = f"Pin location ({lat:.4f}, {lng:.4f})"
                 bbox = self._create_pin_bbox(lat, lng, radius_miles=5)
-                
+
                 logger.info(f"[PIN] Using pin coordinates: {location_name}")
                 logger.info(f"[PKG] Pin bbox (5mi radius): {bbox}")
-                
+
                 # Override agent's bbox with pin bbox
                 stac_query["bbox"] = bbox
-            
+
             # ========================================================================
             # [PIN] SESSION_BBOX FALLBACK: Use session bbox when no location in query
             # ========================================================================
             # When Agent 2 doesn't extract a location from the query (e.g., user says
             # "show me Sentinel tiles" without specifying where), fall back to the
             # session's last known location.
-            # 
+            #
             # This is a FALLBACK, not a priority override:
             # 1. If query has explicit location -> Agent 2 extracts it, use that
             # 2. If no location in query -> Use session_bbox if available
             # 3. If no session_bbox either -> Will return LOCATION_REQUIRED error later
             # ========================================================================
             if not bbox and session_bbox:
-                logger.info(f"[PIN] FALLBACK: No location in query, using session bbox: {session_bbox}")
+                logger.info(
+                    f"[PIN] FALLBACK: No location in query, using session bbox: {session_bbox}"
+                )
                 bbox = session_bbox
                 stac_query["bbox"] = bbox
                 stac_query["location_name"] = "Current map location"
                 location_name = "Current map location"
-                
-                log_pipeline_step(session_id, "LOCATION", "FALLBACK", {
-                    "source": "session_bbox (no location in query)",
-                    "bbox": session_bbox
-                })
-            
+
+                log_pipeline_step(
+                    session_id,
+                    "LOCATION",
+                    "FALLBACK",
+                    {
+                        "source": "session_bbox (no location in query)",
+                        "bbox": session_bbox,
+                    },
+                )
+
             # ========================================================================
             # Create entities dict for compatibility with downstream code
             # ========================================================================
-            
+
             # Build minimal entities structure for GEOINT and other legacy code
             entities = {
                 "location": {
                     "name": location_name,
                     "type": "region",
-                    "confidence": 0.9
+                    "confidence": 0.9,
                 },
                 "temporal": {},
                 "disaster": {},
@@ -5788,59 +6980,67 @@ Location to analyze: {location_name}"""
                 "analysis_intent": {},
                 "original_query": natural_query,
                 "collections": collections,
-                "stac_query": stac_query
+                "stac_query": stac_query,
             }
-            
+
             if pin_location:
-                entities['pin_location'] = {
-                    'lat': pin_location['lat'],
-                    'lng': pin_location['lng'],
-                    'bbox': bbox,
-                    'radius_miles': 50
+                entities["pin_location"] = {
+                    "lat": pin_location["lat"],
+                    "lng": pin_location["lng"],
+                    "bbox": bbox,
+                    "radius_miles": 50,
                 }
-            
+
             # ========================================================================
             # Handle module-based processing based on unified classification
             # ========================================================================
-            
+
             # Check if any modules should be executed (GEOINT or map display)
-            modules_to_execute = classification.get('modules', [])
+            modules_to_execute = classification.get("modules", [])
             if modules_to_execute:
-                logger.info(f"[TARGET] Classification identified {len(modules_to_execute)} module(s): {modules_to_execute}")
-                
+                logger.info(
+                    f"[TARGET] Classification identified {len(modules_to_execute)} module(s): {modules_to_execute}"
+                )
+
                 # Determine if GEOINT processing is needed
-                geoint_modules = [m for m in modules_to_execute if m.startswith('geoint_')]
+                geoint_modules = [
+                    m for m in modules_to_execute if m.startswith("geoint_")
+                ]
                 if geoint_modules:
                     logger.info(f"[TARGET] GEOINT modules detected: {geoint_modules}")
-                    logger.info(f"[TARGET] FORCING HYBRID MODE for GEOINT query")
-                    
+                    logger.info("[TARGET] FORCING HYBRID MODE for GEOINT query")
+
                     # Flag for GEOINT enhancement (for downstream compatibility)
-                    entities['geoint_processing'] = {
-                        'analysis_type': geoint_modules[0].replace('geoint_', ''),
-                        'modules': geoint_modules,
-                        'confidence': classification.get('confidence', 0.8)
+                    entities["geoint_processing"] = {
+                        "analysis_type": geoint_modules[0].replace("geoint_", ""),
+                        "modules": geoint_modules,
+                        "confidence": classification.get("confidence", 0.8),
                     }
-                    entities['force_hybrid'] = True
-                    entities['analysis_intent'] = {
-                        'type': 'geoint_analysis',
-                        'subtype': geoint_modules[0].replace('geoint_', ''),
-                        'urgency': 'high' if 'emergency' in natural_query.lower() else 'medium',
-                        'confidence': classification.get('confidence', 0.8)
+                    entities["force_hybrid"] = True
+                    entities["analysis_intent"] = {
+                        "type": "geoint_analysis",
+                        "subtype": geoint_modules[0].replace("geoint_", ""),
+                        "urgency": (
+                            "high" if "emergency" in natural_query.lower() else "medium"
+                        ),
+                        "confidence": classification.get("confidence", 0.8),
                     }
-                    logger.info("[CHART] Processing GEOINT query with hybrid STAC + Analysis approach")
-            
+                    logger.info(
+                        "[CHART] Processing GEOINT query with hybrid STAC + Analysis approach"
+                    )
+
             # ========================================================================
             # Extract datetime_range for downstream compatibility
             # ========================================================================
-            
+
             datetime_range = stac_query.get("datetime")
-            
+
             # ========================================================================
             # Determine data source (VEDA vs Planetary Computer)
             # ========================================================================
-            
+
             data_source = self.determine_stac_source(natural_query, entities)
-            
+
             if data_source == "veda":
                 # Build VEDA-specific query (override agent's query for VEDA)
                 stac_query = self.build_veda_stac_query(entities, bbox)
@@ -5850,34 +7050,42 @@ Location to analyze: {location_name}"""
                 # Agent 2 already built the query - just add data source flag
                 stac_query["data_source"] = "planetary_computer"
                 logger.info("[GLOBE] Using Planetary Computer STAC source")
-            
+
             # ========================================================================
             # Query completeness analysis (optional)
             # ========================================================================
-            
+
             clarification_questions = []
             analysis = {"needs_clarification": False, "quality_score": 0.8}
-            
+
             if self.query_checker:
-                analysis = self.query_checker.analyze_query_completeness(entities, stac_query, natural_query)
-                
+                analysis = self.query_checker.analyze_query_completeness(
+                    entities, stac_query, natural_query
+                )
+
                 # Generate clarification questions if query quality is poor
                 if analysis["needs_clarification"]:
-                    clarification_questions = self.query_checker.generate_clarification_questions(analysis, natural_query)
-            
+                    clarification_questions = (
+                        self.query_checker.generate_clarification_questions(
+                            analysis, natural_query
+                        )
+                    )
+
             # ========================================================================
             # Calculate overall confidence
             # ========================================================================
-            
+
             overall_confidence = 0.9  # High confidence with new agent system
-            
+
             # Build result
             # Build location_info dict from extracted data
             location_info = {
-                "name": location_name if location_name else stac_query.get("location_name"),
-                "bbox": bbox
+                "name": (
+                    location_name if location_name else stac_query.get("location_name")
+                ),
+                "bbox": bbox,
             }
-            
+
             result = {
                 **stac_query,
                 "confidence": overall_confidence,
@@ -5886,72 +7094,104 @@ Location to analyze: {location_name}"""
                 "translation_method": "semantic_kernel",
                 "analysis": analysis,
                 "clarification_questions": clarification_questions,
-                "needs_clarification": analysis["needs_clarification"]
+                "needs_clarification": analysis["needs_clarification"],
             }
-            
+
             # [TARGET] Add GEOINT processing information if this is a hybrid query
-            geoint_processing = entities.get('geoint_processing')
+            geoint_processing = entities.get("geoint_processing")
             if geoint_processing:
-                logger.info(f"[MAP] Adding GEOINT processing metadata for {geoint_processing['analysis_type']}")
-                
+                logger.info(
+                    f"[MAP] Adding GEOINT processing metadata for {geoint_processing['analysis_type']}"
+                )
+
                 # Add GEOINT metadata to the result
-                result['geoint_analysis'] = {
-                    'required': True,
-                    'analysis_type': geoint_processing['analysis_type'],
-                    'confidence': geoint_processing['confidence'],
-                    'detection_method': geoint_processing['detection_method'],
-                    'parameters': self._extract_geoint_parameters(natural_query, geoint_processing['analysis_type']),
-                    'recommended_collections': self._get_geoint_recommended_collections(geoint_processing['analysis_type'])
+                result["geoint_analysis"] = {
+                    "required": True,
+                    "analysis_type": geoint_processing["analysis_type"],
+                    "confidence": geoint_processing["confidence"],
+                    "detection_method": geoint_processing["detection_method"],
+                    "parameters": self._extract_geoint_parameters(
+                        natural_query, geoint_processing["analysis_type"]
+                    ),
+                    "recommended_collections": self._get_geoint_recommended_collections(
+                        geoint_processing["analysis_type"]
+                    ),
                 }
-                
+
                 # Modify the reasoning to indicate hybrid processing
-                result['reasoning'] = f"{result['reasoning']} + GEOINT {geoint_processing['analysis_type']} analysis"
-                
+                result["reasoning"] = (
+                    f"{result['reasoning']} + GEOINT {geoint_processing['analysis_type']} analysis"
+                )
+
                 # Ensure elevation data collections are included for GEOINT processing
-                current_collections = result.get('collections', [])
-                elevation_collections = ['cop-dem-glo-30', 'nasadem', 'cop-dem-glo-90']
-                
+                current_collections = result.get("collections", [])
+                elevation_collections = ["cop-dem-glo-30", "nasadem", "cop-dem-glo-90"]
+
                 # Add elevation collections if not already present and relevant for the analysis
-                if geoint_processing['analysis_type'] in ['terrain_analysis', 'mobility_analysis', 'line_of_sight', 'elevation_profile']:
+                if geoint_processing["analysis_type"] in [
+                    "terrain_analysis",
+                    "mobility_analysis",
+                    "line_of_sight",
+                    "elevation_profile",
+                ]:
                     for elev_collection in elevation_collections:
                         if elev_collection not in current_collections:
                             current_collections.append(elev_collection)
-                            logger.info(f"[CHART] Added elevation collection for GEOINT: {elev_collection}")
-                    
-                    result['collections'] = current_collections
-                
-                logger.info(f"[OK] Hybrid STAC + GEOINT query prepared: {len(current_collections)} collections + {geoint_processing['analysis_type']} analysis")
-            
+                            logger.info(
+                                f"[CHART] Added elevation collection for GEOINT: {elev_collection}"
+                            )
+
+                    result["collections"] = current_collections
+
+                logger.info(
+                    f"[OK] Hybrid STAC + GEOINT query prepared: {len(current_collections)} collections + {geoint_processing['analysis_type']} analysis"
+                )
+
             elapsed_total = time.perf_counter() - start_total
             elapsed_total_ms = elapsed_total * 1000
-            
+
             # [SEARCH] PIPELINE LOG: Final Result
-            log_pipeline_step(session_id, "RESULT", "OUTPUT", {
-                "success": True,
-                "bbox": result.get("bbox"),
-                "location_name": result.get("location_name") or result.get("extracted_entities", {}).get("location", {}).get("name"),
-                "collections": result.get("collections"),
-                "datetime": result.get("datetime"),
-                "confidence": overall_confidence,
-                "geoint_analysis": bool(result.get("geoint_analysis"))
-            }, elapsed_total_ms)
-            
-            logger.info(f"Translation successful with confidence {overall_confidence:.2f}")
+            log_pipeline_step(
+                session_id,
+                "RESULT",
+                "OUTPUT",
+                {
+                    "success": True,
+                    "bbox": result.get("bbox"),
+                    "location_name": result.get("location_name")
+                    or result.get("extracted_entities", {})
+                    .get("location", {})
+                    .get("name"),
+                    "collections": result.get("collections"),
+                    "datetime": result.get("datetime"),
+                    "confidence": overall_confidence,
+                    "geoint_analysis": bool(result.get("geoint_analysis")),
+                },
+                elapsed_total_ms,
+            )
+
+            logger.info(
+                f"Translation successful with confidence {overall_confidence:.2f}"
+            )
             logger.info(f"[TIME] TOTAL TRANSLATION TIME: {elapsed_total:.2f}s")
             logger.info("=" * 80)
             return result
-            
+
         except ValueError as ve:
             # Handle specific location requirement error
             if "LOCATION_REQUIRED" in str(ve):
-                logger.warning(f"[WARN] Location required but not found in query: '{natural_query}'")
-                
+                logger.warning(
+                    f"[WARN] Location required but not found in query: '{natural_query}'"
+                )
+
                 # [SEARCH] PIPELINE LOG: Error
-                log_pipeline_step(session_id, "RESULT", "ERROR", {
-                    "error": "LOCATION_REQUIRED",
-                    "query": natural_query
-                })
-                
+                log_pipeline_step(
+                    session_id,
+                    "RESULT",
+                    "ERROR",
+                    {"error": "LOCATION_REQUIRED", "query": natural_query},
+                )
+
                 # Return special response structure that caller can detect
                 return {
                     "error": "LOCATION_REQUIRED",
@@ -5960,221 +7200,268 @@ Location to analyze: {location_name}"""
                     "suggestions": [
                         "Try adding a location like 'Seattle', 'California', or 'New York'",
                         "Example: 'Show me Landsat imagery of Seattle from 2024'",
-                        "Example: 'HLS imagery for France vineyards'"
-                    ]
+                        "Example: 'HLS imagery for France vineyards'",
+                    ],
                 }
             else:
                 # Re-raise other ValueErrors
                 raise
-            
+
         except Exception as e:
             logger.error(f"Translation failed: {e}")
-            
+
             # Enhanced error response with context preservation
             error_context = {
                 "original_query": natural_query,
                 "error_type": type(e).__name__,
                 "error_message": str(e),
                 "attempted_extraction": "Translation failed - try rephrasing your query",
-                "suggestions": []
+                "suggestions": [],
             }
-            
+
             # Add specific suggestions based on error type
             if "location" in str(e).lower():
-                error_context["suggestions"].append("Try specifying a more well-known location (e.g., 'California', 'Houston, Texas')")
+                error_context["suggestions"].append(
+                    "Try specifying a more well-known location (e.g., 'California', 'Houston, Texas')"
+                )
             if "timeout" in str(e).lower():
-                error_context["suggestions"].append("The service is experiencing delays. Please try again in a moment.")
+                error_context["suggestions"].append(
+                    "The service is experiencing delays. Please try again in a moment."
+                )
             if "json" in str(e).lower() or "parse" in str(e).lower():
-                error_context["suggestions"].append("There was an issue processing your query. Try rephrasing with simpler terms.")
-            
+                error_context["suggestions"].append(
+                    "There was an issue processing your query. Try rephrasing with simpler terms."
+                )
+
             # Always provide helpful suggestions
             if not error_context["suggestions"]:
                 error_context["suggestions"] = [
                     "Try being more specific about the location and time period",
                     "Use common location names (cities, states, countries)",
-                    "Specify the type of disaster or analysis you need"
+                    "Specify the type of disaster or analysis you need",
                 ]
-            
-            raise Exception(f"Semantic translation failed with context: {json.dumps(error_context, indent=2)}")
-    
-    def _build_reasoning(self, entities: Dict[str, Any], location_info: Dict[str, Any]) -> str:
+
+            raise Exception(
+                f"Semantic translation failed with context: {json.dumps(error_context, indent=2)}"
+            )
+
+    def _build_reasoning(
+        self, entities: Dict[str, Any], location_info: Dict[str, Any]
+    ) -> str:
         """Build human-readable reasoning for the translation"""
-        
+
         parts = []
-        
+
         disaster_type = entities.get("disaster", {}).get("type")
         if disaster_type:
             parts.append(f"{disaster_type} analysis")
-        
+
         location_name = location_info.get("name")
         if location_name:
             parts.append(f"for {location_name}")
-        
+
         temporal = entities.get("temporal", {})
         if temporal.get("year"):
             parts.append(f"in {temporal['year']}")
         elif temporal.get("season"):
             parts.append(f"during {temporal['season']}")
-        
+
         if not parts:
             parts.append("general satellite imagery analysis")
-        
+
         return "Semantic Kernel extraction: " + " ".join(parts)
-    
+
     def _prepare_geoint_summary(self, geoint_results: Dict[str, Any]) -> str:
         """
         Format GEOINT analysis results for inclusion in GPT-4 response generation prompt.
-        
+
         This method extracts numerical metrics and analysis results to enable
         context-aware chat responses with specific measurements and statistics.
-        
+
         Example: Instead of "Here is elevation data" -> "The highest peak is 2,500m at North Rim"
         """
-        if not geoint_results or not geoint_results.get('success'):
+        if not geoint_results or not geoint_results.get("success"):
             return "No GEOINT analysis results available"
-        
-        analysis_type = geoint_results.get('analysis_type', 'unknown')
-        results = geoint_results.get('results', {})
-        
+
+        analysis_type = geoint_results.get("analysis_type", "unknown")
+        results = geoint_results.get("results", {})
+
         summary_parts = []
-        
-        if analysis_type == 'terrain_analysis':
+
+        if analysis_type == "terrain_analysis":
             # Extract elevation statistics
-            elevation_stats = results.get('elevation_statistics', {})
+            elevation_stats = results.get("elevation_statistics", {})
             if elevation_stats:
-                min_elev = elevation_stats.get('min_elevation', 0)
-                max_elev = elevation_stats.get('max_elevation', 0)
-                mean_elev = elevation_stats.get('mean_elevation', 0)
-                
-                summary_parts.append(f"- Elevation range: {min_elev:.1f}m to {max_elev:.1f}m (mean: {mean_elev:.1f}m)")
-                
+                min_elev = elevation_stats.get("min_elevation", 0)
+                max_elev = elevation_stats.get("max_elevation", 0)
+                mean_elev = elevation_stats.get("mean_elevation", 0)
+
+                summary_parts.append(
+                    f"- Elevation range: {min_elev:.1f}m to {max_elev:.1f}m (mean: {mean_elev:.1f}m)"
+                )
+
                 # Peak location
-                peak_loc = elevation_stats.get('peak_location', {})
+                peak_loc = elevation_stats.get("peak_location", {})
                 if peak_loc:
-                    peak_lat = peak_loc.get('latitude', 0)
-                    peak_lon = peak_loc.get('longitude', 0)
-                    peak_elev = peak_loc.get('elevation', 0)
-                    summary_parts.append(f"- Highest peak: {peak_elev:.1f}m at ({peak_lat:.4f}°, {peak_lon:.4f}°)")
-            
+                    peak_lat = peak_loc.get("latitude", 0)
+                    peak_lon = peak_loc.get("longitude", 0)
+                    peak_elev = peak_loc.get("elevation", 0)
+                    summary_parts.append(
+                        f"- Highest peak: {peak_elev:.1f}m at ({peak_lat:.4f}°, {peak_lon:.4f}°)"
+                    )
+
             # Slope analysis
-            slope_analysis = results.get('slope_analysis', {})
+            slope_analysis = results.get("slope_analysis", {})
             if slope_analysis:
-                mean_slope = slope_analysis.get('mean_slope', 0)
-                max_slope = slope_analysis.get('max_slope', 0)
-                summary_parts.append(f"- Slope: mean {mean_slope:.1f}°, max {max_slope:.1f}°")
-                
-                slope_classes = slope_analysis.get('slope_classes', {})
+                mean_slope = slope_analysis.get("mean_slope", 0)
+                max_slope = slope_analysis.get("max_slope", 0)
+                summary_parts.append(
+                    f"- Slope: mean {mean_slope:.1f}°, max {max_slope:.1f}°"
+                )
+
+                slope_classes = slope_analysis.get("slope_classes", {})
                 if slope_classes:
-                    class_strs = [f"{name}: {data.get('percentage', 0):.1f}%" 
-                                 for name, data in slope_classes.items() if data.get('percentage', 0) > 5]
+                    class_strs = [
+                        f"{name}: {data.get('percentage', 0):.1f}%"
+                        for name, data in slope_classes.items()
+                        if data.get("percentage", 0) > 5
+                    ]
                     if class_strs:
-                        summary_parts.append(f"- Slope distribution: {', '.join(class_strs)}")
-            
+                        summary_parts.append(
+                            f"- Slope distribution: {', '.join(class_strs)}"
+                        )
+
             # Roughness
-            roughness = results.get('roughness_index')
+            roughness = results.get("roughness_index")
             if roughness:
                 summary_parts.append(f"- Terrain roughness index: {roughness:.2f}")
-        
-        elif analysis_type == 'mobility_analysis':
+
+        elif analysis_type == "mobility_analysis":
             # Extract mobility zones
-            mobility_zones = results.get('mobility_zones', {})
+            mobility_zones = results.get("mobility_zones", {})
             if mobility_zones:
-                go_zones = mobility_zones.get('go_zones', {})
-                slow_go = mobility_zones.get('slow_go_zones', {})
-                no_go = mobility_zones.get('no_go_zones', {})
-                
+                go_zones = mobility_zones.get("go_zones", {})
+                slow_go = mobility_zones.get("slow_go_zones", {})
+                no_go = mobility_zones.get("no_go_zones", {})
+
                 if go_zones:
-                    summary_parts.append(f"- Accessible terrain (Go zones): {go_zones.get('percentage', 0):.1f}% ({go_zones.get('area_km2', 0):.1f} km²)")
+                    summary_parts.append(
+                        f"- Accessible terrain (Go zones): {go_zones.get('percentage', 0):.1f}% ({go_zones.get('area_km2', 0):.1f} km²)"
+                    )
                 if slow_go:
-                    summary_parts.append(f"- Reduced mobility (Slow-Go): {slow_go.get('percentage', 0):.1f}% ({slow_go.get('area_km2', 0):.1f} km²)")
+                    summary_parts.append(
+                        f"- Reduced mobility (Slow-Go): {slow_go.get('percentage', 0):.1f}% ({slow_go.get('area_km2', 0):.1f} km²)"
+                    )
                 if no_go:
-                    summary_parts.append(f"- Impassable terrain (No-Go): {no_go.get('percentage', 0):.1f}% ({no_go.get('area_km2', 0):.1f} km²)")
-            
-            recommended_routes = results.get('recommended_routes', [])
+                    summary_parts.append(
+                        f"- Impassable terrain (No-Go): {no_go.get('percentage', 0):.1f}% ({no_go.get('area_km2', 0):.1f} km²)"
+                    )
+
+            recommended_routes = results.get("recommended_routes", [])
             if recommended_routes:
-                summary_parts.append(f"- Recommended routes: {', '.join(recommended_routes)}")
-        
-        elif analysis_type == 'elevation_profile':
+                summary_parts.append(
+                    f"- Recommended routes: {', '.join(recommended_routes)}"
+                )
+
+        elif analysis_type == "elevation_profile":
             # Extract profile statistics
-            statistics = results.get('statistics', {})
+            statistics = results.get("statistics", {})
             if statistics:
-                min_elev = statistics.get('min_elevation', 0)
-                max_elev = statistics.get('max_elevation', 0)
-                ascent = statistics.get('total_ascent', 0)
-                descent = statistics.get('total_descent', 0)
-                
-                summary_parts.append(f"- Elevation profile: {min_elev:.1f}m to {max_elev:.1f}m")
-                summary_parts.append(f"- Total ascent: {ascent:.1f}m, descent: {descent:.1f}m")
-            
-            profile_path = results.get('profile_path', {})
+                min_elev = statistics.get("min_elevation", 0)
+                max_elev = statistics.get("max_elevation", 0)
+                ascent = statistics.get("total_ascent", 0)
+                descent = statistics.get("total_descent", 0)
+
+                summary_parts.append(
+                    f"- Elevation profile: {min_elev:.1f}m to {max_elev:.1f}m"
+                )
+                summary_parts.append(
+                    f"- Total ascent: {ascent:.1f}m, descent: {descent:.1f}m"
+                )
+
+            profile_path = results.get("profile_path", {})
             if profile_path:
-                num_samples = profile_path.get('num_samples', 0)
+                num_samples = profile_path.get("num_samples", 0)
                 summary_parts.append(f"- Profile samples: {num_samples} points")
-        
-        elif analysis_type == 'line_of_sight':
-            observer = results.get('observer_location', {})
+
+        elif analysis_type == "line_of_sight":
+            observer = results.get("observer_location", {})
             if observer:
-                obs_lat = observer.get('latitude', 0)
-                obs_lon = observer.get('longitude', 0)
-                obs_height = observer.get('height_agl', 0)
-                summary_parts.append(f"- Observer: ({obs_lat:.4f}°, {obs_lon:.4f}°) @ {obs_height}m AGL")
-            
-            viewshed = results.get('viewshed_analysis', {})
+                obs_lat = observer.get("latitude", 0)
+                obs_lon = observer.get("longitude", 0)
+                obs_height = observer.get("height_agl", 0)
+                summary_parts.append(
+                    f"- Observer: ({obs_lat:.4f}°, {obs_lon:.4f}°) @ {obs_height}m AGL"
+                )
+
+            viewshed = results.get("viewshed_analysis", {})
             if viewshed:
-                visible_area = viewshed.get('visible_area_km2', 0)
-                visible_pct = viewshed.get('visible_percentage', 0)
-                summary_parts.append(f"- Visible area: {visible_area:.1f} km² ({visible_pct:.1f}%)")
-        
+                visible_area = viewshed.get("visible_area_km2", 0)
+                visible_pct = viewshed.get("visible_percentage", 0)
+                summary_parts.append(
+                    f"- Visible area: {visible_area:.1f} km² ({visible_pct:.1f}%)"
+                )
+
         if not summary_parts:
             return f"GEOINT {analysis_type} analysis completed (no detailed metrics available)"
-        
+
         return "\n".join(summary_parts)
 
-    
-    async def generate_contextual_earth_science_response(self, natural_query: str, classification: Dict[str, Any], stac_response: Optional[Dict[str, Any]] = None, geoint_results: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def generate_contextual_earth_science_response(
+        self,
+        natural_query: str,
+        classification: Dict[str, Any],
+        stac_response: Optional[Dict[str, Any]] = None,
+        geoint_results: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Generate comprehensive contextual Earth science response with optional satellite data integration and GEOINT analysis results"""
-        
+
         # Ensure kernel is initialized
         await self._ensure_kernel_initialized()
-        
+
         if not self._kernel_initialized or self.kernel is None:
-            return await self._fallback_contextual_response(natural_query, classification, stac_response)
-        
+            return await self._fallback_contextual_response(
+                natural_query, classification, stac_response
+            )
+
         try:
             # Create classification-based prompt (uses the 3-template system!)
             response_prompt = self._create_response_generation_prompt(classification)
-            
+
             # Prepare data summary for the template system
             stac_data_summary = self._prepare_stac_data_summary(
-                stac_response.get("results", {}).get("features", []) if stac_response else [],
-                stac_response.get("results", {}) if stac_response else {}
+                (
+                    stac_response.get("results", {}).get("features", [])
+                    if stac_response
+                    else []
+                ),
+                stac_response.get("results", {}) if stac_response else {},
             )
-            
+
             # � ADD CLOUD FILTER WARNING if user requested cloud filtering but collections don't support it
-            if classification.get('cloud_filter_unavailable'):
-                cloud_warning = classification['cloud_filter_unavailable']
+            if classification.get("cloud_filter_unavailable"):
+                cloud_warning = classification["cloud_filter_unavailable"]
                 warning_text = f"\n\n**[WARN] IMPORTANT NOTE ABOUT CLOUD COVER:**\nThe user requested imagery with ≤{cloud_warning['requested_threshold']}% cloud cover, but the selected collections ({', '.join(cloud_warning['collections'])}) do not have cloud cover metadata. {cloud_warning['reason']}. The search returned results without cloud filtering. In your response, explain this limitation clearly and suggest alternative collections if cloud-free imagery is important (e.g., Sentinel-2, Landsat, or HLS)."
                 stac_data_summary = f"{stac_data_summary}{warning_text}"
-                logger.info(f"[NOTE] Added cloud filter warning to response context")
-            
+                logger.info("[NOTE] Added cloud filter warning to response context")
+
             # �[MICRO] INTEGRATE GEOINT ANALYSIS RESULTS INTO RESPONSE CONTEXT
-            if geoint_results and geoint_results.get('success'):
-                logger.info("[CHART] Integrating GEOINT analysis results into response context")
+            if geoint_results and geoint_results.get("success"):
+                logger.info(
+                    "[CHART] Integrating GEOINT analysis results into response context"
+                )
                 geoint_summary = self._prepare_geoint_summary(geoint_results)
                 stac_data_summary = f"{stac_data_summary}\n\n**GEOINT ANALYSIS RESULTS:**\n{geoint_summary}"
-                logger.info(f"[OK] Enhanced context with GEOINT metrics")
-            
-            # Get conversation context if available  
+                logger.info("[OK] Enhanced context with GEOINT metrics")
+
+            # Get conversation context if available
             conversation_context = ""
-            
+
             # Generate response using the 3-template system
             response_content = await self._generate_response_with_sk(
-                response_prompt,
-                natural_query,
-                stac_data_summary,
-                conversation_context
+                response_prompt, natural_query, stac_data_summary, conversation_context
             )
-            
+
             # Determine map data if available
             map_data = None
             if stac_response and stac_response.get("success"):
@@ -6184,37 +7471,40 @@ Location to analyze: {location_name}"""
                         "features": features,
                         "bbox": self._extract_bbox_from_features(features),
                         "center": self._calculate_center_from_features(features),
-                        "zoom": self._calculate_appropriate_zoom(features)
+                        "zoom": self._calculate_appropriate_zoom(features),
                     }
-            
+
             return {
                 "message": response_content,
                 "query_type": "contextual_earth_science",
-                "has_satellite_data": stac_response is not None and stac_response.get("success", False),
+                "has_satellite_data": stac_response is not None
+                and stac_response.get("success", False),
                 "has_contextual_analysis": True,
                 "map_data": map_data,
                 "location_focus": classification.get("location_focus"),
                 "temporal_focus": classification.get("temporal_focus"),
-                "disaster_or_event": classification.get("disaster_or_event")
+                "disaster_or_event": classification.get("disaster_or_event"),
             }
-            
+
         except Exception as e:
             logger.error(f"Contextual Earth science response generation failed: {e}")
-            return await self._fallback_contextual_response(natural_query, classification, stac_response)
-    
+            return await self._fallback_contextual_response(
+                natural_query, classification, stac_response
+            )
+
     async def generate_empty_result_response(
-        self, 
-        natural_query: str, 
+        self,
+        natural_query: str,
         stac_query: Dict[str, Any],
         collections: List[str],
-        diagnostics: Dict[str, Any]
+        diagnostics: Dict[str, Any],
     ) -> str:
         """
         [NEW] Generate intelligent, context-aware response for empty results using GPT.
-        
+
         Analyzes the specific failure point (STAC API, spatial filter, tile selection)
         and provides actionable, query-specific recommendations.
-        
+
         Args:
             natural_query: Original user query
             stac_query: The STAC query that was executed (with all filters)
@@ -6225,40 +7515,46 @@ Location to analyze: {location_name}"""
                 "final_count": int,            # After tile selection
                 "failure_stage": str           # Where it failed
             }
-        
+
         Returns:
             Natural language response with specific suggestions
         """
         # Ensure kernel is initialized
         await self._ensure_kernel_initialized()
-        
+
         if not self._kernel_initialized or self.kernel is None:
-            logger.warning("[WARN] Semantic Kernel not available for empty result response, using fallback")
-            return self._fallback_empty_result_response(natural_query, stac_query, collections, diagnostics)
-        
+            logger.warning(
+                "[WARN] Semantic Kernel not available for empty result response, using fallback"
+            )
+            return self._fallback_empty_result_response(
+                natural_query, stac_query, collections, diagnostics
+            )
+
         try:
             logger.info("[BOT] Generating GPT-powered empty result response")
-            
+
             # Build diagnostic context for GPT
-            diagnostic_context = self._build_diagnostic_context(natural_query, stac_query, collections, diagnostics)
-            
+            diagnostic_context = self._build_diagnostic_context(
+                natural_query, stac_query, collections, diagnostics
+            )
+
             # Create prompt for empty result analysis
             empty_result_prompt = self._create_empty_result_prompt()
-            
+
             # Generate response using Semantic Kernel
             response_content = await self._generate_empty_result_with_sk(
-                empty_result_prompt,
-                natural_query,
-                diagnostic_context
+                empty_result_prompt, natural_query, diagnostic_context
             )
-            
+
             logger.info("[OK] GPT-generated empty result response created")
             return response_content
-            
+
         except Exception as e:
             logger.error(f"[FAIL] GPT empty result generation failed: {e}")
-            return self._fallback_empty_result_response(natural_query, stac_query, collections, diagnostics)
-    
+            return self._fallback_empty_result_response(
+                natural_query, stac_query, collections, diagnostics
+            )
+
     async def generate_alternative_result_response(
         self,
         natural_query: str,
@@ -6267,14 +7563,14 @@ Location to analyze: {location_name}"""
         original_filters: Dict[str, Any],
         alternative_filters: Dict[str, Any],
         explanation: str,
-        geoint_results: Optional[Dict[str, Any]] = None
+        geoint_results: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         [NEW] Generate response explaining that alternative results are being shown.
-        
+
         This is called when the original query returned no results, but we successfully
         found alternatives by relaxing filters (cloud cover, date range, collections).
-        
+
         Args:
             natural_query: Original user query
             classification: Query classification
@@ -6283,72 +7579,82 @@ Location to analyze: {location_name}"""
             alternative_filters: What was actually used to find results
             explanation: Technical explanation of what was changed
             geoint_results: Optional GEOINT analysis results
-        
+
         Returns:
             Dict with message explaining the alternative results shown
         """
         # Ensure kernel is initialized
         await self._ensure_kernel_initialized()
-        
+
         if not self._kernel_initialized or self.kernel is None:
             return await self._fallback_alternative_response(
-                natural_query, stac_response, original_filters, alternative_filters, explanation
+                natural_query,
+                stac_response,
+                original_filters,
+                alternative_filters,
+                explanation,
             )
-        
+
         try:
-            logger.info("[INFO] Generating GPT-powered alternative result explanation...")
-            
+            logger.info(
+                "[INFO] Generating GPT-powered alternative result explanation..."
+            )
+
             # Build context for GPT
             alternative_context = self._build_alternative_context(
                 natural_query,
                 original_filters,
                 alternative_filters,
                 explanation,
-                stac_response.get("results", {}).get("features", [])
+                stac_response.get("results", {}).get("features", []),
             )
-            
+
             # Create prompt for alternative result explanation
             alternative_prompt = self._create_alternative_result_prompt()
-            
+
             # Prepare data summary
             stac_data_summary = self._prepare_stac_data_summary(
                 stac_response.get("results", {}).get("features", []),
-                stac_response.get("results", {})
+                stac_response.get("results", {}),
             )
-            
+
             # Add GEOINT results if available
-            if geoint_results and geoint_results.get('success'):
+            if geoint_results and geoint_results.get("success"):
                 geoint_summary = self._prepare_geoint_summary(geoint_results)
                 stac_data_summary = f"{stac_data_summary}\n\n**GEOINT ANALYSIS RESULTS:**\n{geoint_summary}"
-            
+
             # Generate response using Semantic Kernel
             response_content = await self._generate_alternative_with_sk(
                 alternative_prompt,
                 natural_query,
                 alternative_context,
-                stac_data_summary
+                stac_data_summary,
             )
-            
+
             logger.info("[OK] GPT-generated alternative result explanation created")
-            
+
             return {
                 "message": response_content,
                 "query_type": "alternative_results",
                 "has_satellite_data": True,
                 "showing_alternatives": True,
                 "original_filters": original_filters,
-                "alternative_filters": alternative_filters
+                "alternative_filters": alternative_filters,
             }
-            
+
         except Exception as e:
             logger.error(f"[FAIL] GPT alternative explanation generation failed: {e}")
             return await self._fallback_alternative_response(
-                natural_query, stac_response, original_filters, alternative_filters, explanation
+                natural_query,
+                stac_response,
+                original_filters,
+                alternative_filters,
+                explanation,
             )
-    
+
     def _create_alternative_result_prompt(self) -> str:
         """Create prompt template for GPT to explain alternative results"""
-        
+
         return """
         You are an expert Earth observation specialist helping users understand why their exact search didn't work, 
         but showing them the best available alternative instead.
@@ -6387,54 +7693,76 @@ Location to analyze: {location_name}"""
         
         Generate a clear, helpful explanation of the alternative results being shown:
         """
-    
+
     def _build_alternative_context(
         self,
         natural_query: str,
         original_filters: Dict[str, Any],
         alternative_filters: Dict[str, Any],
         explanation: str,
-        features: List[Dict]
+        features: List[Dict],
     ) -> str:
         """Build context explaining what alternative was used"""
-        
+
         context_parts = []
-        
-        context_parts.append(f"**What user originally requested:**")
-        
+
+        context_parts.append("**What user originally requested:**")
+
         # Original filters
         if original_filters.get("cloud_cover"):
-            context_parts.append(f"  - Cloud cover: <{original_filters['cloud_cover']}%")
+            context_parts.append(
+                f"  - Cloud cover: <{original_filters['cloud_cover']}%"
+            )
         if original_filters.get("datetime"):
             context_parts.append(f"  - Date range: {original_filters['datetime']}")
         if original_filters.get("collections"):
-            context_parts.append(f"  - Collections: {', '.join(original_filters['collections'])}")
-        
-        context_parts.append(f"\n**Why original request had no results:**")
+            context_parts.append(
+                f"  - Collections: {', '.join(original_filters['collections'])}"
+            )
+
+        context_parts.append("\n**Why original request had no results:**")
         context_parts.append(f"  {explanation}")
-        
-        context_parts.append(f"\n**What alternative is being shown instead:**")
-        
+
+        context_parts.append("\n**What alternative is being shown instead:**")
+
         # Alternative filters
-        if alternative_filters.get("cloud_cover") and alternative_filters["cloud_cover"] != original_filters.get("cloud_cover"):
-            context_parts.append(f"  - Cloud cover: <{alternative_filters['cloud_cover']}% (relaxed from <{original_filters.get('cloud_cover')}%)")
-        
-        if alternative_filters.get("datetime") and alternative_filters["datetime"] != original_filters.get("datetime"):
+        if alternative_filters.get("cloud_cover") and alternative_filters[
+            "cloud_cover"
+        ] != original_filters.get("cloud_cover"):
+            context_parts.append(
+                f"  - Cloud cover: <{alternative_filters['cloud_cover']}% (relaxed from <{original_filters.get('cloud_cover')}%)"
+            )
+
+        if alternative_filters.get("datetime") and alternative_filters[
+            "datetime"
+        ] != original_filters.get("datetime"):
             days_expanded = alternative_filters.get("days_expanded", "")
             if days_expanded:
-                context_parts.append(f"  - Date range: Expanded to {days_expanded} days")
+                context_parts.append(
+                    f"  - Date range: Expanded to {days_expanded} days"
+                )
             else:
-                context_parts.append(f"  - Date range: {alternative_filters['datetime']}")
-        
-        if alternative_filters.get("collections") and alternative_filters["collections"] != original_filters.get("collections"):
-            context_parts.append(f"  - Collections: {', '.join(alternative_filters['collections'])} (changed from {', '.join(original_filters.get('collections', []))})")
-        
+                context_parts.append(
+                    f"  - Date range: {alternative_filters['datetime']}"
+                )
+
+        if alternative_filters.get("collections") and alternative_filters[
+            "collections"
+        ] != original_filters.get("collections"):
+            context_parts.append(
+                f"  - Collections: {', '.join(alternative_filters['collections'])} (changed from {', '.join(original_filters.get('collections', []))})"
+            )
+
         # Feature summary
-        context_parts.append(f"\n**Alternative results found:**")
+        context_parts.append("\n**Alternative results found:**")
         context_parts.append(f"  - {len(features)} satellite images")
-        
+
         if features:
-            dates = [f.get("properties", {}).get("datetime", "") for f in features if f.get("properties", {}).get("datetime")]
+            dates = [
+                f.get("properties", {}).get("datetime", "")
+                for f in features
+                if f.get("properties", {}).get("datetime")
+            ]
             if dates:
                 earliest = min(dates)[:10]
                 latest = max(dates)[:10]
@@ -6442,18 +7770,18 @@ Location to analyze: {location_name}"""
                     context_parts.append(f"  - Date: {earliest}")
                 else:
                     context_parts.append(f"  - Date range: {earliest} to {latest}")
-        
+
         return "\n".join(context_parts)
-    
+
     async def _generate_alternative_with_sk(
         self,
         prompt_template: str,
         user_query: str,
         alternative_context: str,
-        data_summary: str
+        data_summary: str,
     ) -> str:
         """Generate alternative result explanation using Semantic Kernel"""
-        
+
         try:
             # Create prompt configuration
             prompt_config = PromptTemplateConfig(
@@ -6461,39 +7789,49 @@ Location to analyze: {location_name}"""
                 name="generate_alternative_result_response",
                 template_format="semantic-kernel",
                 input_variables=[
-                    InputVariable(name="user_query", description="The user's original query"),
-                    InputVariable(name="alternative_context", description="Context about what alternative is being shown"),
-                    InputVariable(name="data_summary", description="Summary of the alternative data being displayed")
-                ]
+                    InputVariable(
+                        name="user_query", description="The user's original query"
+                    ),
+                    InputVariable(
+                        name="alternative_context",
+                        description="Context about what alternative is being shown",
+                    ),
+                    InputVariable(
+                        name="data_summary",
+                        description="Summary of the alternative data being displayed",
+                    ),
+                ],
             )
-            
+
             # Create function
             alternative_function = KernelFunction.from_prompt(
                 prompt_template_config=prompt_config,
                 function_name="generate_alternative_result_response",
-                plugin_name="semantic_translator"
+                plugin_name="semantic_translator",
             )
-            
+
             # Execute with timeout
             arguments = KernelArguments(
                 user_query=user_query,
                 alternative_context=alternative_context,
-                data_summary=data_summary
+                data_summary=data_summary,
             )
-            
+
             result = await asyncio.wait_for(
                 self.kernel.invoke(alternative_function, arguments=arguments),
-                timeout=20.0
+                timeout=20.0,
             )
-            
+
             # Extract response content
             response_content = self._extract_clean_content_from_sk_result(result)
-            
+
             # Validate content
             if not response_content or response_content.strip() == "":
-                logger.warning("Empty content returned from GPT for alternative, using fallback")
-                return f"I couldn't find exactly what you requested, but I'm showing you similar imagery that's available for this location."
-            
+                logger.warning(
+                    "Empty content returned from GPT for alternative, using fallback"
+                )
+                return "I couldn't find exactly what you requested, but I'm showing you similar imagery that's available for this location."
+
             # Clean up response - handle both single and double quotes
             response_content = response_content.strip()
             # Remove double-double quotes: ""content""
@@ -6502,51 +7840,57 @@ Location to analyze: {location_name}"""
             # Remove single quotes: "content"
             elif response_content.startswith('"') and response_content.endswith('"'):
                 response_content = response_content[1:-1]
-            
+
             return response_content
-            
+
         except Exception as e:
             logger.error(f"Alternative explanation SK generation failed: {e}")
             raise
-    
+
     async def _fallback_alternative_response(
         self,
         natural_query: str,
         stac_response: Dict[str, Any],
         original_filters: Dict[str, Any],
         alternative_filters: Dict[str, Any],
-        explanation: str
+        explanation: str,
     ) -> Dict[str, Any]:
         """Fallback alternative explanation when GPT unavailable"""
-        
+
         features = stac_response.get("results", {}).get("features", [])
-        
+
         # Build simple explanation
         message_parts = []
-        message_parts.append(f"I couldn't find imagery exactly matching your request")
-        
+        message_parts.append("I couldn't find imagery exactly matching your request")
+
         # Explain what changed
-        if alternative_filters.get("cloud_cover") and alternative_filters["cloud_cover"] != original_filters.get("cloud_cover"):
-            message_parts.append(f"with <{original_filters.get('cloud_cover')}% cloud cover")
-        
+        if alternative_filters.get("cloud_cover") and alternative_filters[
+            "cloud_cover"
+        ] != original_filters.get("cloud_cover"):
+            message_parts.append(
+                f"with <{original_filters.get('cloud_cover')}% cloud cover"
+            )
+
         message_parts.append(f", but I'm showing you {len(features)} similar images")
-        
+
         if alternative_filters.get("cloud_cover"):
-            message_parts.append(f"with up to {alternative_filters['cloud_cover']}% cloud cover instead")
-        
+            message_parts.append(
+                f"with up to {alternative_filters['cloud_cover']}% cloud cover instead"
+            )
+
         message_parts.append(".")
-        
+
         return {
             "message": " ".join(message_parts),
             "query_type": "alternative_results",
             "has_satellite_data": True,
             "showing_alternatives": True,
-            "fallback_used": True
+            "fallback_used": True,
         }
-    
+
     def _create_empty_result_prompt(self) -> str:
         """Create prompt template for GPT-powered empty result responses"""
-        
+
         return """
         You are an expert Earth observation data specialist helping users understand why their satellite imagery search returned no results.
         
@@ -6576,34 +7920,36 @@ Location to analyze: {location_name}"""
         
         Generate a helpful response explaining why no results were found and how to adjust the search:
         """
-    
+
     def _build_diagnostic_context(
         self,
         natural_query: str,
         stac_query: Dict[str, Any],
         collections: List[str],
-        diagnostics: Dict[str, Any]
+        diagnostics: Dict[str, Any],
     ) -> str:
         """Build detailed diagnostic context for GPT to analyze"""
-        
+
         context_parts = []
-        
+
         # Failure stage analysis
         failure_stage = diagnostics.get("failure_stage", "unknown")
         raw_count = diagnostics.get("raw_count", 0)
         spatial_count = diagnostics.get("spatial_filtered_count", 0)
         final_count = diagnostics.get("final_count", 0)
-        
+
         context_parts.append(f"**Failure Stage:** {failure_stage}")
-        context_parts.append(f"**Results at each stage:**")
+        context_parts.append("**Results at each stage:**")
         context_parts.append(f"  - STAC API returned: {raw_count} images")
         context_parts.append(f"  - After spatial filtering: {spatial_count} images")
         context_parts.append(f"  - After tile selection: {final_count} images")
-        
+
         # Collections searched
         if collections:
-            context_parts.append(f"\n**Collections searched:** {', '.join(collections)}")
-        
+            context_parts.append(
+                f"\n**Collections searched:** {', '.join(collections)}"
+            )
+
         # DateTime filter analysis
         datetime_str = stac_query.get("datetime", "")
         if datetime_str:
@@ -6613,28 +7959,35 @@ Location to analyze: {location_name}"""
                     start, end = datetime_str.split("/")
                     start_date = start[:10] if len(start) >= 10 else start
                     end_date = end[:10] if len(end) >= 10 else end
-                    
+
                     # Calculate duration
                     from datetime import datetime as dt
+
                     start_dt = dt.fromisoformat(start_date)
                     end_dt = dt.fromisoformat(end_date)
                     days = (end_dt - start_dt).days
-                    
-                    context_parts.append(f"  Duration: {days} days ({start_date} to {end_date})")
+
+                    context_parts.append(
+                        f"  Duration: {days} days ({start_date} to {end_date})"
+                    )
                 except (ValueError, IndexError, TypeError):
                     pass
-        
+
         # Cloud cover filter analysis
         query_filter = stac_query.get("filter", {})
         if "eo:cloud_cover" in str(query_filter):
-            context_parts.append(f"\n**Cloud cover filter:** Active (likely <10% or <20% threshold)")
+            context_parts.append(
+                "\n**Cloud cover filter:** Active (likely <10% or <20% threshold)"
+            )
             # Try to extract exact threshold
             filter_str = str(query_filter)
             if "10" in filter_str:
-                context_parts.append("  Threshold: <10% (very strict - clear imagery only)")
+                context_parts.append(
+                    "  Threshold: <10% (very strict - clear imagery only)"
+                )
             elif "20" in filter_str:
                 context_parts.append("  Threshold: <20% (moderate - mostly clear)")
-        
+
         # Bounding box (spatial context)
         bbox = stac_query.get("bbox")
         if bbox:
@@ -6642,9 +7995,11 @@ Location to analyze: {location_name}"""
             width = abs(bbox[2] - bbox[0])
             height = abs(bbox[3] - bbox[1])
             area = width * height
-            
-            context_parts.append(f"\n**Search area:** {width:.2f}° × {height:.2f}° (area: {area:.2f} sq degrees)")
-            
+
+            context_parts.append(
+                f"\n**Search area:** {width:.2f}° × {height:.2f}° (area: {area:.2f} sq degrees)"
+            )
+
             # Provide context on area size
             if area < 0.1:
                 context_parts.append("  Size: Very small area (city-level)")
@@ -6654,31 +8009,28 @@ Location to analyze: {location_name}"""
                 context_parts.append("  Size: Medium area (state-level)")
             else:
                 context_parts.append("  Size: Large area (multi-state/country-level)")
-        
+
         # Query intent hints
         query_lower = natural_query.lower()
         intent_hints = []
-        
+
         if any(term in query_lower for term in ["recent", "latest", "current"]):
             intent_hints.append("User wants RECENT data")
         if any(term in query_lower for term in ["clear", "cloudless", "low cloud"]):
             intent_hints.append("User wants CLEAR imagery")
         if any(term in query_lower for term in ["high res", "detailed", "resolution"]):
             intent_hints.append("User wants HIGH RESOLUTION")
-        
+
         if intent_hints:
             context_parts.append(f"\n**User intent:** {', '.join(intent_hints)}")
-        
+
         return "\n".join(context_parts)
-    
+
     async def _generate_empty_result_with_sk(
-        self,
-        prompt_template: str,
-        user_query: str,
-        diagnostic_context: str
+        self, prompt_template: str, user_query: str, diagnostic_context: str
     ) -> str:
         """Generate empty result response using Semantic Kernel"""
-        
+
         try:
             # Create prompt configuration
             prompt_config = PromptTemplateConfig(
@@ -6686,37 +8038,41 @@ Location to analyze: {location_name}"""
                 name="generate_empty_result_response",
                 template_format="semantic-kernel",
                 input_variables=[
-                    InputVariable(name="user_query", description="The user's original query"),
-                    InputVariable(name="diagnostic_context", description="Diagnostic information about the search failure")
-                ]
+                    InputVariable(
+                        name="user_query", description="The user's original query"
+                    ),
+                    InputVariable(
+                        name="diagnostic_context",
+                        description="Diagnostic information about the search failure",
+                    ),
+                ],
             )
-            
+
             # Create function
             empty_result_function = KernelFunction.from_prompt(
                 prompt_template_config=prompt_config,
                 function_name="generate_empty_result_response",
-                plugin_name="semantic_translator"
+                plugin_name="semantic_translator",
             )
-            
+
             # Execute with timeout
             arguments = KernelArguments(
-                user_query=user_query,
-                diagnostic_context=diagnostic_context
+                user_query=user_query, diagnostic_context=diagnostic_context
             )
-            
+
             result = await asyncio.wait_for(
                 self.kernel.invoke(empty_result_function, arguments=arguments),
-                timeout=20.0
+                timeout=20.0,
             )
-            
+
             # Extract response content
             response_content = self._extract_clean_content_from_sk_result(result)
-            
+
             # Validate content
             if not response_content or response_content.strip() == "":
                 logger.warning("Empty content returned from GPT, using fallback")
                 return "I searched for satellite data but didn't find any matching your criteria. Try adjusting your search parameters or date range."
-            
+
             # Clean up response - handle both single and double quotes
             response_content = response_content.strip()
             # Remove double-double quotes: ""content""
@@ -6725,26 +8081,26 @@ Location to analyze: {location_name}"""
             # Remove single quotes: "content"
             elif response_content.startswith('"') and response_content.endswith('"'):
                 response_content = response_content[1:-1]
-            
+
             return response_content
-            
+
         except Exception as e:
             logger.error(f"Empty result SK generation failed: {e}")
             raise
-    
+
     def _fallback_empty_result_response(
         self,
         natural_query: str,
         stac_query: Dict[str, Any],
         collections: List[str],
-        diagnostics: Dict[str, Any]
+        diagnostics: Dict[str, Any],
     ) -> str:
         """Fallback empty result response when GPT is unavailable (rule-based)"""
-        
+
         raw_count = diagnostics.get("raw_count", 0)
         spatial_count = diagnostics.get("spatial_filtered_count", 0)
         failure_stage = diagnostics.get("failure_stage", "unknown")
-        
+
         # Use simple rule-based responses as fallback
         if raw_count == 0:
             return (
@@ -6762,10 +8118,10 @@ Location to analyze: {location_name}"""
                 f"I found {spatial_count} satellite images covering your area, but they didn't meet quality thresholds. "
                 "Try relaxing quality filters or accepting imagery with higher cloud cover."
             )
-    
+
     def _create_contextual_analysis_prompt(self) -> str:
         """Create prompt for comprehensive Earth science contextual analysis"""
-        
+
         return """
         You are an expert Earth scientist with deep knowledge across Earth observation, environmental science, climate science, geology, oceanography, atmospheric science, and remote sensing. You provide scientifically accurate, well-explained answers about Earth systems, phenomena, and data.
 
@@ -6800,49 +8156,68 @@ Location to analyze: {location_name}"""
 
         Generate a scientifically accurate, well-explained response to the user's question:
         """
-    
-    def _prepare_contextual_analysis_data(self, query: str, classification: Dict[str, Any], stac_response: Optional[Dict[str, Any]]) -> str:
+
+    def _prepare_contextual_analysis_data(
+        self,
+        query: str,
+        classification: Dict[str, Any],
+        stac_response: Optional[Dict[str, Any]],
+    ) -> str:
         """Prepare context data for comprehensive Earth science analysis"""
-        
+
         context_parts = []
-        
+
         # Add classification context
         intent_type = classification.get("intent_type", "unknown")
         context_parts.append(f"Query type: {intent_type}")
-        
+
         if classification.get("location_focus"):
             context_parts.append(f"Location focus: {classification['location_focus']}")
-        
+
         if classification.get("temporal_focus"):
             context_parts.append(f"Time period: {classification['temporal_focus']}")
-        
+
         if classification.get("disaster_or_event"):
-            context_parts.append(f"Event/Disaster: {classification['disaster_or_event']}")
-        
+            context_parts.append(
+                f"Event/Disaster: {classification['disaster_or_event']}"
+            )
+
         # Add satellite data context if available
         if stac_response and stac_response.get("success"):
             features = stac_response.get("results", {}).get("features", [])
             if features:
-                collections = list(set(f.get("collection", "unknown") for f in features))
-                context_parts.append(f"Available satellite data: {len(features)} images from {', '.join(collections)}")
-                
+                collections = list(
+                    set(f.get("collection", "unknown") for f in features)
+                )
+                context_parts.append(
+                    f"Available satellite data: {len(features)} images from {', '.join(collections)}"
+                )
+
                 # Add temporal info from satellite data
-                dates = [f.get("properties", {}).get("datetime", "") for f in features if f.get("properties", {}).get("datetime")]
+                dates = [
+                    f.get("properties", {}).get("datetime", "")
+                    for f in features
+                    if f.get("properties", {}).get("datetime")
+                ]
                 if dates:
                     earliest = min(dates)[:10]
                     latest = max(dates)[:10]
                     if earliest == latest:
                         context_parts.append(f"Satellite data date: {earliest}")
                     else:
-                        context_parts.append(f"Satellite data period: {earliest} to {latest}")
+                        context_parts.append(
+                            f"Satellite data period: {earliest} to {latest}"
+                        )
         else:
             context_parts.append("No satellite data available for this analysis")
-        
+
         return "; ".join(context_parts)
-    
-    async def _generate_contextual_response_with_sk(self, prompt_template: str, user_query: str, context_data: str) -> str:
+
+    async def _generate_contextual_response_with_sk(
+        self, prompt_template: str, user_query: str, context_data: str
+    ) -> str:
         """Generate contextual response using Semantic Kernel"""
-        
+
         try:
             # Create prompt configuration
             prompt_config = PromptTemplateConfig(
@@ -6850,37 +8225,44 @@ Location to analyze: {location_name}"""
                 name="generate_contextual_response",
                 template_format="semantic-kernel",
                 input_variables=[
-                    InputVariable(name="user_query", description="The user's natural language query"),
-                    InputVariable(name="context_data", description="Contextual data for Earth science analysis")
-                ]
+                    InputVariable(
+                        name="user_query",
+                        description="The user's natural language query",
+                    ),
+                    InputVariable(
+                        name="context_data",
+                        description="Contextual data for Earth science analysis",
+                    ),
+                ],
             )
-            
+
             # Create function
             contextual_function = KernelFunction.from_prompt(
                 prompt_template_config=prompt_config,
                 function_name="generate_contextual_response",
-                plugin_name="semantic_translator"
+                plugin_name="semantic_translator",
             )
-            
+
             # Execute with timeout
             arguments = KernelArguments(
-                user_query=user_query,
-                context_data=context_data
+                user_query=user_query, context_data=context_data
             )
-            
+
             result = await asyncio.wait_for(
                 self.kernel.invoke(contextual_function, arguments=arguments),
-                timeout=25.0
+                timeout=25.0,
             )
-            
+
             # Extract response content using the same robust method as other SK calls
             response_content = self._extract_clean_content_from_sk_result(result)
-            
+
             # Validate content
             if not response_content or response_content.strip() == "":
-                logger.warning("Empty contextual content returned from SK, using fallback")
+                logger.warning(
+                    "Empty contextual content returned from SK, using fallback"
+                )
                 return f"I found relevant information about your query: {user_query}. Please check the data visualization for details."
-            
+
             # Clean up response - handle both single and double quotes
             response_content = response_content.strip()
             # Remove double-double quotes: ""content""
@@ -6889,47 +8271,59 @@ Location to analyze: {location_name}"""
             # Remove single quotes: "content"
             elif response_content.startswith('"') and response_content.endswith('"'):
                 response_content = response_content[1:-1]
-            
+
             return response_content
-            
+
         except Exception as e:
             logger.error(f"Contextual response generation with SK failed: {e}")
             raise
-    
-    async def _fallback_contextual_response(self, query: str, classification: Dict[str, Any], stac_response: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+
+    async def _fallback_contextual_response(
+        self,
+        query: str,
+        classification: Dict[str, Any],
+        stac_response: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
         """Generate contextual response using direct LLM HTTP call when Semantic Kernel fails"""
 
         try:
-            response_content = await self._direct_llm_call_for_contextual_analysis(query, classification, stac_response)
+            response_content = await self._direct_llm_call_for_contextual_analysis(
+                query, classification, stac_response
+            )
 
             return {
                 "message": response_content,
                 "query_type": "direct_llm_contextual",
-                "has_satellite_data": stac_response is not None and stac_response.get("success", False),
+                "has_satellite_data": stac_response is not None
+                and stac_response.get("success", False),
                 "has_contextual_analysis": True,
                 "location_focus": classification.get("location_focus"),
                 "fallback_used": False,
-                "method": "direct_llm_http"
+                "method": "direct_llm_http",
             }
-            
+
         except Exception as e:
             logger.error(f"Direct LLM call failed: {e}")
             # Last resort: minimal response indicating the system should call LLM
             return {
                 "message": f"I apologize, but I'm having technical difficulties generating a detailed analysis right now. However, I can see this is a question about {query}. Please try again in a moment as the system should provide a comprehensive, AI-generated response about the impacts and analysis you're asking about.",
-                "query_type": "error_fallback", 
+                "query_type": "error_fallback",
                 "has_satellite_data": False,
                 "has_contextual_analysis": False,
                 "error": str(e),
-                "fallback_used": True
+                "fallback_used": True,
             }
-    
-    async def _direct_llm_call_for_contextual_analysis(self, query: str, classification: Dict[str, Any], stac_response: Optional[Dict[str, Any]]) -> str:
+
+    async def _direct_llm_call_for_contextual_analysis(
+        self,
+        query: str,
+        classification: Dict[str, Any],
+        stac_response: Optional[Dict[str, Any]],
+    ) -> str:
         """Make direct HTTP call to the LLM for contextual analysis when Semantic Kernel fails"""
-        
+
         import aiohttp
-        import json
-        
+
         # Prepare context data
         context_info = []
         if classification.get("location_focus"):
@@ -6939,9 +8333,11 @@ Location to analyze: {location_name}"""
         if stac_response and stac_response.get("success"):
             features = stac_response.get("results", {}).get("features", [])
             context_info.append(f"Satellite data: {len(features)} images available")
-        
-        context_text = "; ".join(context_info) if context_info else "General Earth science query"
-        
+
+        context_text = (
+            "; ".join(context_info) if context_info else "General Earth science query"
+        )
+
         # Create concise prompt for direct LLM call
         system_prompt = """You are an expert Earth scientist with comprehensive knowledge across Earth observation, environmental science, climate science, geology, oceanography, atmospheric science, and remote sensing. You provide scientifically accurate, well-explained answers to questions about Earth systems, phenomena, and data.
 
@@ -6975,21 +8371,21 @@ TOPIC COVERAGE (examples):
 Keep your response focused, informative, and directly relevant to the user's question."""
 
         user_prompt = f"Context: {context_text}\n\nUser Question: {query}\n\nProvide a comprehensive, educational response:"
-        
+
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.llm_api_key}"
+            "Authorization": f"Bearer {self.llm_api_key}",
         }
 
         payload = {
             "model": self.model_name,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             "max_completion_tokens": 800,
             "temperature": 0.7,
-            "top_p": 0.9
+            "top_p": 0.9,
         }
 
         url = f"{self.llm_base_url}/chat/completions"
@@ -7002,17 +8398,21 @@ Keep your response focused, informative, and directly relevant to the user's que
                     return result["choices"][0]["message"]["content"].strip()
                 else:
                     error_text = await response.text()
-                    raise Exception(f"LLM API call failed: {response.status} - {error_text}")
-    
-    def _extract_bbox_from_features(self, features: List[Dict]) -> Optional[List[float]]:
+                    raise Exception(
+                        f"LLM API call failed: {response.status} - {error_text}"
+                    )
+
+    def _extract_bbox_from_features(
+        self, features: List[Dict]
+    ) -> Optional[List[float]]:
         """Extract bounding box from STAC features"""
         if not features:
             return None
-        
+
         # Get bbox from first feature or calculate from all features
         if features[0].get("bbox"):
             return features[0]["bbox"]
-        
+
         # Calculate bbox from all feature geometries
         lons, lats = [], []
         for feature in features:
@@ -7022,31 +8422,33 @@ Keep your response focused, informative, and directly relevant to the user's que
                     for coord_pair in coords[0]:
                         lons.append(coord_pair[0])
                         lats.append(coord_pair[1])
-        
+
         if lons and lats:
             return [min(lons), min(lats), max(lons), max(lats)]
-        
+
         return None
-    
-    def _calculate_center_from_features(self, features: List[Dict]) -> Optional[List[float]]:
+
+    def _calculate_center_from_features(
+        self, features: List[Dict]
+    ) -> Optional[List[float]]:
         """Calculate center point from STAC features"""
         bbox = self._extract_bbox_from_features(features)
         if bbox and len(bbox) == 4:
             west, south, east, north = bbox
             return [(west + east) / 2, (south + north) / 2]
         return None
-    
+
     def _calculate_appropriate_zoom(self, features: List[Dict]) -> int:
         """Calculate appropriate zoom level based on feature coverage"""
         bbox = self._extract_bbox_from_features(features)
         if not bbox or len(bbox) != 4:
             return 10
-        
+
         west, south, east, north = bbox
         width = abs(east - west)
         height = abs(north - south)
         max_dimension = max(width, height)
-        
+
         # Zoom calculation based on area size
         if max_dimension > 10:
             return 5
@@ -7062,15 +8464,15 @@ Keep your response focused, informative, and directly relevant to the user's que
             return 10
         else:
             return 11
-    
+
     # ============================================================================
     # TILE SELECTION HELPERS (Agent 3 Support)
     # ============================================================================
-    
+
     def _parse_resolution(self, res_str: str) -> float:
         """
         Parse resolution string to numeric meters
-        
+
         Handles formats:
         - "10m" -> 10.0
         - "10-60m" -> 10.0 (best resolution in range)
@@ -7079,71 +8481,73 @@ Keep your response focused, informative, and directly relevant to the user's que
         """
         try:
             res_lower = res_str.lower().strip()
-            
+
             # Handle kilometer units
             if "km" in res_lower:
-                nums = re.findall(r'[\d.]+', res_lower)
+                nums = re.findall(r"[\d.]+", res_lower)
                 if nums:
                     return float(nums[0]) * 1000
-            
+
             # Handle meter units (with or without 'm')
-            nums = re.findall(r'[\d.]+', res_lower)
+            nums = re.findall(r"[\d.]+", res_lower)
             if nums:
                 # If range (e.g., "10-60"), return best (lowest number)
                 return float(nums[0])
-            
+
             # Fallback: couldn't parse
-            logger.warning(f"[WARN] Could not parse resolution: {res_str}, defaulting to 1000m")
+            logger.warning(
+                f"[WARN] Could not parse resolution: {res_str}, defaulting to 1000m"
+            )
             return 1000.0
-            
+
         except Exception as e:
             logger.error(f"[FAIL] Error parsing resolution '{res_str}': {e}")
             return 1000.0
-    
+
     def _calculate_area(self, bbox: List[float]) -> float:
         """
         Calculate approximate area of bounding box in km²
-        
+
         Uses simple approximation (good enough for tile selection)
         """
         if not bbox or len(bbox) != 4:
             return 0.0
-        
+
         west, south, east, north = bbox
-        
+
         # Width in degrees
         width_deg = abs(east - west)
         # Height in degrees
         height_deg = abs(north - south)
-        
+
         # Approximate km per degree (varies by latitude)
         # At equator: ~111km per degree
         # Use average latitude for more accuracy
         avg_lat = (south + north) / 2
         km_per_deg_lon = 111.32 * abs(math.cos(math.radians(avg_lat)))
         km_per_deg_lat = 111.32
-        
+
         # Calculate area
         width_km = width_deg * km_per_deg_lon
         height_km = height_deg * km_per_deg_lat
         area_km2 = width_km * height_km
-        
+
         return area_km2
-    
+
     def _determine_tile_limit(self, bbox: List[float], query: str) -> int:
         """
         Determine context-aware tile limit based on AOI size and query intent
-        
+
         Strategy:
         - Small AOI (city): 5-15 tiles
-        - Medium AOI (region): 10-25 tiles  
+        - Medium AOI (region): 10-25 tiles
         - Large AOI (state): 20-40 tiles
         - Continental: 30-50 tiles
         - Adjust for query keywords (latest, time-series, etc.)
         """
         area_km2 = self._calculate_area(bbox)
         query_lower = query.lower()
-        
+
         # Base limit on area - INCREASED for country-scale coverage
         if area_km2 < 100:  # City-scale (~10km x 10km)
             base_limit = 10
@@ -7157,30 +8561,41 @@ Keep your response focused, informative, and directly relevant to the user's que
             base_limit = 80  # NEW tier - countries need 80 tiles
         else:  # Continental (>500k km²)
             base_limit = 100  # Increased from 50
-        
+
         # Log the calculation for debugging
-        logger.info(f"[RULER] _determine_tile_limit: area={area_km2:.0f} km² -> base_limit={base_limit}")
-        
+        logger.info(
+            f"[RULER] _determine_tile_limit: area={area_km2:.0f} km² -> base_limit={base_limit}"
+        )
+
         # Adjust for query intent
         if any(word in query_lower for word in ["latest", "recent", "current", "now"]):
             # User wants most recent only
             return max(5, min(base_limit // 2, 15))
-        elif any(word in query_lower for word in ["time series", "timeseries", "change", "historical", "from"]):
+        elif any(
+            word in query_lower
+            for word in ["time series", "timeseries", "change", "historical", "from"]
+        ):
             # User wants temporal coverage - for large areas, need more items to cover geography
             if area_km2 > 1000000:  # Continental scale (Australia, USA, etc.)
-                return 200  # Need many tiles to cover large area with temporal constraint
+                return (
+                    200  # Need many tiles to cover large area with temporal constraint
+                )
             else:
                 return min(base_limit * 2, 150)  # Increased cap from 100 to 150
-        elif any(word in query_lower for word in ["detailed", "high resolution", "high res"]):
+        elif any(
+            word in query_lower for word in ["detailed", "high resolution", "high res"]
+        ):
             # User wants quality over quantity
             return max(5, min(base_limit // 2, 20))
         else:
             return base_limit
-    
-    def _check_spatial_coverage(self, features: List[Dict], bbox: List[float]) -> Dict[str, Any]:
+
+    def _check_spatial_coverage(
+        self, features: List[Dict], bbox: List[float]
+    ) -> Dict[str, Any]:
         """
         Check how well features cover the requested bounding box
-        
+
         Returns:
         - coverage_percent: 0-100 indicating coverage
         - gaps: List of uncovered areas
@@ -7188,56 +8603,64 @@ Keep your response focused, informative, and directly relevant to the user's que
         """
         if not features or not bbox:
             return {"coverage_percent": 0.0, "gaps": [], "overlap": "none"}
-        
+
         # Simple heuristic: count tiles that intersect with bbox
         west, south, east, north = bbox
         bbox_area = self._calculate_area(bbox)
-        
+
         intersecting_tiles = 0
         for feature in features:
             feature_bbox = feature.get("bbox")
             if not feature_bbox or len(feature_bbox) != 4:
                 continue
-            
+
             fw, fs, fe, fn = feature_bbox
-            
+
             # Check if bboxes intersect
             if not (fe < west or fw > east or fn < south or fs > north):
                 intersecting_tiles += 1
-        
+
         # Rough coverage estimate
         if not features:
             coverage_percent = 0.0
         else:
             # More tiles = better coverage (rough approximation)
-            coverage_percent = min(100.0, (intersecting_tiles / max(1, len(features) // 2)) * 100)
-        
+            coverage_percent = min(
+                100.0, (intersecting_tiles / max(1, len(features) // 2)) * 100
+            )
+
         return {
             "coverage_percent": coverage_percent,
             "intersecting_tiles": intersecting_tiles,
-            "total_tiles": len(features)
+            "total_tiles": len(features),
         }
-    
-    def _prepare_stac_data_summary(self, features: List[Dict], collection_summary: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _prepare_stac_data_summary(
+        self, features: List[Dict], collection_summary: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Prepare comprehensive summary of STAC data for LLM analysis"""
-        
+
         if not features:
             return {
                 "has_data": False,
                 "total_images": 0,
                 "collections": [],
                 "temporal_coverage": "No data available",
-                "quality_summary": "No images found"
+                "quality_summary": "No images found",
             }
-        
+
         # Basic statistics
         total_images = len(features)
         collections = list(set(f.get("collection", "unknown") for f in features))
-        
+
         # Temporal analysis - handle both standard datetime and composite datasets
-        dates = [f.get("properties", {}).get("datetime", "") for f in features if f.get("properties", {}).get("datetime")]
+        dates = [
+            f.get("properties", {}).get("datetime", "")
+            for f in features
+            if f.get("properties", {}).get("datetime")
+        ]
         temporal_coverage = "Unknown"
-        
+
         if dates:
             earliest = min(dates)[:10] if dates else "Unknown"
             latest = max(dates)[:10] if dates else "Unknown"
@@ -7249,7 +8672,9 @@ Keep your response focused, informative, and directly relevant to the user's que
             # For composite products (MODIS fire, vegetation), extract date from item ID
             # Example: MYD14A1.A2025033.h08v05.061 -> Day 033 of 2025
             item_ids = [f.get("id", "") for f in features if f.get("id")]
-            if item_ids and any("A202" in item_id or "A201" in item_id for item_id in item_ids):
+            if item_ids and any(
+                "A202" in item_id or "A201" in item_id for item_id in item_ids
+            ):
                 # Extract year.day format from MODIS item IDs
                 modis_dates = []
                 for item_id in item_ids:
@@ -7259,14 +8684,17 @@ Keep your response focused, informative, and directly relevant to the user's que
                             date_part = item_id.split(".A")[1][:7]  # A2025033
                             year = int(date_part[:4])
                             day_of_year = int(date_part[4:7])
-                            
+
                             # Convert day of year to date
                             from datetime import datetime, timedelta
-                            date_obj = datetime(year, 1, 1) + timedelta(days=day_of_year - 1)
+
+                            date_obj = datetime(year, 1, 1) + timedelta(
+                                days=day_of_year - 1
+                            )
                             modis_dates.append(date_obj.strftime("%Y-%m-%d"))
                         except (ValueError, IndexError, TypeError):
                             pass
-                
+
                 if modis_dates:
                     earliest = min(modis_dates)
                     latest = max(modis_dates)
@@ -7274,27 +8702,30 @@ Keep your response focused, informative, and directly relevant to the user's que
                         temporal_coverage = f"Single date: {earliest}"
                     else:
                         temporal_coverage = f"Date range: {earliest} to {latest}"
-        
+
         # Quality analysis
         cloud_covers = [
-            f.get("properties", {}).get("eo:cloud_cover") 
-            for f in features 
-            if f.get("properties", {}) and f.get("properties", {}).get("eo:cloud_cover") is not None
+            f.get("properties", {}).get("eo:cloud_cover")
+            for f in features
+            if f.get("properties", {})
+            and f.get("properties", {}).get("eo:cloud_cover") is not None
         ]
-        
+
         quality_summary = "Quality data not available"
         if cloud_covers:
             avg_cloud = sum(cloud_covers) / len(cloud_covers)
             clear_images = len([c for c in cloud_covers if c < 20])
             quality_summary = f"Average cloud cover: {avg_cloud:.1f}%, Clear images (<20% clouds): {clear_images}/{len(cloud_covers)}"
-        
+
         # Platform analysis with fallback to collection-based mapping
-        platforms_from_stac = list(set(
-            f.get("properties", {}).get("platform", None) 
-            for f in features 
-            if f.get("properties", {}) and f.get("properties", {}).get("platform")
-        ))
-        
+        platforms_from_stac = list(
+            set(
+                f.get("properties", {}).get("platform", None)
+                for f in features
+                if f.get("properties", {}) and f.get("properties", {}).get("platform")
+            )
+        )
+
         # Fallback: Map collections to their platforms if platform property not available
         platform_fallback_map = {
             "naip": "USDA NAIP",
@@ -7312,19 +8743,21 @@ Keep your response focused, informative, and directly relevant to the user's que
             "modis-13Q1-061": "NASA MODIS",
             "cop-dem-glo-30": "ESA Copernicus DEM",
             "cop-dem-glo-90": "ESA Copernicus DEM",
-            "nasadem": "NASA DEM"
+            "nasadem": "NASA DEM",
         }
-        
-        platforms = platforms_from_stac if platforms_from_stac else [
-            platform_fallback_map.get(coll, coll) for coll in collections
-        ]
-        
+
+        platforms = (
+            platforms_from_stac
+            if platforms_from_stac
+            else [platform_fallback_map.get(coll, coll) for coll in collections]
+        )
+
         # Geographic coverage (if bbox available)
         geographic_coverage = "Global coverage possible"
         if features and features[0].get("bbox"):
             bbox = features[0]["bbox"]
             geographic_coverage = f"Bounding box: {bbox[0]:.2f}, {bbox[1]:.2f}, {bbox[2]:.2f}, {bbox[3]:.2f}"
-        
+
         return {
             "has_data": True,
             "total_images": total_images,
@@ -7334,12 +8767,14 @@ Keep your response focused, informative, and directly relevant to the user's que
             "quality_summary": quality_summary,
             "geographic_coverage": geographic_coverage,
             "collection_details": self._get_collection_details(collections),
-            "sample_features": features[:3] if features else []  # First 3 for detailed analysis
+            "sample_features": (
+                features[:3] if features else []
+            ),  # First 3 for detailed analysis
         }
-    
+
     def _get_collection_details(self, collections: List[str]) -> Dict[str, str]:
         """Get human-readable descriptions of satellite collections"""
-        
+
         collection_descriptions = {
             "sentinel-2-l2a": "Sentinel-2 optical imagery (10-60m resolution)",
             "sentinel-1-grd": "Sentinel-1 synthetic aperture radar (SAR) data",
@@ -7357,14 +8792,16 @@ Keep your response focused, informative, and directly relevant to the user's que
             "era5-pds": "ERA5 reanalysis weather data",
             "daymet-daily-na": "Daymet daily weather data North America",
             "esa-worldcover": "ESA WorldCover global land cover classification",
-            "modis-13Q1-061": "MODIS vegetation indices"
+            "modis-13Q1-061": "MODIS vegetation indices",
         }
-        
+
         return {
-            collection: collection_descriptions.get(collection, f"{collection} satellite data")
+            collection: collection_descriptions.get(
+                collection, f"{collection} satellite data"
+            )
             for collection in collections
         }
-    
+
     def _create_brief_map_data_prompt(self) -> str:
         """Create brief prompt for simple map data requests"""
         return """
@@ -7456,30 +8893,49 @@ Keep your response focused, informative, and directly relevant to the user's que
         Response:
         """
 
-    def _create_response_generation_prompt(self, classification: Dict[str, Any] = None) -> str:
+    def _create_response_generation_prompt(
+        self, classification: Dict[str, Any] = None
+    ) -> str:
         """Create appropriate prompt based on classification"""
         if not classification:
             return self._create_brief_map_data_prompt()
-            
-        intent_type = classification.get('intent_type', 'stac')
-        
+
+        intent_type = classification.get("intent_type", "stac")
+
         # Map intent types to response prompts
         # - vision: Analyze currently visible imagery -> Not used in this method (handled separately)
         # - stac: Load new satellite imagery only -> Brief data specs
         # - hybrid: Load new imagery AND analyze it -> Hybrid response (data + analysis)
         # - contextual: Information/education only -> Detailed analysis
-        if intent_type in ['stac', 'map_only_request', 'map_data_request']:  # Legacy names for backwards compatibility
+        if intent_type in [
+            "stac",
+            "map_only_request",
+            "map_data_request",
+        ]:  # Legacy names for backwards compatibility
             return self._create_brief_map_data_prompt()
-        elif intent_type in ['contextual', 'chat_only_request', 'contextual_analysis']:  # Legacy names for backwards compatibility
+        elif intent_type in [
+            "contextual",
+            "chat_only_request",
+            "contextual_analysis",
+        ]:  # Legacy names for backwards compatibility
             return self._create_detailed_analysis_prompt()
-        elif intent_type in ['hybrid', 'hybrid_request']:  # Legacy name for backwards compatibility
+        elif intent_type in [
+            "hybrid",
+            "hybrid_request",
+        ]:  # Legacy name for backwards compatibility
             return self._create_hybrid_response_prompt()
         else:
             return self._create_brief_map_data_prompt()  # Default fallback
-    
-    async def _generate_response_with_sk(self, prompt_template: str, user_query: str, data_summary: Dict[str, Any], conversation_context: str = "") -> str:
+
+    async def _generate_response_with_sk(
+        self,
+        prompt_template: str,
+        user_query: str,
+        data_summary: Dict[str, Any],
+        conversation_context: str = "",
+    ) -> str:
         """Generate response using Semantic Kernel with the prepared data and conversation context"""
-        
+
         try:
             # Create prompt template configuration for SK 1.36.2
             prompt_config = PromptTemplateConfig(
@@ -7488,222 +8944,260 @@ Keep your response focused, informative, and directly relevant to the user's que
                 description="Generate response based on user query, data summary, and conversation context",
                 template_format="semantic-kernel",
                 input_variables=[
-                    InputVariable(name="user_query", description="The user's natural language query"),
-                    InputVariable(name="data_summary", description="Comprehensive analysis of the STAC data found"),
-                    InputVariable(name="conversation_context", description="Recent conversation history for context")
-                ]
+                    InputVariable(
+                        name="user_query",
+                        description="The user's natural language query",
+                    ),
+                    InputVariable(
+                        name="data_summary",
+                        description="Comprehensive analysis of the STAC data found",
+                    ),
+                    InputVariable(
+                        name="conversation_context",
+                        description="Recent conversation history for context",
+                    ),
+                ],
             )
-            
+
             # Prepare data summary as formatted text for the LLM
             formatted_data_summary = self._format_data_summary_for_llm(data_summary)
-            
+
             # Execute using SK 1.36.2 invoke_prompt
             arguments = KernelArguments(
                 user_query=user_query,
                 data_summary=formatted_data_summary,
-                conversation_context=conversation_context or "No previous conversation context."
+                conversation_context=conversation_context
+                or "No previous conversation context.",
             )
             result = await self.kernel.invoke_prompt(
                 prompt=prompt_template,
                 function_name="generate_response",
                 plugin_name="semantic_translator",
                 arguments=arguments,
-                prompt_template_config=prompt_config
+                prompt_template_config=prompt_config,
             )
-            
+
             # Extract response content with comprehensive fallback handling
             content = self._extract_clean_content_from_sk_result(result)
-            
+
             # Final validation and cleanup
             if not content or content.strip() == "":
-                logger.warning("Empty content returned from Semantic Kernel, using fallback")
+                logger.warning(
+                    "Empty content returned from Semantic Kernel, using fallback"
+                )
                 return f"Found {data_summary.get('total_images', 0)} satellite images for your query."
-            
+
             # Clean and return the response
-            cleaned_content = content.strip().replace('\\n', '\n').replace('\\"', '"')
+            cleaned_content = content.strip().replace("\\n", "\n").replace('\\"', '"')
             logger.info(f"Generated intelligent response: {cleaned_content[:200]}...")
-            
+
             return cleaned_content
-            
+
         except Exception as e:
             logger.error(f"SK response generation failed: {e}")
             raise Exception(f"Failed to generate intelligent response: {e}")
-    
+
     def _extract_clean_content_from_sk_result(self, result) -> str:
         """Extract clean text content from Semantic Kernel result with comprehensive error handling"""
-        
+
         if not result:
             return ""
-        
+
         # Method 1: Direct value extraction (most common path)
-        if hasattr(result, 'value') and result.value:
+        if hasattr(result, "value") and result.value:
             # Check if it's a simple string
             if isinstance(result.value, str):
                 return result.value
-            
+
             # Check for ChatMessageContent structure
-            if hasattr(result.value, 'inner_content'):
-                if hasattr(result.value.inner_content, 'content'):
+            if hasattr(result.value, "inner_content"):
+                if hasattr(result.value.inner_content, "content"):
                     return str(result.value.inner_content.content)
-                elif hasattr(result.value.inner_content, 'text'):
+                elif hasattr(result.value.inner_content, "text"):
                     return str(result.value.inner_content.text)
-            
+
             # Check for direct content attribute
-            if hasattr(result.value, 'content'):
+            if hasattr(result.value, "content"):
                 if isinstance(result.value.content, str):
                     return result.value.content
-                elif hasattr(result.value.content, 'text'):
+                elif hasattr(result.value.content, "text"):
                     return str(result.value.content.text)
-            
+
             # Check for items collection
-            if hasattr(result.value, 'items') and result.value.items:
+            if hasattr(result.value, "items") and result.value.items:
                 for item in result.value.items:
-                    if hasattr(item, 'text') and item.text:
+                    if hasattr(item, "text") and item.text:
                         return str(item.text)
-                    elif hasattr(item, 'content') and item.content:
+                    elif hasattr(item, "content") and item.content:
                         return str(item.content)
-        
+
         # Method 2: String parsing for debug objects that leaked through
         result_str = str(result)
-        if 'ChatMessageContent' in result_str or 'ChatCompletion' in result_str:
+        if "ChatMessageContent" in result_str or "ChatCompletion" in result_str:
             import re
+
             # Comprehensive regex patterns to extract content
             patterns = [
-                r"content='([^']*)'",           # Single quotes
-                r'content="([^"]*)"',           # Double quotes  
-                r"content=([^,\]\)]+)",         # Unquoted content
-                r"text='([^']*)'",              # Text field single quotes
-                r'text="([^"]*)"',              # Text field double quotes
-                r"message='([^']*)'",           # Message field
-                r'message="([^"]*)"',           # Message field double quotes
-                r"'text':\s*'([^']*)'",         # JSON-like structure
-                r'"text":\s*"([^"]*)"',         # JSON-like structure
+                r"content='([^']*)'",  # Single quotes
+                r'content="([^"]*)"',  # Double quotes
+                r"content=([^,\]\)]+)",  # Unquoted content
+                r"text='([^']*)'",  # Text field single quotes
+                r'text="([^"]*)"',  # Text field double quotes
+                r"message='([^']*)'",  # Message field
+                r'message="([^"]*)"',  # Message field double quotes
+                r"'text':\s*'([^']*)'",  # JSON-like structure
+                r'"text":\s*"([^"]*)"',  # JSON-like structure
                 r"content=ChatCompletionMessage\(content='([^']*)'",  # Nested structure
             ]
-            
+
             for pattern in patterns:
                 match = re.search(pattern, result_str, re.DOTALL)
                 if match:
                     extracted = match.group(1).strip()
-                    if extracted and len(extracted) > 10:  # Ensure it's meaningful content
+                    if (
+                        extracted and len(extracted) > 10
+                    ):  # Ensure it's meaningful content
                         logger.info(f"Extracted content via regex: {pattern}")
                         return extracted
-        
+
         # Method 3: Last resort - return string representation if it looks like normal text
         result_str = str(result)
-        if result_str and not any(debug_marker in result_str for debug_marker in ['ChatMessageContent', 'ChatCompletion', 'inner_content=', 'role=', 'function_call=']):
+        if result_str and not any(
+            debug_marker in result_str
+            for debug_marker in [
+                "ChatMessageContent",
+                "ChatCompletion",
+                "inner_content=",
+                "role=",
+                "function_call=",
+            ]
+        ):
             return result_str
-        
+
         # If all else fails, return empty string to trigger fallback
-        logger.warning(f"Could not extract clean content from SK result: {type(result)} - {str(result)[:200]}")
+        logger.warning(
+            f"Could not extract clean content from SK result: {type(result)} - {str(result)[:200]}"
+        )
         return ""
-    
+
     def _format_data_summary_for_llm(self, data_summary: Dict[str, Any]) -> str:
         """Format the data summary with detailed technical specifications for map data responses"""
-        
+
         if not data_summary.get("has_data", False):
             return "No satellite data was found for this query. The search returned zero results."
-        
+
         # Build detailed summary focusing on data characteristics for map visualization
         summary_parts = []
-        
+
         # Image count and basic info
-        total_images = data_summary.get('total_images', 0)
-        summary_parts.append(f"DATASET: {total_images} satellite images available for map display")
-        
+        total_images = data_summary.get("total_images", 0)
+        summary_parts.append(
+            f"DATASET: {total_images} satellite images available for map display"
+        )
+
         # Satellite platforms and sensors (more specific than collections)
         if data_summary.get("platforms"):
             platforms_text = ", ".join(data_summary["platforms"])
             summary_parts.append(f"SATELLITES: {platforms_text}")
-        
+
         # Time range with specific dates
         if data_summary.get("temporal_coverage"):
             summary_parts.append(f"DATE RANGE: {data_summary['temporal_coverage']}")
-        
+
         # Data quality details (cloud cover, resolution, etc.)
         if data_summary.get("quality_summary"):
             summary_parts.append(f"DATA QUALITY: {data_summary['quality_summary']}")
-        
+
         # Cloud cover statistics if available
         if data_summary.get("cloud_coverage"):
             summary_parts.append(f"CLOUD COVER: {data_summary['cloud_coverage']}")
-        
+
         # Resolution details
         if data_summary.get("resolution"):
             summary_parts.append(f"RESOLUTION: {data_summary['resolution']}")
-        
+
         # Geographic coverage
         if data_summary.get("geographic_coverage"):
-            summary_parts.append(f"COVERAGE AREA: {data_summary['geographic_coverage']}")
-        
+            summary_parts.append(
+                f"COVERAGE AREA: {data_summary['geographic_coverage']}"
+            )
+
         # Collection types with descriptions
         if data_summary.get("collections"):
             summary_parts.append("DATA TYPES:")
             collection_details = data_summary.get("collection_details", {})
             for collection in data_summary["collections"]:
-                description = collection_details.get(collection, f"{collection} dataset")
+                description = collection_details.get(
+                    collection, f"{collection} dataset"
+                )
                 summary_parts.append(f"- {collection}: {description}")
-        
+
         # Processing level or data characteristics
         if data_summary.get("processing_level"):
             summary_parts.append(f"PROCESSING: {data_summary['processing_level']}")
-        
+
         return "\n".join(summary_parts)
 
     # =============================================================================
     # PIN LOCATION HELPER METHODS
     # =============================================================================
-    
-    def _create_pin_bbox(self, lat: float, lng: float, radius_miles: float = 50) -> List[float]:
+
+    def _create_pin_bbox(
+        self, lat: float, lng: float, radius_miles: float = 50
+    ) -> List[float]:
         """
         Create bounding box around pin with specified radius.
-        
+
         Args:
             lat: Latitude in decimal degrees
             lng: Longitude in decimal degrees
             radius_miles: Radius in miles (default 50 for GEOINT analysis)
-        
+
         Returns:
             [west, south, east, north] bbox in EPSG:4326
         """
         import math
-        
+
         radius_km = radius_miles * 1.60934  # Convert miles to km
-        
+
         # Approximate degrees per km (varies by latitude)
         lat_offset = radius_km / 111.0  # 1° latitude ≈ 111 km
-        lng_offset = radius_km / (111.0 * math.cos(math.radians(lat)))  # Adjust for latitude
-        
+        lng_offset = radius_km / (
+            111.0 * math.cos(math.radians(lat))
+        )  # Adjust for latitude
+
         west = lng - lng_offset
         south = lat - lat_offset
         east = lng + lng_offset
         north = lat + lat_offset
-        
+
         return [west, south, east, north]
 
     # =============================================================================
     # GEOINT INTELLIGENCE ROUTING AND PROCESSING
     # =============================================================================
-    
+
     async def _detect_geoint_intent(self, query: str) -> Optional[Dict[str, Any]]:
         """
         Detect GEOINT-specific queries using GPT-4 powered intelligence analysis.
-        
+
         Args:
             query: Natural language query to analyze
-            
+
         Returns:
             Dict with GEOINT intent details or None if not a GEOINT query
         """
         try:
             # Ensure kernel is initialized for GPT-4 analysis
             await self._ensure_kernel_initialized()
-            
+
             if not self._kernel_initialized or self.kernel is None:
                 # Fallback to simple keyword detection if GPT-4 unavailable
-                logger.warning("[TARGET] GPT-4 unavailable, using fallback keyword detection for GEOINT")
+                logger.warning(
+                    "[TARGET] GPT-4 unavailable, using fallback keyword detection for GEOINT"
+                )
                 return self._detect_geoint_intent_fallback(query)
-            
+
             # Create GPT-4 GEOINT classification prompt
             geoint_classification_prompt = """
 You are a GEOINT (Geospatial Intelligence) analysis expert. Analyze the user's query to determine if it requires specialized geospatial intelligence processing with analytical calculations.
@@ -7796,7 +9290,7 @@ If NOT GEOINT (regular map/satellite data request):
 
 **Instructions:** Return ONLY the JSON object. No markdown formatting, no explanations, no additional text.
 """
-            
+
             # Execute GPT-4 classification
             arguments = KernelArguments(query=query)
             result = await asyncio.wait_for(
@@ -7804,347 +9298,472 @@ If NOT GEOINT (regular map/satellite data request):
                     prompt=geoint_classification_prompt,
                     function_name="classify_geoint",
                     plugin_name="geoint_classifier",
-                    arguments=arguments
+                    arguments=arguments,
                 ),
-                timeout=15.0
+                timeout=15.0,
             )
-            
+
             # Parse the JSON response
             content = self._extract_clean_content_from_sk_result(result)
             content = content.strip()
-            
+
             # Clean up the response to extract JSON
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0]
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0]
-            
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+
             try:
                 classification = json.loads(content)
             except json.JSONDecodeError as e:
                 logger.error(f"[FAIL] Failed to parse GEOINT classification JSON: {e}")
                 logger.error(f"Raw content: {content}")
                 return self._detect_geoint_intent_fallback(query)
-            
+
             # Validate and process GPT-4 result
-            if not classification.get('is_geoint', False):
-                logger.info(f"[TARGET] GPT-4: Not a GEOINT query - {classification.get('reasoning', 'No reason provided')}")
+            if not classification.get("is_geoint", False):
+                logger.info(
+                    f"[TARGET] GPT-4: Not a GEOINT query - {classification.get('reasoning', 'No reason provided')}"
+                )
                 return None
-            
-            analysis_type = classification.get('analysis_type')
-            confidence = classification.get('confidence', 0.8)
-            reasoning = classification.get('reasoning', 'GPT-4 classified as GEOINT')
-            military_context = classification.get('military_context', False)
-            
-            logger.info(f"[TARGET] GPT-4 GEOINT detection: {analysis_type} (confidence: {confidence})")
+
+            analysis_type = classification.get("analysis_type")
+            confidence = classification.get("confidence", 0.8)
+            reasoning = classification.get("reasoning", "GPT-4 classified as GEOINT")
+            military_context = classification.get("military_context", False)
+
+            logger.info(
+                f"[TARGET] GPT-4 GEOINT detection: {analysis_type} (confidence: {confidence})"
+            )
             logger.info(f"[TARGET] Reasoning: {reasoning}")
-            
+
             return {
-                'intent_type': analysis_type,
-                'analysis_type': analysis_type,
-                'confidence': confidence,
-                'reasoning': reasoning,
-                'military_context': military_context,
-                'detection_method': 'gpt4_analysis'
+                "intent_type": analysis_type,
+                "analysis_type": analysis_type,
+                "confidence": confidence,
+                "reasoning": reasoning,
+                "military_context": military_context,
+                "detection_method": "gpt4_analysis",
             }
-            
+
         except asyncio.TimeoutError:
             logger.error("[FAIL] GEOINT classification timeout, using fallback")
             return self._detect_geoint_intent_fallback(query)
         except Exception as e:
             logger.error(f"[FAIL] Error in GPT-4 GEOINT detection: {str(e)}")
             return self._detect_geoint_intent_fallback(query)
-    
+
     def _detect_geoint_intent_fallback(self, query: str) -> Optional[Dict[str, Any]]:
         """
         Fallback GEOINT detection using keyword matching when GPT-4 is unavailable.
         """
         try:
             query_lower = query.lower()
-            
+
             # Define GEOINT intent patterns (original keyword-based approach)
             geoint_patterns = {
-                'terrain_analysis': {
-                    'keywords': ['slope', 'terrain', 'elevation', 'topography', 'hillshade', 'aspect', 'gradient', 'contour'],
-                    'phrases': ['terrain analysis', 'slope analysis', 'elevation profile', 'topographic analysis', 'terrain roughness'],
-                    'analysis_type': 'terrain_analysis'
+                "terrain_analysis": {
+                    "keywords": [
+                        "slope",
+                        "terrain",
+                        "elevation",
+                        "topography",
+                        "hillshade",
+                        "aspect",
+                        "gradient",
+                        "contour",
+                    ],
+                    "phrases": [
+                        "terrain analysis",
+                        "slope analysis",
+                        "elevation profile",
+                        "topographic analysis",
+                        "terrain roughness",
+                    ],
+                    "analysis_type": "terrain_analysis",
                 },
-                'mobility_analysis': {
-                    'keywords': ['mobility', 'traversability', 'vehicle', 'route', 'passable', 'impassable', 'movement', 'accessibility', 'access', 'emergency response', 'evacuation', 'convoy'],
-                    'phrases': ['mobility analysis', 'vehicle mobility', 'terrain mobility', 'route planning', 'traversability assessment', 'vehicle accessibility', 'emergency access', 'flood access', 'rescue access'],
-                    'analysis_type': 'mobility_analysis'
+                "mobility_analysis": {
+                    "keywords": [
+                        "mobility",
+                        "traversability",
+                        "vehicle",
+                        "route",
+                        "passable",
+                        "impassable",
+                        "movement",
+                        "accessibility",
+                        "access",
+                        "emergency response",
+                        "evacuation",
+                        "convoy",
+                    ],
+                    "phrases": [
+                        "mobility analysis",
+                        "vehicle mobility",
+                        "terrain mobility",
+                        "route planning",
+                        "traversability assessment",
+                        "vehicle accessibility",
+                        "emergency access",
+                        "flood access",
+                        "rescue access",
+                    ],
+                    "analysis_type": "mobility_analysis",
                 },
-                'line_of_sight': {
-                    'keywords': ['visibility', 'line of sight', 'viewshed', 'observation', 'visible', 'hidden', 'obstruction'],
-                    'phrases': ['line of sight', 'line-of-sight', 'visibility analysis', 'viewshed analysis', 'observation post'],
-                    'analysis_type': 'line_of_sight'
+                "line_of_sight": {
+                    "keywords": [
+                        "visibility",
+                        "line of sight",
+                        "viewshed",
+                        "observation",
+                        "visible",
+                        "hidden",
+                        "obstruction",
+                    ],
+                    "phrases": [
+                        "line of sight",
+                        "line-of-sight",
+                        "visibility analysis",
+                        "viewshed analysis",
+                        "observation post",
+                    ],
+                    "analysis_type": "line_of_sight",
                 },
-                'elevation_profile': {
-                    'keywords': ['elevation profile', 'cross section', 'profile', 'transect'],
-                    'phrases': ['elevation profile', 'cross-section', 'terrain profile', 'elevation transect'],
-                    'analysis_type': 'elevation_profile'
-                }
+                "elevation_profile": {
+                    "keywords": [
+                        "elevation profile",
+                        "cross section",
+                        "profile",
+                        "transect",
+                    ],
+                    "phrases": [
+                        "elevation profile",
+                        "cross-section",
+                        "terrain profile",
+                        "elevation transect",
+                    ],
+                    "analysis_type": "elevation_profile",
+                },
             }
-            
+
             # Check for GEOINT patterns
             for intent_type, patterns in geoint_patterns.items():
                 # Check exact phrases first (higher confidence)
-                for phrase in patterns['phrases']:
+                for phrase in patterns["phrases"]:
                     if phrase in query_lower:
-                        logger.info(f"[TARGET] GEOINT phrase match: '{phrase}' -> {intent_type}")
+                        logger.info(
+                            f"[TARGET] GEOINT phrase match: '{phrase}' -> {intent_type}"
+                        )
                         return {
-                            'intent_type': intent_type,
-                            'analysis_type': patterns['analysis_type'],
-                            'confidence': 0.9,
-                            'matched_phrase': phrase,
-                            'detection_method': 'fallback_phrase_match'
+                            "intent_type": intent_type,
+                            "analysis_type": patterns["analysis_type"],
+                            "confidence": 0.9,
+                            "matched_phrase": phrase,
+                            "detection_method": "fallback_phrase_match",
                         }
-                
+
                 # Check keywords (medium confidence)
-                keyword_matches = sum(1 for keyword in patterns['keywords'] if keyword in query_lower)
+                keyword_matches = sum(
+                    1 for keyword in patterns["keywords"] if keyword in query_lower
+                )
                 if keyword_matches >= 1:
                     confidence = min(0.8, 0.4 + (keyword_matches * 0.2))
-                    logger.info(f"[TARGET] GEOINT keyword match: {keyword_matches} keywords -> {intent_type}")
+                    logger.info(
+                        f"[TARGET] GEOINT keyword match: {keyword_matches} keywords -> {intent_type}"
+                    )
                     return {
-                        'intent_type': intent_type,
-                        'analysis_type': patterns['analysis_type'],
-                        'confidence': confidence,
-                        'matched_keywords': keyword_matches,
-                        'detection_method': 'fallback_keyword_match'
+                        "intent_type": intent_type,
+                        "analysis_type": patterns["analysis_type"],
+                        "confidence": confidence,
+                        "matched_keywords": keyword_matches,
+                        "detection_method": "fallback_keyword_match",
                     }
-            
+
             # Check for military/tactical context that might indicate GEOINT needs
-            military_indicators = ['tactical', 'military', 'defense', 'surveillance', 'reconnaissance', 'intel', 'mission']
-            geoint_context = ['terrain', 'visibility', 'mobility', 'elevation', 'obstacle', 'cover']
-            
-            military_matches = sum(1 for indicator in military_indicators if indicator in query_lower)
-            geoint_matches = sum(1 for context in geoint_context if context in query_lower)
-            
+            military_indicators = [
+                "tactical",
+                "military",
+                "defense",
+                "surveillance",
+                "reconnaissance",
+                "intel",
+                "mission",
+            ]
+            geoint_context = [
+                "terrain",
+                "visibility",
+                "mobility",
+                "elevation",
+                "obstacle",
+                "cover",
+            ]
+
+            military_matches = sum(
+                1 for indicator in military_indicators if indicator in query_lower
+            )
+            geoint_matches = sum(
+                1 for context in geoint_context if context in query_lower
+            )
+
             if military_matches >= 1 and geoint_matches >= 1:
-                logger.info(f"[TARGET] Military GEOINT context detected: {military_matches} military + {geoint_matches} geoint terms")
+                logger.info(
+                    f"[TARGET] Military GEOINT context detected: {military_matches} military + {geoint_matches} geoint terms"
+                )
                 return {
-                    'intent_type': 'military_geoint',
-                    'analysis_type': 'terrain_analysis',  # Default to terrain analysis
-                    'confidence': 0.7,
-                    'matched_military': military_matches,
-                    'matched_geoint': geoint_matches,
-                    'detection_method': 'fallback_context_match'
+                    "intent_type": "military_geoint",
+                    "analysis_type": "terrain_analysis",  # Default to terrain analysis
+                    "confidence": 0.7,
+                    "matched_military": military_matches,
+                    "matched_geoint": geoint_matches,
+                    "detection_method": "fallback_context_match",
                 }
-            
+
             return None
-            
+
         except Exception as e:
             logger.error(f"[FAIL] Error in fallback GEOINT intent detection: {str(e)}")
             return None
-    
-    async def _route_to_geoint_service(self, query: str, geoint_intent: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def _route_to_geoint_service(
+        self, query: str, geoint_intent: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Route GEOINT queries to the appropriate specialized service.
-        
+
         Args:
             query: Original natural language query
             geoint_intent: Detected GEOINT intent information
-            
+
         Returns:
             Dict containing GEOINT service routing information
         """
         try:
-            logger.info(f"[TARGET] Routing to GEOINT service: {geoint_intent['analysis_type']}")
-            
+            logger.info(
+                f"[TARGET] Routing to GEOINT service: {geoint_intent['analysis_type']}"
+            )
+
             # Extract location information for GEOINT analysis
             entities = await self.extract_entities(query)
             location_info = entities.get("location", {})
             location_name = location_info.get("name")
-            
+
             # Resolve location to bounding box if available
             bbox = None
             if location_name:
                 bbox = await self.resolve_location_to_bbox(
-                    location_name, 
-                    location_info.get("type", "region")
+                    location_name, location_info.get("type", "region")
                 )
-                logger.info(f"[PIN] GEOINT location resolved: {location_name} -> {bbox}")
-            
+                logger.info(
+                    f"[PIN] GEOINT location resolved: {location_name} -> {bbox}"
+                )
+
             # Extract additional parameters for GEOINT analysis
-            geoint_params = self._extract_geoint_parameters(query, geoint_intent['analysis_type'])
-            
+            geoint_params = self._extract_geoint_parameters(
+                query, geoint_intent["analysis_type"]
+            )
+
             # Build GEOINT service request
             geoint_request = {
-                'service_type': 'geoint',
-                'analysis_type': geoint_intent['analysis_type'],
-                'query': query,
-                'bbox': bbox,
-                'location_info': location_info,
-                'parameters': geoint_params,
-                'intent_confidence': geoint_intent['confidence'],
-                'detection_method': geoint_intent['detection_method'],
-                'extracted_entities': entities
+                "service_type": "geoint",
+                "analysis_type": geoint_intent["analysis_type"],
+                "query": query,
+                "bbox": bbox,
+                "location_info": location_info,
+                "parameters": geoint_params,
+                "intent_confidence": geoint_intent["confidence"],
+                "detection_method": geoint_intent["detection_method"],
+                "extracted_entities": entities,
             }
-            
+
             # Add specific routing information based on analysis type
-            if geoint_intent['analysis_type'] == 'terrain_analysis':
-                geoint_request['recommended_resolution'] = 30  # meters
-                geoint_request['analysis_options'] = ['slope', 'aspect', 'hillshade', 'roughness']
-                
-            elif geoint_intent['analysis_type'] == 'mobility_analysis':
-                geoint_request['vehicle_type'] = geoint_params.get('vehicle_type', 'ground')
-                geoint_request['weather_condition'] = geoint_params.get('weather_condition', 'dry')
-                
-            elif geoint_intent['analysis_type'] == 'line_of_sight':
-                geoint_request['observer_height'] = geoint_params.get('observer_height', 1.75)
-                geoint_request['target_height'] = geoint_params.get('target_height', 1.75)
-                
-            elif geoint_intent['analysis_type'] == 'elevation_profile':
-                geoint_request['sample_distance'] = geoint_params.get('sample_distance', 100)
-            
-            logger.info(f"[OK] GEOINT service routing completed: {geoint_intent['analysis_type']}")
-            
+            if geoint_intent["analysis_type"] == "terrain_analysis":
+                geoint_request["recommended_resolution"] = 30  # meters
+                geoint_request["analysis_options"] = [
+                    "slope",
+                    "aspect",
+                    "hillshade",
+                    "roughness",
+                ]
+
+            elif geoint_intent["analysis_type"] == "mobility_analysis":
+                geoint_request["vehicle_type"] = geoint_params.get(
+                    "vehicle_type", "ground"
+                )
+                geoint_request["weather_condition"] = geoint_params.get(
+                    "weather_condition", "dry"
+                )
+
+            elif geoint_intent["analysis_type"] == "line_of_sight":
+                geoint_request["observer_height"] = geoint_params.get(
+                    "observer_height", 1.75
+                )
+                geoint_request["target_height"] = geoint_params.get(
+                    "target_height", 1.75
+                )
+
+            elif geoint_intent["analysis_type"] == "elevation_profile":
+                geoint_request["sample_distance"] = geoint_params.get(
+                    "sample_distance", 100
+                )
+
+            logger.info(
+                f"[OK] GEOINT service routing completed: {geoint_intent['analysis_type']}"
+            )
+
             return geoint_request
-            
+
         except Exception as e:
             logger.error(f"[FAIL] Error routing to GEOINT service: {str(e)}")
             return {
-                'error': f"GEOINT routing failed: {str(e)}",
-                'service_type': 'geoint',
-                'analysis_type': geoint_intent.get('analysis_type', 'unknown'),
-                'fallback_to_stac': True
+                "error": f"GEOINT routing failed: {str(e)}",
+                "service_type": "geoint",
+                "analysis_type": geoint_intent.get("analysis_type", "unknown"),
+                "fallback_to_stac": True,
             }
-    
-    def _extract_geoint_parameters(self, query: str, analysis_type: str) -> Dict[str, Any]:
+
+    def _extract_geoint_parameters(
+        self, query: str, analysis_type: str
+    ) -> Dict[str, Any]:
         """
         Extract specific parameters for GEOINT analysis from the query.
-        
+
         Args:
             query: Natural language query
             analysis_type: Type of GEOINT analysis to perform
-            
+
         Returns:
             Dict containing extracted parameters
         """
         try:
             query_lower = query.lower()
             params = {}
-            
+
             # Common parameter extraction
-            if 'vehicle' in query_lower:
-                if any(vehicle in query_lower for vehicle in ['tank', 'armor', 'tracked']):
-                    params['vehicle_type'] = 'tracked_vehicle'
-                elif any(vehicle in query_lower for vehicle in ['truck', 'wheeled', 'humvee']):
-                    params['vehicle_type'] = 'light_vehicle'
-                elif 'heavy' in query_lower:
-                    params['vehicle_type'] = 'heavy_vehicle'
+            if "vehicle" in query_lower:
+                if any(
+                    vehicle in query_lower for vehicle in ["tank", "armor", "tracked"]
+                ):
+                    params["vehicle_type"] = "tracked_vehicle"
+                elif any(
+                    vehicle in query_lower for vehicle in ["truck", "wheeled", "humvee"]
+                ):
+                    params["vehicle_type"] = "light_vehicle"
+                elif "heavy" in query_lower:
+                    params["vehicle_type"] = "heavy_vehicle"
                 else:
-                    params['vehicle_type'] = 'light_vehicle'
-            
+                    params["vehicle_type"] = "light_vehicle"
+
             # Weather condition extraction
             weather_terms = {
-                'wet': ['wet', 'rain', 'rainy', 'precipitation'],
-                'snow': ['snow', 'snowy', 'winter'],
-                'mud': ['mud', 'muddy'],
-                'dry': ['dry', 'clear', 'sunny']
+                "wet": ["wet", "rain", "rainy", "precipitation"],
+                "snow": ["snow", "snowy", "winter"],
+                "mud": ["mud", "muddy"],
+                "dry": ["dry", "clear", "sunny"],
             }
-            
+
             for condition, terms in weather_terms.items():
                 if any(term in query_lower for term in terms):
-                    params['weather_condition'] = condition
+                    params["weather_condition"] = condition
                     break
-            
+
             # Height/elevation parameter extraction
             import re
-            height_pattern = r'(\d+(?:\.\d+)?)\s*(?:m|meter|meters|ft|feet|foot)'
+
+            height_pattern = r"(\d+(?:\.\d+)?)\s*(?:m|meter|meters|ft|feet|foot)"
             height_matches = re.findall(height_pattern, query_lower)
-            
+
             if height_matches:
                 height_value = float(height_matches[0])
                 # Convert feet to meters if needed
-                if any(unit in query_lower for unit in ['ft', 'feet', 'foot']):
+                if any(unit in query_lower for unit in ["ft", "feet", "foot"]):
                     height_value *= 0.3048
-                
-                if 'observer' in query_lower or 'eye' in query_lower:
-                    params['observer_height'] = height_value
-                elif 'target' in query_lower:
-                    params['target_height'] = height_value
+
+                if "observer" in query_lower or "eye" in query_lower:
+                    params["observer_height"] = height_value
+                elif "target" in query_lower:
+                    params["target_height"] = height_value
                 else:
-                    params['observer_height'] = height_value
-            
+                    params["observer_height"] = height_value
+
             # Resolution parameter extraction
-            resolution_pattern = r'(\d+)\s*(?:m|meter|meters)?\s*resolution'
+            resolution_pattern = r"(\d+)\s*(?:m|meter|meters)?\s*resolution"
             resolution_matches = re.findall(resolution_pattern, query_lower)
             if resolution_matches:
-                params['resolution'] = int(resolution_matches[0])
-            
+                params["resolution"] = int(resolution_matches[0])
+
             logger.info(f"[TOOL] Extracted GEOINT parameters: {params}")
             return params
-            
+
         except Exception as e:
             logger.error(f"[FAIL] Parameter extraction failed: {str(e)}")
             return {}
-    
+
     def _get_geoint_recommended_collections(self, analysis_type: str) -> List[str]:
         """
         Get recommended STAC collections for different GEOINT analysis types.
-        
+
         Args:
             analysis_type: Type of GEOINT analysis
-            
+
         Returns:
             List of recommended STAC collection IDs
         """
         collection_mapping = {
-            'terrain_analysis': ['cop-dem-glo-30', 'nasadem', 'cop-dem-glo-90'],
-            'mobility_analysis': ['cop-dem-glo-30', 'sentinel-1-grd', 'landsat-c2-l2'],
-            'line_of_sight': ['cop-dem-glo-30', 'nasadem'],
-            'elevation_profile': ['cop-dem-glo-30', 'nasadem', 'cop-dem-glo-90']
+            "terrain_analysis": ["cop-dem-glo-30", "nasadem", "cop-dem-glo-90"],
+            "mobility_analysis": ["cop-dem-glo-30", "sentinel-1-grd", "landsat-c2-l2"],
+            "line_of_sight": ["cop-dem-glo-30", "nasadem"],
+            "elevation_profile": ["cop-dem-glo-30", "nasadem", "cop-dem-glo-90"],
         }
-        
-        return collection_mapping.get(analysis_type, ['cop-dem-glo-30'])
+
+        return collection_mapping.get(analysis_type, ["cop-dem-glo-30"])
 
 
 # =============================================================================
 # STANDALONE WRAPPER FUNCTIONS FOR BACKWARD COMPATIBILITY
 # =============================================================================
 
+
 async def process_query_with_openai(query: str) -> Dict[str, Any]:
     """
     Standalone function wrapper for processing queries with OpenAI-compatible LLMs.
-    
+
     This function provides backward compatibility for code that expects
     a standalone process_query_with_openai function.
-    
+
     Args:
         query: Natural language query to process
-        
+
     Returns:
         Dictionary containing STAC query and extracted entities
     """
     try:
         logger.info(f"[SEARCH] Processing standalone query: '{query}'")
-        
+
         # Initialize translator and process query
         translator = SemanticQueryTranslator()
         result = await translator.translate_query(query)
-        
-        logger.info(f"[OK] Successfully processed query via standalone function")
+
+        logger.info("[OK] Successfully processed query via standalone function")
         return result
-        
+
     except Exception as e:
         logger.error(f"[FAIL] Error in standalone process_query_with_openai: {e}")
         return {
             "error": str(e),
             "query": query,
-            "function": "process_query_with_openai"
+            "function": "process_query_with_openai",
         }
 
 
 def process_query_with_openai_sync(query: str) -> Dict[str, Any]:
     """
     Synchronous wrapper for the async process_query_with_openai function
-    
+
     This allows calling the function without async/await syntax.
-    
+
     Args:
         query: Natural language query to process
-        
+
     Returns:
         Dictionary containing STAC query and extracted entities
     """
@@ -8157,7 +9776,7 @@ def process_query_with_openai_sync(query: str) -> Dict[str, Any]:
         return {
             "error": str(e),
             "query": query,
-            "function": "process_query_with_openai_sync"
+            "function": "process_query_with_openai_sync",
         }
 
 
@@ -8171,6 +9790,7 @@ async def create_semantic_translator() -> SemanticQueryTranslator:
 # Provider-agnostic helpers (re-exported so other modules can import from here)
 # ---------------------------------------------------------------------------
 
+
 def get_llm_client(model: str = None, vision: bool = False):
     """Return an OpenAI-compatible client for the configured LLM provider.
 
@@ -8178,4 +9798,5 @@ def get_llm_client(model: str = None, vision: bool = False):
     ``from semantic_translator import get_llm_client`` continue to work.
     """
     from llm_client import get_llm_client as _get
+
     return _get(model=model, vision=vision)

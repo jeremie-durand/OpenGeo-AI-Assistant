@@ -13,25 +13,24 @@ Usage:
     tool = AsyncFunctionTool(functions)
 """
 
-import logging
 import json
+import logging
 import math
 import os
-from typing import Dict, Any, List, Optional, Set, Callable
-from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
+from typing import Any, Callable, Dict, List, Optional, Set
 
 import numpy as np
 import planetary_computer
 import pystac_client
-import requests
 
 logger = logging.getLogger(__name__)
 
 # Module-level constants
 STAC_ENDPOINT = os.getenv("STAC_API_URL", "http://localhost:8081")
 RADIUS_MILES = 5
-SLOPE_THRESHOLD_SLOW = 15   # degrees
+SLOPE_THRESHOLD_SLOW = 15  # degrees
 SLOPE_THRESHOLD_NO_GO = 30  # degrees
 WATER_BACKSCATTER_THRESHOLD = -20  # dB
 VEGETATION_NDVI_DENSE = 0.6
@@ -55,16 +54,16 @@ WORLDCOVER_CLASSES = {
 # Mobility impact per WorldCover class
 WORLDCOVER_MOBILITY = {
     10: "SLOW-GO",  # Tree cover — canopy, roots
-    20: "GO",       # Shrubland — passable
-    30: "GO",       # Grassland — clear
-    40: "GO",       # Cropland — flat, may be muddy
-    50: "GO",       # Built-up — roads likely
-    60: "GO",       # Bare — easy traverse
-    70: "NO-GO",    # Snow/ice — dangerous
-    80: "NO-GO",    # Permanent water — impassable
+    20: "GO",  # Shrubland — passable
+    30: "GO",  # Grassland — clear
+    40: "GO",  # Cropland — flat, may be muddy
+    50: "GO",  # Built-up — roads likely
+    60: "GO",  # Bare — easy traverse
+    70: "NO-GO",  # Snow/ice — dangerous
+    80: "NO-GO",  # Permanent water — impassable
     90: "SLOW-GO",  # Wetland — soft ground
-    95: "NO-GO",    # Mangroves — impassable
-    100: "GO",      # Moss/lichen — passable
+    95: "NO-GO",  # Mangroves — impassable
+    100: "GO",  # Moss/lichen — passable
 }
 
 # Lazy-loaded STAC catalog
@@ -98,7 +97,9 @@ def _convert_numpy_to_python(obj: Any) -> Any:
     return obj
 
 
-def _calculate_bbox(latitude: float, longitude: float, radius_miles: float = 5.0) -> List[float]:
+def _calculate_bbox(
+    latitude: float, longitude: float, radius_miles: float = 5.0
+) -> List[float]:
     """Calculate bounding box from center point and radius in miles."""
     lat_delta = radius_miles / 69.0
     lon_delta = radius_miles / (69.0 * math.cos(math.radians(latitude)))
@@ -106,27 +107,51 @@ def _calculate_bbox(latitude: float, longitude: float, radius_miles: float = 5.0
         longitude - lon_delta,
         latitude - lat_delta,
         longitude + lon_delta,
-        latitude + lat_delta
+        latitude + lat_delta,
     ]
 
 
-def _calculate_directional_bbox(latitude: float, longitude: float, cardinal: str) -> List[float]:
+def _calculate_directional_bbox(
+    latitude: float, longitude: float, cardinal: str
+) -> List[float]:
     """Calculate bounding box for a cardinal direction sector (N/S/E/W)."""
     sector_radius = RADIUS_MILES / 2.0
     lat_delta = sector_radius / 69.0
     lon_delta = sector_radius / (69.0 * math.cos(math.radians(latitude)))
 
     if cardinal == "N":
-        return [longitude - lon_delta, latitude, longitude + lon_delta, latitude + lat_delta]
+        return [
+            longitude - lon_delta,
+            latitude,
+            longitude + lon_delta,
+            latitude + lat_delta,
+        ]
     elif cardinal == "S":
-        return [longitude - lon_delta, latitude - lat_delta, longitude + lon_delta, latitude]
+        return [
+            longitude - lon_delta,
+            latitude - lat_delta,
+            longitude + lon_delta,
+            latitude,
+        ]
     elif cardinal == "E":
-        return [longitude, latitude - lat_delta, longitude + lon_delta, latitude + lat_delta]
+        return [
+            longitude,
+            latitude - lat_delta,
+            longitude + lon_delta,
+            latitude + lat_delta,
+        ]
     else:  # W
-        return [longitude - lon_delta, latitude - lat_delta, longitude, latitude + lat_delta]
+        return [
+            longitude - lon_delta,
+            latitude - lat_delta,
+            longitude,
+            latitude + lat_delta,
+        ]
 
 
-def _calculate_corridor_bbox(lat1: float, lon1: float, lat2: float, lon2: float, padding_miles: float = 6.0) -> List[float]:
+def _calculate_corridor_bbox(
+    lat1: float, lon1: float, lat2: float, lon2: float, padding_miles: float = 6.0
+) -> List[float]:
     """Calculate bounding box encompassing the full A→B corridor with padding.
     Padding covers endpoint 5-mile analysis radii plus margin.
     """
@@ -137,7 +162,7 @@ def _calculate_corridor_bbox(lat1: float, lon1: float, lat2: float, lon2: float,
         min(lon1, lon2) - lon_pad,
         min(lat1, lat2) - lat_pad,
         max(lon1, lon2) + lon_pad,
-        max(lat1, lat2) + lat_pad
+        max(lat1, lat2) + lat_pad,
     ]
 
 
@@ -148,7 +173,7 @@ def _items_covering_point(items: list, lat: float, lon: float) -> list:
     """
     covering = []
     for item in items:
-        if hasattr(item, 'bbox') and item.bbox:
+        if hasattr(item, "bbox") and item.bbox:
             b = item.bbox  # [west, south, east, north]
             if b[0] <= lon <= b[2] and b[1] <= lat <= b[3]:
                 covering.append(item)
@@ -194,10 +219,11 @@ def _prefetch_corridor_stac_items(corridor_bbox: List[float]) -> Dict[str, list]
 
 
 def _query_stac_collection_sync(
-    collection: str, bbox: List[float],
+    collection: str,
+    bbox: List[float],
     datetime_range: Optional[str] = None,
     query_params: Optional[Dict] = None,
-    limit: int = 10
+    limit: int = 10,
 ) -> list:
     """Query a STAC collection synchronously via pystac_client."""
     try:
@@ -220,12 +246,14 @@ def _query_stac_collection_sync(
         return []
 
 
-def _read_cog_window_sync(asset_url: str, bbox: List[float], band: int = 1) -> Optional[np.ndarray]:
+def _read_cog_window_sync(
+    asset_url: str, bbox: List[float], band: int = 1
+) -> Optional[np.ndarray]:
     """Read pixels from a Cloud-Optimized GeoTIFF for a bounding box (synchronous)."""
     try:
         import rasterio
-        from rasterio.windows import from_bounds
         from rasterio.warp import transform_bounds
+        from rasterio.windows import from_bounds
 
         signed_url = planetary_computer.sign_url(asset_url)
         with rasterio.open(signed_url) as src:
@@ -255,12 +283,32 @@ def _analyze_fire_pixels(pixels: np.ndarray) -> Dict[str, Any]:
     low = int(np.sum(valid == 7))
     total = high + nominal + low
     if high > 0:
-        return {"status": "NO-GO", "reason": f"Active fires detected: {high} high-confidence fire pixels", "confidence": "high", "metrics": {"high": high, "nominal": nominal, "low": low, "total": total}}
+        return {
+            "status": "NO-GO",
+            "reason": f"Active fires detected: {high} high-confidence fire pixels",
+            "confidence": "high",
+            "metrics": {"high": high, "nominal": nominal, "low": low, "total": total},
+        }
     elif total > 5:
-        return {"status": "SLOW-GO", "reason": f"Multiple fire detections: {total} pixels", "confidence": "medium", "metrics": {"high": high, "nominal": nominal, "low": low, "total": total}}
+        return {
+            "status": "SLOW-GO",
+            "reason": f"Multiple fire detections: {total} pixels",
+            "confidence": "medium",
+            "metrics": {"high": high, "nominal": nominal, "low": low, "total": total},
+        }
     elif total > 0:
-        return {"status": "SLOW-GO", "reason": f"Potential fires: {total} low-confidence detections", "confidence": "medium", "metrics": {"high": high, "nominal": nominal, "low": low, "total": total}}
-    return {"status": "GO", "reason": "No active fires detected", "confidence": "high", "metrics": {"total": 0}}
+        return {
+            "status": "SLOW-GO",
+            "reason": f"Potential fires: {total} low-confidence detections",
+            "confidence": "medium",
+            "metrics": {"high": high, "nominal": nominal, "low": low, "total": total},
+        }
+    return {
+        "status": "GO",
+        "reason": "No active fires detected",
+        "confidence": "high",
+        "metrics": {"total": 0},
+    }
 
 
 def _analyze_water_pixels(pixels: np.ndarray) -> Dict[str, Any]:
@@ -270,10 +318,25 @@ def _analyze_water_pixels(pixels: np.ndarray) -> Dict[str, Any]:
         return {"status": "GO", "reason": "No SAR data available", "confidence": "low"}
     water_pct = float((np.sum(valid < WATER_BACKSCATTER_THRESHOLD) / len(valid)) * 100)
     if water_pct > 30:
-        return {"status": "NO-GO", "reason": f"Major water bodies: {water_pct:.1f}% coverage", "confidence": "high", "metrics": {"water_pct": round(water_pct, 1)}}
+        return {
+            "status": "NO-GO",
+            "reason": f"Major water bodies: {water_pct:.1f}% coverage",
+            "confidence": "high",
+            "metrics": {"water_pct": round(water_pct, 1)},
+        }
     elif water_pct > 10:
-        return {"status": "SLOW-GO", "reason": f"Moderate water coverage: {water_pct:.1f}%", "confidence": "high", "metrics": {"water_pct": round(water_pct, 1)}}
-    return {"status": "GO", "reason": f"Minimal water: {water_pct:.1f}% coverage", "confidence": "high", "metrics": {"water_pct": round(water_pct, 1)}}
+        return {
+            "status": "SLOW-GO",
+            "reason": f"Moderate water coverage: {water_pct:.1f}%",
+            "confidence": "high",
+            "metrics": {"water_pct": round(water_pct, 1)},
+        }
+    return {
+        "status": "GO",
+        "reason": f"Minimal water: {water_pct:.1f}% coverage",
+        "confidence": "high",
+        "metrics": {"water_pct": round(water_pct, 1)},
+    }
 
 
 def _analyze_jrc_water_pixels(pixels: np.ndarray) -> Dict[str, Any]:
@@ -283,17 +346,50 @@ def _analyze_jrc_water_pixels(pixels: np.ndarray) -> Dict[str, Any]:
     """
     valid = pixels[~np.isnan(pixels)]
     if len(valid) == 0:
-        return {"status": "GO", "reason": "No water occurrence data available", "confidence": "low"}
+        return {
+            "status": "GO",
+            "reason": "No water occurrence data available",
+            "confidence": "low",
+        }
     # Pixels with occurrence >= 50% are considered water bodies
     water_pixels = np.sum(valid >= 50)
     water_pct = float(water_pixels / len(valid) * 100)
     avg_occurrence = float(np.mean(valid[valid > 0])) if np.any(valid > 0) else 0.0
-    permanent_pct = float(np.sum(valid >= 80) / len(valid) * 100)  # Near-permanent water
+    permanent_pct = float(
+        np.sum(valid >= 80) / len(valid) * 100
+    )  # Near-permanent water
     if water_pct > 30:
-        return {"status": "NO-GO", "reason": f"Major water bodies: {water_pct:.1f}% coverage ({permanent_pct:.1f}% permanent)", "confidence": "high", "metrics": {"water_pct": round(water_pct, 1), "permanent_pct": round(permanent_pct, 1), "avg_occurrence": round(avg_occurrence, 1)}}
+        return {
+            "status": "NO-GO",
+            "reason": f"Major water bodies: {water_pct:.1f}% coverage ({permanent_pct:.1f}% permanent)",
+            "confidence": "high",
+            "metrics": {
+                "water_pct": round(water_pct, 1),
+                "permanent_pct": round(permanent_pct, 1),
+                "avg_occurrence": round(avg_occurrence, 1),
+            },
+        }
     elif water_pct > 10:
-        return {"status": "SLOW-GO", "reason": f"Moderate water coverage: {water_pct:.1f}% (avg occurrence {avg_occurrence:.0f}%)", "confidence": "high", "metrics": {"water_pct": round(water_pct, 1), "permanent_pct": round(permanent_pct, 1), "avg_occurrence": round(avg_occurrence, 1)}}
-    return {"status": "GO", "reason": f"Minimal water: {water_pct:.1f}% coverage", "confidence": "high", "metrics": {"water_pct": round(water_pct, 1), "permanent_pct": round(permanent_pct, 1), "avg_occurrence": round(avg_occurrence, 1)}}
+        return {
+            "status": "SLOW-GO",
+            "reason": f"Moderate water coverage: {water_pct:.1f}% (avg occurrence {avg_occurrence:.0f}%)",
+            "confidence": "high",
+            "metrics": {
+                "water_pct": round(water_pct, 1),
+                "permanent_pct": round(permanent_pct, 1),
+                "avg_occurrence": round(avg_occurrence, 1),
+            },
+        }
+    return {
+        "status": "GO",
+        "reason": f"Minimal water: {water_pct:.1f}% coverage",
+        "confidence": "high",
+        "metrics": {
+            "water_pct": round(water_pct, 1),
+            "permanent_pct": round(permanent_pct, 1),
+            "avg_occurrence": round(avg_occurrence, 1),
+        },
+    }
 
 
 def _analyze_elevation_pixels(pixels: np.ndarray) -> Dict[str, Any]:
@@ -305,7 +401,11 @@ def _analyze_elevation_pixels(pixels: np.ndarray) -> Dict[str, Any]:
     slope_deg = np.degrees(np.arctan(np.sqrt(dx**2 + dy**2)))
     valid_slopes = slope_deg[~np.isnan(slope_deg)]
     if len(valid_slopes) == 0:
-        return {"status": "GO", "reason": "Unable to calculate slopes", "confidence": "low"}
+        return {
+            "status": "GO",
+            "reason": "Unable to calculate slopes",
+            "confidence": "low",
+        }
     total = len(valid_slopes)
     gentle = float(np.sum(valid_slopes < 15) / total * 100)
     moderate = float(np.sum((valid_slopes >= 15) & (valid_slopes < 30)) / total * 100)
@@ -313,10 +413,43 @@ def _analyze_elevation_pixels(pixels: np.ndarray) -> Dict[str, Any]:
     max_s = float(np.max(valid_slopes))
     avg_s = float(np.mean(valid_slopes))
     if steep > 30:
-        return {"status": "NO-GO", "reason": f"Steep terrain: {steep:.1f}% > 30 deg slopes (max {max_s:.1f} deg)", "confidence": "high", "metrics": {"avg": round(avg_s, 1), "max": round(max_s, 1), "gentle_pct": round(gentle, 1), "moderate_pct": round(moderate, 1), "steep_pct": round(steep, 1)}}
+        return {
+            "status": "NO-GO",
+            "reason": f"Steep terrain: {steep:.1f}% > 30 deg slopes (max {max_s:.1f} deg)",
+            "confidence": "high",
+            "metrics": {
+                "avg": round(avg_s, 1),
+                "max": round(max_s, 1),
+                "gentle_pct": round(gentle, 1),
+                "moderate_pct": round(moderate, 1),
+                "steep_pct": round(steep, 1),
+            },
+        }
     elif moderate + steep > 50:
-        return {"status": "SLOW-GO", "reason": f"Moderate terrain: {moderate:.1f}% slopes 15-30 deg (avg {avg_s:.1f} deg)", "confidence": "high", "metrics": {"avg": round(avg_s, 1), "max": round(max_s, 1), "gentle_pct": round(gentle, 1), "moderate_pct": round(moderate, 1), "steep_pct": round(steep, 1)}}
-    return {"status": "GO", "reason": f"Gentle terrain: {gentle:.1f}% < 15 deg slopes (avg {avg_s:.1f} deg)", "confidence": "high", "metrics": {"avg": round(avg_s, 1), "max": round(max_s, 1), "gentle_pct": round(gentle, 1), "moderate_pct": round(moderate, 1), "steep_pct": round(steep, 1)}}
+        return {
+            "status": "SLOW-GO",
+            "reason": f"Moderate terrain: {moderate:.1f}% slopes 15-30 deg (avg {avg_s:.1f} deg)",
+            "confidence": "high",
+            "metrics": {
+                "avg": round(avg_s, 1),
+                "max": round(max_s, 1),
+                "gentle_pct": round(gentle, 1),
+                "moderate_pct": round(moderate, 1),
+                "steep_pct": round(steep, 1),
+            },
+        }
+    return {
+        "status": "GO",
+        "reason": f"Gentle terrain: {gentle:.1f}% < 15 deg slopes (avg {avg_s:.1f} deg)",
+        "confidence": "high",
+        "metrics": {
+            "avg": round(avg_s, 1),
+            "max": round(max_s, 1),
+            "gentle_pct": round(gentle, 1),
+            "moderate_pct": round(moderate, 1),
+            "steep_pct": round(steep, 1),
+        },
+    }
 
 
 def _analyze_vegetation_pixels(red: np.ndarray, nir: np.ndarray) -> Dict[str, Any]:
@@ -331,10 +464,25 @@ def _analyze_vegetation_pixels(red: np.ndarray, nir: np.ndarray) -> Dict[str, An
     dense = float(np.sum(valid >= 0.7) / total * 100)
     avg = float(np.mean(valid))
     if dense > 50:
-        return {"status": "NO-GO", "reason": f"Dense vegetation: {dense:.1f}% (NDVI > 0.7)", "confidence": "high", "metrics": {"avg_ndvi": round(avg, 2), "dense_pct": round(dense, 1)}}
+        return {
+            "status": "NO-GO",
+            "reason": f"Dense vegetation: {dense:.1f}% (NDVI > 0.7)",
+            "confidence": "high",
+            "metrics": {"avg_ndvi": round(avg, 2), "dense_pct": round(dense, 1)},
+        }
     elif moderate + dense > 60:
-        return {"status": "SLOW-GO", "reason": f"Moderate vegetation: {moderate:.1f}% (avg NDVI {avg:.2f})", "confidence": "high", "metrics": {"avg_ndvi": round(avg, 2), "dense_pct": round(dense, 1)}}
-    return {"status": "GO", "reason": f"Light vegetation: {sparse:.1f}% sparse (avg NDVI {avg:.2f})", "confidence": "high", "metrics": {"avg_ndvi": round(avg, 2), "dense_pct": round(dense, 1)}}
+        return {
+            "status": "SLOW-GO",
+            "reason": f"Moderate vegetation: {moderate:.1f}% (avg NDVI {avg:.2f})",
+            "confidence": "high",
+            "metrics": {"avg_ndvi": round(avg, 2), "dense_pct": round(dense, 1)},
+        }
+    return {
+        "status": "GO",
+        "reason": f"Light vegetation: {sparse:.1f}% sparse (avg NDVI {avg:.2f})",
+        "confidence": "high",
+        "metrics": {"avg_ndvi": round(avg, 2), "dense_pct": round(dense, 1)},
+    }
 
 
 def _analyze_landcover_pixels(pixels: np.ndarray) -> Dict[str, Any]:
@@ -373,7 +521,9 @@ def _analyze_landcover_pixels(pixels: np.ndarray) -> Dict[str, Any]:
         reason = f"Challenging terrain: {slowgo_pct:.0f}% tree cover/wetland"
     else:
         status = dominant_mobility
-        reason = f"Dominant: {dominant_label} ({class_pcts.get(dominant_label, 0):.0f}%)"
+        reason = (
+            f"Dominant: {dominant_label} ({class_pcts.get(dominant_label, 0):.0f}%)"
+        )
 
     return {
         "status": status,
@@ -383,22 +533,32 @@ def _analyze_landcover_pixels(pixels: np.ndarray) -> Dict[str, Any]:
             "dominant_class": dominant_label,
             "class_percentages": class_pcts,
             "has_roads_likely": class_pcts.get("Built-up", 0) > 5,
-        }
+        },
     }
 
 
-def _interpolate_points(lat1: float, lon1: float, lat2: float, lon2: float, num_points: int) -> List[Dict[str, float]]:
+def _interpolate_points(
+    lat1: float, lon1: float, lat2: float, lon2: float, num_points: int
+) -> List[Dict[str, float]]:
     """Generate equally-spaced intermediate points along a great-circle arc."""
     points = []
     for i in range(num_points):
         fraction = (i + 1) / (num_points + 1)  # exclude endpoints
         lat = lat1 + fraction * (lat2 - lat1)
         lon = lon1 + fraction * (lon2 - lon1)
-        points.append({"latitude": round(lat, 6), "longitude": round(lon, 6), "fraction": round(fraction, 2)})
+        points.append(
+            {
+                "latitude": round(lat, 6),
+                "longitude": round(lon, 6),
+                "fraction": round(fraction, 2),
+            }
+        )
     return points
 
 
-def _sample_corridor_point(lat: float, lon: float, prefetched_items: Optional[Dict[str, list]] = None) -> Dict[str, Any]:
+def _sample_corridor_point(
+    lat: float, lon: float, prefetched_items: Optional[Dict[str, list]] = None
+) -> Dict[str, Any]:
     """Lightweight terrain check at a single corridor waypoint.
     Only checks elevation/slope and land cover — fire and water are already
     assessed at the endpoints and don't need re-checking along the corridor.
@@ -406,7 +566,13 @@ def _sample_corridor_point(lat: float, lon: float, prefetched_items: Optional[Di
     skips STAC queries entirely (uses corridor-level pre-fetched items).
     """
     bbox = _calculate_bbox(lat, lon, radius_miles=2.0)  # smaller radius for corridor
-    result = {"latitude": lat, "longitude": lon, "status": "GO", "hazards": [], "data": {}}
+    result = {
+        "latitude": lat,
+        "longitude": lon,
+        "status": "GO",
+        "hazards": [],
+        "data": {},
+    }
 
     def _fetch(col, asset_key):
         if prefetched_items and col in prefetched_items and prefetched_items[col]:
@@ -456,7 +622,14 @@ def _sample_corridor_point(lat: float, lon: float, prefetched_items: Optional[Di
     return result
 
 
-def _build_elevation_transect(lat1: float, lon1: float, lat2: float, lon2: float, num_samples: int = 10, prefetched_dem_items: Optional[list] = None) -> Dict[str, Any]:
+def _build_elevation_transect(
+    lat1: float,
+    lon1: float,
+    lat2: float,
+    lon2: float,
+    num_samples: int = 10,
+    prefetched_dem_items: Optional[list] = None,
+) -> Dict[str, Any]:
     """Sample the DEM at points along A→B to produce an elevation profile.
     When prefetched_dem_items are provided, skips per-point STAC queries (saves ~10 queries).
     """
@@ -485,24 +658,34 @@ def _build_elevation_transect(lat1: float, lon1: float, lat2: float, lon2: float
         return None
 
     with ThreadPoolExecutor(max_workers=min(num_samples, 6)) as executor:
-        futures = [executor.submit(_sample_elev, lat, lon) for lat, lon in points_coords]
+        futures = [
+            executor.submit(_sample_elev, lat, lon) for lat, lon in points_coords
+        ]
         for f in futures:
             elevations.append(f.result())
 
     profile = []
     for i, ((lat, lon), elev) in enumerate(zip(points_coords, elevations)):
-        profile.append({
-            "index": i,
-            "latitude": round(lat, 6),
-            "longitude": round(lon, 6),
-            "elevation_m": round(elev, 1) if elev is not None else None,
-            "fraction": round(i / (num_samples - 1), 2),
-        })
+        profile.append(
+            {
+                "index": i,
+                "latitude": round(lat, 6),
+                "longitude": round(lon, 6),
+                "elevation_m": round(elev, 1) if elev is not None else None,
+                "fraction": round(i / (num_samples - 1), 2),
+            }
+        )
 
     valid_elevs = [e for e in elevations if e is not None]
     if len(valid_elevs) >= 2:
-        total_ascent = sum(max(0, valid_elevs[i+1] - valid_elevs[i]) for i in range(len(valid_elevs)-1))
-        total_descent = sum(max(0, valid_elevs[i] - valid_elevs[i+1]) for i in range(len(valid_elevs)-1))
+        total_ascent = sum(
+            max(0, valid_elevs[i + 1] - valid_elevs[i])
+            for i in range(len(valid_elevs) - 1)
+        )
+        total_descent = sum(
+            max(0, valid_elevs[i] - valid_elevs[i + 1])
+            for i in range(len(valid_elevs) - 1)
+        )
         max_elev = max(valid_elevs)
         min_elev = min(valid_elevs)
     else:
@@ -518,13 +701,15 @@ def _build_elevation_transect(lat1: float, lon1: float, lat2: float, lon2: float
             "elevation_range_m": round(max_elev - min_elev, 1),
             "start_elevation_m": round(valid_elevs[0], 1) if valid_elevs else None,
             "end_elevation_m": round(valid_elevs[-1], 1) if valid_elevs else None,
-        }
+        },
     }
+
 
 # ============================================================================
 # PUBLIC TOOL FUNCTIONS (registered with AsyncFunctionTool)
 # All functions are fully synchronous — no asyncio wrappers.
 # ============================================================================
+
 
 def analyze_directional_mobility(latitude: float, longitude: float) -> str:
     """Analyze terrain mobility in all four cardinal directions (N, S, E, W) from a location.
@@ -536,7 +721,9 @@ def analyze_directional_mobility(latitude: float, longitude: float) -> str:
     :return: JSON string with directional mobility assessments (north, south, east, west)
     """
     try:
-        logger.info(f"[TOOL] analyze_directional_mobility at ({latitude:.4f}, {longitude:.4f})")
+        logger.info(
+            f"[TOOL] analyze_directional_mobility at ({latitude:.4f}, {longitude:.4f})"
+        )
         result = _analyze_all_directions_sync(latitude, longitude)
         return json.dumps(_convert_numpy_to_python(result))
     except Exception as e:
@@ -544,7 +731,11 @@ def analyze_directional_mobility(latitude: float, longitude: float) -> str:
         return json.dumps({"error": str(e)})
 
 
-def _analyze_all_directions_sync(latitude: float, longitude: float, prefetched_items: Optional[Dict[str, list]] = None) -> Dict[str, Any]:
+def _analyze_all_directions_sync(
+    latitude: float,
+    longitude: float,
+    prefetched_items: Optional[Dict[str, list]] = None,
+) -> Dict[str, Any]:
     """Synchronous directional mobility analysis.
 
     When prefetched_items are provided (collection name → item list), skips all
@@ -572,9 +763,17 @@ def _analyze_all_directions_sync(latitude: float, longitude: float, prefetched_i
         # Filter items to those covering THIS endpoint (handles tile boundaries)
         for col, key in col_to_key.items():
             all_items = prefetched_items.get(col, [])
-            items = _items_covering_point(all_items, latitude, longitude) if all_items else []
+            items = (
+                _items_covering_point(all_items, latitude, longitude)
+                if all_items
+                else []
+            )
             if items:
-                terrain_data[key] = {"items_found": len(items), "collection": col, "items": items[:3]}
+                terrain_data[key] = {
+                    "items_found": len(items),
+                    "collection": col,
+                    "items": items[:3],
+                }
                 terrain_data["collection_status"][col] = "success"
                 terrain_data["sources"].append(col)
             else:
@@ -582,7 +781,9 @@ def _analyze_all_directions_sync(latitude: float, longitude: float, prefetched_i
     else:
         # Query each collection in PARALLEL (original path for single-point analysis)
         end_date = datetime.utcnow()
-        recent = f"{(end_date - timedelta(days=90)).isoformat()}Z/{end_date.isoformat()}Z"
+        recent = (
+            f"{(end_date - timedelta(days=90)).isoformat()}Z/{end_date.isoformat()}Z"
+        )
 
         collection_queries = [
             ("jrc-gsw", None, None),
@@ -595,9 +796,20 @@ def _analyze_all_directions_sync(latitude: float, longitude: float, prefetched_i
 
         def _fetch_collection(col, dt_range, qparams, key):
             try:
-                items = _query_stac_collection_sync(col, bbox, datetime_range=dt_range, query_params=qparams, limit=10)
+                items = _query_stac_collection_sync(
+                    col, bbox, datetime_range=dt_range, query_params=qparams, limit=10
+                )
                 if items:
-                    return key, col, {"items_found": len(items), "collection": col, "items": items[:3]}, "success"
+                    return (
+                        key,
+                        col,
+                        {
+                            "items_found": len(items),
+                            "collection": col,
+                            "items": items[:3],
+                        },
+                        "success",
+                    )
                 return key, col, None, "no_data"
             except Exception as e:
                 logger.error(f"Collection {col} query failed: {e}")
@@ -620,9 +832,19 @@ def _analyze_all_directions_sync(latitude: float, longitude: float, prefetched_i
     with ThreadPoolExecutor(max_workers=2) as dir_executor:
         dir_futures = {
             dir_executor.submit(
-                _analyze_single_direction_sync, name.title(), latitude, longitude, terrain_data, cardinal
+                _analyze_single_direction_sync,
+                name.title(),
+                latitude,
+                longitude,
+                terrain_data,
+                cardinal,
             ): name
-            for name, cardinal in [("north", "N"), ("south", "S"), ("east", "E"), ("west", "W")]
+            for name, cardinal in [
+                ("north", "N"),
+                ("south", "S"),
+                ("east", "E"),
+                ("west", "W"),
+            ]
         }
         for f in as_completed(dir_futures):
             name = dir_futures[f]
@@ -631,9 +853,13 @@ def _analyze_all_directions_sync(latitude: float, longitude: float, prefetched_i
             except Exception as e:
                 logger.error(f"Direction {name} analysis failed: {e}")
                 directions[name] = {
-                    "direction": name.title(), "cardinal": name[0].upper(),
-                    "status": "GO", "factors": [f"Analysis error: {e}"],
-                    "confidence": "low", "data_sources_used": [], "metrics": {}
+                    "direction": name.title(),
+                    "cardinal": name[0].upper(),
+                    "status": "GO",
+                    "factors": [f"Analysis error: {e}"],
+                    "confidence": "low",
+                    "data_sources_used": [],
+                    "metrics": {},
                 }
 
     return {
@@ -641,13 +867,15 @@ def _analyze_all_directions_sync(latitude: float, longitude: float, prefetched_i
         "radius_miles": RADIUS_MILES,
         "directions": directions,
         "data_sources": terrain_data["sources"],
-        "collection_status": terrain_data["collection_status"]
+        "collection_status": terrain_data["collection_status"],
     }
 
 
-def _analyze_single_direction_sync(direction_name: str, lat: float, lon: float, terrain_data: Dict, cardinal: str) -> Dict:
+def _analyze_single_direction_sync(
+    direction_name: str, lat: float, lon: float, terrain_data: Dict, cardinal: str
+) -> Dict:
     """Analyze mobility for one cardinal direction (synchronous).
-    
+
     Pre-fetches all COG raster data in parallel, then evaluates fire → water →
     elevation → vegetation logic sequentially for correct status propagation.
     """
@@ -668,19 +896,25 @@ def _analyze_single_direction_sync(direction_name: str, lat: float, lon: float, 
         if url:
             fetch_tasks["fire"] = (url.href, d_bbox, 1)
 
-    if terrain_data.get("water_detection") and terrain_data["water_detection"].get("items"):
+    if terrain_data.get("water_detection") and terrain_data["water_detection"].get(
+        "items"
+    ):
         item = terrain_data["water_detection"]["items"][0]
         asset = item.assets.get("occurrence", None)
         if asset:
             fetch_tasks["water"] = (asset.href, d_bbox, 1)
 
-    if terrain_data.get("elevation_profile") and terrain_data["elevation_profile"].get("items"):
+    if terrain_data.get("elevation_profile") and terrain_data["elevation_profile"].get(
+        "items"
+    ):
         item = terrain_data["elevation_profile"]["items"][0]
         asset = item.assets.get("data", None)
         if asset:
             fetch_tasks["elevation"] = (asset.href, d_bbox, 1)
 
-    if terrain_data.get("vegetation_density") and terrain_data["vegetation_density"].get("items"):
+    if terrain_data.get("vegetation_density") and terrain_data[
+        "vegetation_density"
+    ].get("items"):
         item = terrain_data["vegetation_density"]["items"][0]
         red_asset = item.assets.get("B04", None)
         nir_asset = item.assets.get("B08", None)
@@ -753,8 +987,13 @@ def _analyze_single_direction_sync(direction_name: str, lat: float, lon: float, 
             logger.error(f"Elevation analysis failed: {e}")
 
     # Vegetation
-    if (status == "GO" and "veg_red" in fetched and "veg_nir" in fetched
-            and fetched["veg_red"] is not None and fetched["veg_nir"] is not None):
+    if (
+        status == "GO"
+        and "veg_red" in fetched
+        and "veg_nir" in fetched
+        and fetched["veg_red"] is not None
+        and fetched["veg_nir"] is not None
+    ):
         try:
             r = _analyze_vegetation_pixels(fetched["veg_red"], fetched["veg_nir"])
             if r["status"] == "NO-GO":
@@ -786,10 +1025,13 @@ def _analyze_single_direction_sync(direction_name: str, lat: float, lon: float, 
         confidence = "low"
 
     return {
-        "direction": direction_name, "cardinal": cardinal,
-        "status": status, "factors": factors, "confidence": confidence,
+        "direction": direction_name,
+        "cardinal": cardinal,
+        "status": status,
+        "factors": factors,
+        "confidence": confidence,
         "data_sources_used": data_used or ["No raster data available"],
-        "metrics": metrics
+        "metrics": metrics,
     }
 
 
@@ -807,13 +1049,22 @@ def detect_water_bodies(latitude: float, longitude: float) -> str:
         bbox = _calculate_bbox(latitude, longitude, RADIUS_MILES)
         items = _query_stac_collection_sync("jrc-gsw", bbox, limit=5)
         if not items:
-            return json.dumps({"status": "no_data", "message": "No JRC Global Surface Water data available"})
+            return json.dumps(
+                {
+                    "status": "no_data",
+                    "message": "No JRC Global Surface Water data available",
+                }
+            )
         asset = items[0].assets.get("occurrence", None)
         if not asset:
-            return json.dumps({"status": "no_data", "message": "No water occurrence asset in JRC GSW"})
+            return json.dumps(
+                {"status": "no_data", "message": "No water occurrence asset in JRC GSW"}
+            )
         px = _read_cog_window_sync(asset.href, bbox)
         if px is None:
-            return json.dumps({"status": "error", "message": "Failed to read water occurrence raster"})
+            return json.dumps(
+                {"status": "error", "message": "Failed to read water occurrence raster"}
+            )
         result = _analyze_jrc_water_pixels(px)
         return json.dumps(_convert_numpy_to_python(result))
     except Exception as e:
@@ -834,13 +1085,17 @@ def detect_active_fires(latitude: float, longitude: float) -> str:
         bbox = _calculate_bbox(latitude, longitude, RADIUS_MILES)
         items = _query_stac_collection_sync("modis-14A1-061", bbox, limit=5)
         if not items:
-            return json.dumps({"status": "no_data", "message": "No MODIS fire data available"})
+            return json.dumps(
+                {"status": "no_data", "message": "No MODIS fire data available"}
+            )
         asset = items[0].assets.get("FireMask", None)
         if not asset:
             return json.dumps({"status": "no_data", "message": "No FireMask asset"})
         px = _read_cog_window_sync(asset.href, bbox)
         if px is None:
-            return json.dumps({"status": "error", "message": "Failed to read fire raster"})
+            return json.dumps(
+                {"status": "error", "message": "Failed to read fire raster"}
+            )
         result = _analyze_fire_pixels(px)
         return json.dumps(_convert_numpy_to_python(result))
     except Exception as e:
@@ -857,7 +1112,9 @@ def analyze_slope_for_mobility(latitude: float, longitude: float) -> str:
     :return: JSON string with slope analysis and mobility classification
     """
     try:
-        logger.info(f"[TOOL] analyze_slope_for_mobility at ({latitude:.4f}, {longitude:.4f})")
+        logger.info(
+            f"[TOOL] analyze_slope_for_mobility at ({latitude:.4f}, {longitude:.4f})"
+        )
         bbox = _calculate_bbox(latitude, longitude, RADIUS_MILES)
         items = _query_stac_collection_sync("cop-dem-glo-30", bbox, limit=5)
         if not items:
@@ -867,7 +1124,9 @@ def analyze_slope_for_mobility(latitude: float, longitude: float) -> str:
             return json.dumps({"status": "no_data", "message": "No DEM data asset"})
         px = _read_cog_window_sync(asset.href, bbox)
         if px is None:
-            return json.dumps({"status": "error", "message": "Failed to read DEM raster"})
+            return json.dumps(
+                {"status": "error", "message": "Failed to read DEM raster"}
+            )
         result = _analyze_elevation_pixels(px)
         return json.dumps(_convert_numpy_to_python(result))
     except Exception as e:
@@ -884,21 +1143,40 @@ def analyze_vegetation_density(latitude: float, longitude: float) -> str:
     :return: JSON string with vegetation density analysis
     """
     try:
-        logger.info(f"[TOOL] analyze_vegetation_density at ({latitude:.4f}, {longitude:.4f})")
+        logger.info(
+            f"[TOOL] analyze_vegetation_density at ({latitude:.4f}, {longitude:.4f})"
+        )
         bbox = _calculate_bbox(latitude, longitude, RADIUS_MILES)
         end_date = datetime.utcnow()
-        dt_range = f"{(end_date - timedelta(days=90)).isoformat()}Z/{end_date.isoformat()}Z"
-        items = _query_stac_collection_sync("sentinel-2-l2a", bbox, dt_range, query_params={"eo:cloud_cover": {"lt": 50}}, limit=5)
+        dt_range = (
+            f"{(end_date - timedelta(days=90)).isoformat()}Z/{end_date.isoformat()}Z"
+        )
+        items = _query_stac_collection_sync(
+            "sentinel-2-l2a",
+            bbox,
+            dt_range,
+            query_params={"eo:cloud_cover": {"lt": 50}},
+            limit=5,
+        )
         if not items:
-            return json.dumps({"status": "no_data", "message": "No Sentinel-2 data available (may be cloudy)"})
+            return json.dumps(
+                {
+                    "status": "no_data",
+                    "message": "No Sentinel-2 data available (may be cloudy)",
+                }
+            )
         red_asset = items[0].assets.get("B04", None)
         nir_asset = items[0].assets.get("B08", None)
         if not red_asset or not nir_asset:
-            return json.dumps({"status": "no_data", "message": "No Red/NIR band assets"})
+            return json.dumps(
+                {"status": "no_data", "message": "No Red/NIR band assets"}
+            )
         red_px = _read_cog_window_sync(red_asset.href, bbox)
         nir_px = _read_cog_window_sync(nir_asset.href, bbox)
         if red_px is None or nir_px is None:
-            return json.dumps({"status": "error", "message": "Failed to read Sentinel-2 raster"})
+            return json.dumps(
+                {"status": "error", "message": "Failed to read Sentinel-2 raster"}
+            )
         result = _analyze_vegetation_pixels(red_px, nir_px)
         return json.dumps(_convert_numpy_to_python(result))
     except Exception as e:
@@ -906,22 +1184,35 @@ def analyze_vegetation_density(latitude: float, longitude: float) -> str:
         return json.dumps({"error": str(e)})
 
 
-def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> Dict[str, float]:
+def _haversine_distance(
+    lat1: float, lon1: float, lat2: float, lon2: float
+) -> Dict[str, float]:
     """Calculate distance and bearing between two points."""
     R = 3958.8  # Earth radius in miles
     rlat1, rlat2 = math.radians(lat1), math.radians(lat2)
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(rlat1) * math.cos(rlat2) * math.sin(dlon / 2) ** 2
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(rlat1) * math.cos(rlat2) * math.sin(dlon / 2) ** 2
+    )
     dist_mi = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     # Bearing
     y = math.sin(dlon) * math.cos(rlat2)
-    x = math.cos(rlat1) * math.sin(rlat2) - math.sin(rlat1) * math.cos(rlat2) * math.cos(dlon)
+    x = math.cos(rlat1) * math.sin(rlat2) - math.sin(rlat1) * math.cos(
+        rlat2
+    ) * math.cos(dlon)
     bearing = (math.degrees(math.atan2(y, x)) + 360) % 360
-    return {"distance_miles": round(dist_mi, 2), "distance_km": round(dist_mi * 1.60934, 2), "bearing_degrees": round(bearing, 1)}
+    return {
+        "distance_miles": round(dist_mi, 2),
+        "distance_km": round(dist_mi * 1.60934, 2),
+        "bearing_degrees": round(bearing, 1),
+    }
 
 
-def analyze_two_point_traverse(latitude_a: float, longitude_a: float, latitude_b: float, longitude_b: float) -> str:
+def analyze_two_point_traverse(
+    latitude_a: float, longitude_a: float, latitude_b: float, longitude_b: float
+) -> str:
     """Analyze terrain traversability between two points (A and B) simultaneously.
     Runs mobility analysis at both endpoints IN PARALLEL, plus corridor waypoint
     sampling, elevation transect, and weather conditions.
@@ -934,7 +1225,9 @@ def analyze_two_point_traverse(latitude_a: float, longitude_a: float, latitude_b
     :return: JSON string with mobility assessments for both points, corridor, elevation profile, road route, and weather
     """
     try:
-        logger.info(f"[TOOL] analyze_two_point_traverse A({latitude_a:.4f}, {longitude_a:.4f}) -> B({latitude_b:.4f}, {longitude_b:.4f})")
+        logger.info(
+            f"[TOOL] analyze_two_point_traverse A({latitude_a:.4f}, {longitude_a:.4f}) -> B({latitude_b:.4f}, {longitude_b:.4f})"
+        )
         route = _haversine_distance(latitude_a, longitude_a, latitude_b, longitude_b)
 
         # Determine number of corridor waypoints based on distance
@@ -947,21 +1240,39 @@ def analyze_two_point_traverse(latitude_a: float, longitude_a: float, latitude_b
             num_waypoints = 2
         else:
             num_waypoints = 1
-        waypoints = _interpolate_points(latitude_a, longitude_a, latitude_b, longitude_b, num_waypoints)
+        waypoints = _interpolate_points(
+            latitude_a, longitude_a, latitude_b, longitude_b, num_waypoints
+        )
 
         # ── PRE-FETCH: Query all 6 STAC collections ONCE for the full corridor ──
         # Eliminates ~20 redundant STAC queries (was: 6/endpoint + 10 transect + 4 corridor = 26)
-        corridor_bbox = _calculate_corridor_bbox(latitude_a, longitude_a, latitude_b, longitude_b)
+        corridor_bbox = _calculate_corridor_bbox(
+            latitude_a, longitude_a, latitude_b, longitude_b
+        )
         prefetched = _prefetch_corridor_stac_items(corridor_bbox)
         dem_items = prefetched.get("cop-dem-glo-30") or None
 
         # Run ALL analyses in PARALLEL with pre-fetched STAC data:
         with ThreadPoolExecutor(max_workers=2 + num_waypoints) as executor:
-            future_a = executor.submit(_analyze_all_directions_sync, latitude_a, longitude_a, prefetched)
-            future_b = executor.submit(_analyze_all_directions_sync, latitude_b, longitude_b, prefetched)
-            future_transect = executor.submit(_build_elevation_transect, latitude_a, longitude_a, latitude_b, longitude_b, 10, dem_items)
+            future_a = executor.submit(
+                _analyze_all_directions_sync, latitude_a, longitude_a, prefetched
+            )
+            future_b = executor.submit(
+                _analyze_all_directions_sync, latitude_b, longitude_b, prefetched
+            )
+            future_transect = executor.submit(
+                _build_elevation_transect,
+                latitude_a,
+                longitude_a,
+                latitude_b,
+                longitude_b,
+                10,
+                dem_items,
+            )
             corridor_futures = [
-                executor.submit(_sample_corridor_point, wp["latitude"], wp["longitude"], prefetched)
+                executor.submit(
+                    _sample_corridor_point, wp["latitude"], wp["longitude"], prefetched
+                )
                 for wp in waypoints
             ]
 

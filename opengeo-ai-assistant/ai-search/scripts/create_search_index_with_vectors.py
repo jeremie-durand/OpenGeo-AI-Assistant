@@ -1,18 +1,19 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-import requests
 import json
+import os
+import sys
+from pathlib import Path
+
+import requests
+from azure.core.credentials import AzureKeyCredential
+from azure.identity import DefaultAzureCredential
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
 from azure.search.documents.indexes.models import *
-from azure.core.credentials import AzureKeyCredential
-from azure.identity import DefaultAzureCredential
-from langchain_openai import AzureOpenAIEmbeddings
-import os
-import sys
 from dotenv import load_dotenv
-from pathlib import Path
+from langchain_openai import AzureOpenAIEmbeddings
 
 # Load from root .env file
 ROOT_ENV_PATH = Path(__file__).parent.parent.parent.parent / ".env"
@@ -29,7 +30,9 @@ else:
 
 # Configuration - map from main env variables
 SEARCH_ENDPOINT = os.getenv("SEARCH_ENDPOINT")
-SEARCH_KEY = os.getenv("SEARCH_API_KEY")  # Optional - will use Managed Identity if not set
+SEARCH_KEY = os.getenv(
+    "SEARCH_API_KEY"
+)  # Optional - will use Managed Identity if not set
 USE_MANAGED_IDENTITY = os.getenv("USE_MANAGED_IDENTITY", "false").lower() == "true"
 INDEX_NAME = os.getenv("SEARCH_INDEX_NAME", "veda-collections")  # From main config
 AOAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
@@ -227,7 +230,9 @@ def populate_vector_index():
         print(f"Uploading {len(documents)} documents...")
         try:
             search_client.upload_documents(documents)
-            print(f"[OK] Successfully uploaded {len(documents)} documents with embeddings")
+            print(
+                f"[OK] Successfully uploaded {len(documents)} documents with embeddings"
+            )
         except Exception as e:
             print(f"[FAIL] Error uploading documents: {e}")
             raise
@@ -257,5 +262,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[FAIL] Script failed with error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

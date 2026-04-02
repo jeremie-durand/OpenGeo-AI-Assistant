@@ -11,10 +11,10 @@ Flow per query:
   5. Conversation history kept in-process per session
 """
 
-import logging
 import json
-from typing import Dict, Any, Optional, List
+import logging
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -68,14 +68,15 @@ def _get_tool_registry() -> Dict[str, Any]:
     global _TOOL_REGISTRY
     if not _TOOL_REGISTRY:
         from geoint.extreme_weather_tools import (
-            get_temperature_projection,
-            get_precipitation_projection,
-            get_wind_projection,
-            get_humidity_projection,
-            get_radiation_projection,
-            get_climate_overview,
             compare_climate_scenarios,
+            get_climate_overview,
+            get_humidity_projection,
+            get_precipitation_projection,
+            get_radiation_projection,
+            get_temperature_projection,
+            get_wind_projection,
         )
+
         _TOOL_REGISTRY = {
             "get_temperature_projection": get_temperature_projection,
             "get_precipitation_projection": get_precipitation_projection,
@@ -92,6 +93,7 @@ def _get_tool_registry() -> Dict[str, Any]:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _parse_json_safe(text: str) -> Any:
     text = text.strip()
     for marker in ("```json", "```"):
@@ -102,6 +104,7 @@ def _parse_json_safe(text: str) -> Any:
         return json.loads(text)
     except Exception:
         import re
+
         m = re.search(r"\[.*\]", text, re.DOTALL)
         if m:
             try:
@@ -112,7 +115,9 @@ def _parse_json_safe(text: str) -> Any:
 
 
 async def _llm_text(llm, messages, max_tokens=512, temperature=0.2, **kwargs):
-    response = await llm.chat(messages, max_tokens=max_tokens, temperature=temperature, **kwargs)
+    response = await llm.chat(
+        messages, max_tokens=max_tokens, temperature=temperature, **kwargs
+    )
     if isinstance(response, dict):
         blocks = response.get("content", [])
         if blocks and isinstance(blocks, list):
@@ -127,6 +132,7 @@ async def _llm_text(llm, messages, max_tokens=512, temperature=0.2, **kwargs):
 # ---------------------------------------------------------------------------
 # Session
 # ---------------------------------------------------------------------------
+
 
 class ExtremeWeatherAgentSession:
     def __init__(self, session_id: str, latitude: float, longitude: float):
@@ -148,6 +154,7 @@ class ExtremeWeatherAgentSession:
 # ExtremeWeatherAgent
 # ---------------------------------------------------------------------------
 
+
 class ExtremeWeatherAgent:
     """Provider-agnostic extreme weather / climate projection agent."""
 
@@ -165,25 +172,33 @@ class ExtremeWeatherAgent:
         if self._initialized:
             return
         import asyncio
+
         for attempt in range(3):
             try:
                 await self._do_initialize()
                 return
             except Exception as e:
                 if attempt < 2:
-                    wait = 2 ** attempt
-                    logger.warning(f"[RETRY] ExtremeWeatherAgent init attempt {attempt + 1} failed: {e} — retrying in {wait}s")
+                    wait = 2**attempt
+                    logger.warning(
+                        f"[RETRY] ExtremeWeatherAgent init attempt {attempt + 1} failed: {e} — retrying in {wait}s"
+                    )
                     await asyncio.sleep(wait)
                 else:
-                    logger.error(f"ExtremeWeatherAgent init failed after 3 attempts: {e}")
+                    logger.error(
+                        f"ExtremeWeatherAgent init failed after 3 attempts: {e}"
+                    )
                     raise
 
     async def _do_initialize(self):
         from llm_client import get_llm_client
+
         compat = get_llm_client()
         self._llm = compat._llm
         self._initialized = True
-        logger.info(f"ExtremeWeatherAgent initialised (provider={self._llm.provider}, model={self._llm.model})")
+        logger.info(
+            f"ExtremeWeatherAgent initialised (provider={self._llm.provider}, model={self._llm.model})"
+        )
 
     # ------------------------------------------------------------------
     # Step 1 — select which tools to call
@@ -235,8 +250,13 @@ Return ONLY a valid JSON array of calls, e.g.:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _call_tool(tool_name: str, latitude: float, longitude: float,
-                   scenario: str = "ssp585", year: int = 2030) -> str:
+    def _call_tool(
+        tool_name: str,
+        latitude: float,
+        longitude: float,
+        scenario: str = "ssp585",
+        year: int = 2030,
+    ) -> str:
         registry = _get_tool_registry()
         fn = registry.get(tool_name)
         if not fn:
@@ -244,7 +264,9 @@ Return ONLY a valid JSON array of calls, e.g.:
         try:
             if tool_name == "compare_climate_scenarios":
                 return fn(latitude=latitude, longitude=longitude, year=year)
-            return fn(latitude=latitude, longitude=longitude, scenario=scenario, year=year)
+            return fn(
+                latitude=latitude, longitude=longitude, scenario=scenario, year=year
+            )
         except Exception as e:
             logger.error(f"[ExtremeWeatherAgent] Tool {tool_name} failed: {e}")
             return json.dumps({"error": str(e)})
@@ -272,23 +294,42 @@ Return ONLY a valid JSON array of calls, e.g.:
             )
 
             if self._llm.provider == "anthropic":
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": vision_prompt},
-                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": clean}},
-                    ],
-                }]
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": vision_prompt},
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": clean,
+                                },
+                            },
+                        ],
+                    }
+                ]
             else:
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": vision_prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{clean}", "detail": "high"}},
-                    ],
-                }]
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": vision_prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{clean}",
+                                    "detail": "high",
+                                },
+                            },
+                        ],
+                    }
+                ]
 
-            result = await _llm_text(self._llm, messages, max_tokens=500, temperature=0.3)
+            result = await _llm_text(
+                self._llm, messages, max_tokens=500, temperature=0.3
+            )
             logger.info(f"Climate vision analysis: {len(result)} chars")
             return result
         except Exception as e:
@@ -331,7 +372,9 @@ Return ONLY a valid JSON array of calls, e.g.:
 
         messages = []
         if self._llm.provider != "anthropic":
-            messages.append({"role": "system", "content": EXTREME_WEATHER_AGENT_INSTRUCTIONS})
+            messages.append(
+                {"role": "system", "content": EXTREME_WEATHER_AGENT_INSTRUCTIONS}
+            )
         messages.extend(session.history[-8:])
         messages.append({"role": "user", "content": user_content})
 
@@ -363,7 +406,8 @@ Return ONLY a valid JSON array of calls, e.g.:
     def cleanup_old_sessions(self, max_age_minutes: int = 60):
         now = datetime.utcnow()
         expired = [
-            sid for sid, s in self.sessions.items()
+            sid
+            for sid, s in self.sessions.items()
             if (now - s.last_activity).total_seconds() > max_age_minutes * 60
         ]
         for sid in expired:
@@ -397,6 +441,7 @@ Return ONLY a valid JSON array of calls, e.g.:
             fallback = f"Location ({latitude:.4f}, {longitude:.4f})"
             try:
                 from semantic_translator import geocoding_plugin
+
                 rg = await geocoding_plugin.reverse_geocode(latitude, longitude)
                 data = json.loads(rg)
                 if not data.get("error"):
@@ -404,7 +449,9 @@ Return ONLY a valid JSON array of calls, e.g.:
                     r = data.get("region", "")
                     c = data.get("country", "")
                     parts = [p for p in [r, c] if p and p != n]
-                    result = f"{n}, {', '.join(parts)}" if n and parts else n or fallback
+                    result = (
+                        f"{n}, {', '.join(parts)}" if n and parts else n or fallback
+                    )
                     _reverse_geocode_cache[cache_key] = result
                     return result
             except Exception as e:
@@ -426,12 +473,18 @@ Return ONLY a valid JSON array of calls, e.g.:
                 logger.warning(f"Climate vision error: {e}")
             return None
 
-        location_name, visual_analysis = await asyncio.gather(_reverse_geocode(), _vision())
-        logger.info(f"ExtremeWeatherAgent: location={location_name}, vision={len(visual_analysis) if visual_analysis else 0} chars")
+        location_name, visual_analysis = await asyncio.gather(
+            _reverse_geocode(), _vision()
+        )
+        logger.info(
+            f"ExtremeWeatherAgent: location={location_name}, vision={len(visual_analysis) if visual_analysis else 0} chars"
+        )
 
         # ---- Select and run tools ----
         tool_calls_spec = await self._select_tools(user_message)
-        logger.info(f"ExtremeWeatherAgent: selected tools {[t['tool'] for t in tool_calls_spec]}")
+        logger.info(
+            f"ExtremeWeatherAgent: selected tools {[t['tool'] for t in tool_calls_spec]}"
+        )
 
         loop = asyncio.get_event_loop()
         tool_results: Dict[str, str] = {}
@@ -454,7 +507,14 @@ Return ONLY a valid JSON array of calls, e.g.:
                     year,
                 )
                 tool_results[label] = result_str
-                tool_calls_meta.append({"tool": tool_name, "scenario": scenario, "year": year, "result": result_str[:300]})
+                tool_calls_meta.append(
+                    {
+                        "tool": tool_name,
+                        "scenario": scenario,
+                        "year": year,
+                        "result": result_str[:300],
+                    }
+                )
                 logger.info(f"ExtremeWeatherAgent: {label} → {result_str[:120]}")
             except Exception as e:
                 logger.error(f"ExtremeWeatherAgent: {tool_name} executor failed: {e}")

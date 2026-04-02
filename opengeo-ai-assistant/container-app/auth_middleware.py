@@ -1,5 +1,6 @@
-import os
 import logging
+import os
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -27,7 +28,10 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
         provided = request.headers.get("X-Api-Key", "")
         if not self._api_key or provided != self._api_key:
             return JSONResponse(
-                {"error": "unauthorized", "detail": "Missing or invalid X-Api-Key header"},
+                {
+                    "error": "unauthorized",
+                    "detail": "Missing or invalid X-Api-Key header",
+                },
                 status_code=401,
             )
         return await call_next(request)

@@ -32,12 +32,13 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _normalize_json_text(text: str) -> str:
     """Replace Python literals with their JSON equivalents."""
     # Must replace whole-word occurrences only to avoid mangling strings
-    text = re.sub(r'\bNone\b', 'null', text)
-    text = re.sub(r'\bTrue\b', 'true', text)
-    text = re.sub(r'\bFalse\b', 'false', text)
+    text = re.sub(r"\bNone\b", "null", text)
+    text = re.sub(r"\bTrue\b", "true", text)
+    text = re.sub(r"\bFalse\b", "false", text)
     return text
 
 
@@ -87,10 +88,14 @@ def _parse_json(text: str) -> Any:
     raise json.JSONDecodeError("Could not parse LLM output as JSON", text, 0)
 
 
-async def _llm_text(client, messages: List[Dict], max_tokens: int = 512, temperature: float = 0.2) -> str:
+async def _llm_text(
+    client, messages: List[Dict], max_tokens: int = 512, temperature: float = 0.2
+) -> str:
     """Call *client* (LLMClient) and return the assistant text."""
     try:
-        response = await client.chat(messages, max_tokens=max_tokens, temperature=temperature)
+        response = await client.chat(
+            messages, max_tokens=max_tokens, temperature=temperature
+        )
     except Exception as exc:
         logger.error(f"[GQT] _llm_text chat() raised: {type(exc).__name__}: {exc}")
         return ""
@@ -104,10 +109,13 @@ async def _llm_text(client, messages: List[Dict], max_tokens: int = 512, tempera
             msg = choices[0].get("message", {})
             content = msg.get("content") if isinstance(msg, dict) else None
             if not content:
-                logger.warning(f"[GQT] _llm_text got null/empty content, finish_reason={choices[0].get('finish_reason')!r}")
+                logger.warning(
+                    f"[GQT] _llm_text got null/empty content, finish_reason={choices[0].get('finish_reason')!r}"
+                )
             return content or ""
     logger.warning(f"[GQT] _llm_text unexpected response shape: {str(response)[:200]}")
     return ""
+
 
 # ---------------------------------------------------------------------------
 # Keyword-based STAC parameter extractor (fallback when LLM fails)
@@ -144,7 +152,11 @@ def _keyword_extract_stac_params(query: str) -> Dict[str, Any]:
     q_lower = query.lower()
 
     # Extract year(s) — pick the first 4-digit year in [1970, 2030]
-    years = [int(y) for y in re.findall(r"\b((?:19|20)\d{2})\b", query) if 1970 <= int(y) <= 2030]
+    years = [
+        int(y)
+        for y in re.findall(r"\b((?:19|20)\d{2})\b", query)
+        if 1970 <= int(y) <= 2030
+    ]
     datetime_range: Optional[str] = None
     if len(years) >= 2:
         years_sorted = sorted(years)
@@ -166,7 +178,9 @@ def _keyword_extract_stac_params(query: str) -> Dict[str, Any]:
     cc_match = re.search(r"(\d+)\s*%?\s*cloud", q_lower)
     cloud_cover: Optional[int] = int(cc_match.group(1)) if cc_match else None
 
-    logger.info(f"[GQT] keyword fallback: location={location_name}, bbox={bbox}, datetime={datetime_range}")
+    logger.info(
+        f"[GQT] keyword fallback: location={location_name}, bbox={bbox}, datetime={datetime_range}"
+    )
     return {
         "location_name": location_name,
         "bbox": bbox,
@@ -179,12 +193,14 @@ def _keyword_extract_stac_params(query: str) -> Dict[str, Any]:
 # Main class
 # ---------------------------------------------------------------------------
 
+
 class GenericQueryTranslator:
     """Provider-agnostic query translator used when LLM_PROVIDER is set to "generic"."""
 
     def __init__(self):
         from llm_client import get_llm_client as _get
-        self._compat = _get()          # OpenAICompatClient
+
+        self._compat = _get()  # OpenAICompatClient
         self._llm = self._compat._llm  # raw LLMClient
         self.conversation_contexts: Dict[str, Any] = {}
         self._model_override: Optional[str] = None
@@ -237,6 +253,7 @@ class GenericQueryTranslator:
         Returns a list of {"id": ..., "title": ...} dicts, or None if not configured.
         """
         import os
+
         stac_url = os.getenv("STAC_API_URL", "").strip()
         if not stac_url:
             return None
@@ -245,14 +262,23 @@ class GenericQueryTranslator:
         collections_url = f"{base}/collections"
         try:
             import aiohttp
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as session:
+
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=8)
+            ) as session:
                 async with session.get(collections_url) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         cols = data.get("collections", [])
-                        return [{"id": c["id"], "title": c.get("title", c["id"])} for c in cols if "id" in c]
+                        return [
+                            {"id": c["id"], "title": c.get("title", c["id"])}
+                            for c in cols
+                            if "id" in c
+                        ]
         except Exception as exc:
-            logger.warning(f"[GQT] Could not discover STAC collections from {collections_url}: {exc}")
+            logger.warning(
+                f"[GQT] Could not discover STAC collections from {collections_url}: {exc}"
+            )
         return None
 
     async def collection_mapping_agent(self, query: str) -> List[str]:
@@ -268,7 +294,9 @@ class GenericQueryTranslator:
         """
         # Discover local collections for routing purposes only — not for prompting.
         discovered = await self._discover_stac_collections()
-        self._local_collection_ids = {c["id"] for c in discovered} if discovered else None
+        self._local_collection_ids = (
+            {c["id"] for c in discovered} if discovered else None
+        )
 
         # Always prompt the LLM with PC collection IDs so the returned IDs are
         # always valid for Planetary Computer regardless of local STAC state.
@@ -333,6 +361,7 @@ Example: ["sentinel-2-l2a", "landsat-c2-l2"]"""
 
         # Keyword fallback — always returns PC collection IDs.
         from fastapi_app import detect_collections
+
         return detect_collections(query)
 
     # ------------------------------------------------------------------
@@ -473,6 +502,7 @@ Use ISO 8601 range format. If no date mentioned return null."""
         if not bbox and location_name:
             try:
                 from location_resolver import EnhancedLocationResolver
+
                 resolver = EnhancedLocationResolver()
                 bbox = await resolver.resolve_location_to_bbox(location_name)
             except Exception as exc:
@@ -488,7 +518,9 @@ Use ISO 8601 range format. If no date mentioned return null."""
         if cloud_cover is not None:
             params["cloud_cover"] = cloud_cover
 
-        logger.info(f"[GQT] translate_query result: collections={collections}, bbox={bbox}, datetime={datetime_range}")
+        logger.info(
+            f"[GQT] translate_query result: collections={collections}, bbox={bbox}, datetime={datetime_range}"
+        )
         return params
 
     # ------------------------------------------------------------------
@@ -503,7 +535,11 @@ Use ISO 8601 range format. If no date mentioned return null."""
         geoint_results: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate a natural language response describing the STAC results."""
-        features = (stac_response or {}).get("results", {}).get("features", []) if stac_response else []
+        features = (
+            (stac_response or {}).get("results", {}).get("features", [])
+            if stac_response
+            else []
+        )
         count = len(features)
 
         # Build a brief data summary
@@ -536,7 +572,9 @@ Guidelines:
                 temperature=0.4,
             )
         except Exception as exc:
-            logger.error(f"[GQT] generate_contextual_earth_science_response failed: {exc}")
+            logger.error(
+                f"[GQT] generate_contextual_earth_science_response failed: {exc}"
+            )
             message = (
                 f"Found {count} result(s) for your query."
                 if count > 0
@@ -635,10 +673,15 @@ Provide a 2-3 sentence helpful response. Be specific about what might have gone 
             return stac_results
 
         kept = [
-            f for f in stac_results["features"]
-            if f.get("bbox") and self._calculate_spatial_overlap(requested_bbox, f["bbox"]) >= min_overlap
+            f
+            for f in stac_results["features"]
+            if f.get("bbox")
+            and self._calculate_spatial_overlap(requested_bbox, f["bbox"])
+            >= min_overlap
         ]
-        logger.info(f"[TARGET] Spatial filter: {len(kept)}/{len(stac_results['features'])} features kept")
+        logger.info(
+            f"[TARGET] Spatial filter: {len(kept)}/{len(stac_results['features'])} features kept"
+        )
         return {**stac_results, "features": kept}
 
     def _filter_stac_results_by_cloud_cover(
@@ -659,7 +702,9 @@ Provide a 2-3 sentence helpful response. Be specific about what might have gone 
             if cloud is None or cloud <= max_cloud_cover:
                 kept.append(feature)
 
-        logger.info(f"[CLOUD] Cloud filter ≤{max_cloud_cover}%: {len(kept)}/{len(stac_results['features'])} features kept")
+        logger.info(
+            f"[CLOUD] Cloud filter ≤{max_cloud_cover}%: {len(kept)}/{len(stac_results['features'])} features kept"
+        )
         return {**stac_results, "features": kept}
 
     async def generate_alternative_result_response(

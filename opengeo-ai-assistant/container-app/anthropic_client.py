@@ -1,12 +1,14 @@
-import os
-from typing import Any, Dict, List, Optional
-import httpx
 import logging
+from typing import Any, Dict, List, Optional
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
+
 class AnthropicClient:
     """Minimal async client for Anthropic's Claude API (v2023-06-01)."""
+
     def __init__(self, api_key: str, model: str, base_url: Optional[str] = None):
         self.api_key = api_key
         self.model = model
@@ -14,10 +16,12 @@ class AnthropicClient:
         self.headers = {
             "x-api-key": self.api_key,
             "anthropic-version": "2023-06-01",
-            "content-type": "application/json"
+            "content-type": "application/json",
         }
 
-    async def chat(self, messages: List[Dict[str, str]], **kwargs: Any) -> Dict[str, Any]:
+    async def chat(
+        self, messages: List[Dict[str, str]], **kwargs: Any
+    ) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
             "model": self.model,
             "max_tokens": kwargs.get("max_tokens", 1024),
@@ -33,12 +37,10 @@ class AnthropicClient:
                 f"{self.base_url}/messages",
                 headers=self.headers,
                 json=payload,
-                timeout=60
+                timeout=60,
             )
             if response.status_code >= 400:
-                logger.error(
-                    f"[Anthropic] {response.status_code} — {response.text}"
-                )
+                logger.error(f"[Anthropic] {response.status_code} — {response.text}")
             response.raise_for_status()
             return response.json()
 
