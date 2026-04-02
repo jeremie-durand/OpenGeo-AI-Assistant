@@ -443,7 +443,7 @@ class TileSelector:
                     recency_score = 40
                 else:
                     recency_score = max(10, 30 - (days_old // 365) * 5)  # Decay over years
-            except:
+            except (ValueError, TypeError):
                 recency_score = 50
             
             # Calculate coverage score based on unique grid cells (not raw tile count)

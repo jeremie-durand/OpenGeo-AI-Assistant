@@ -3064,7 +3064,7 @@ IMPORTANT:
                         # Round to nearest hour to group tiles from same acquisition
                         return dt.replace(minute=0, second=0, microsecond=0)
                     return datetime.min
-                except:
+                except (ValueError, AttributeError, TypeError):
                     return datetime.min
             
             # Group tiles by datetime
@@ -6621,7 +6621,7 @@ Location to analyze: {location_name}"""
                     days = (end_dt - start_dt).days
                     
                     context_parts.append(f"  Duration: {days} days ({start_date} to {end_date})")
-                except:
+                except (ValueError, IndexError, TypeError):
                     pass
         
         # Cloud cover filter analysis
@@ -7264,7 +7264,7 @@ Keep your response focused, informative, and directly relevant to the user's que
                             from datetime import datetime, timedelta
                             date_obj = datetime(year, 1, 1) + timedelta(days=day_of_year - 1)
                             modis_dates.append(date_obj.strftime("%Y-%m-%d"))
-                        except:
+                        except (ValueError, IndexError, TypeError):
                             pass
                 
                 if modis_dates:
