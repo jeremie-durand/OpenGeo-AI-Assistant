@@ -1569,7 +1569,10 @@ async def unified_query_processor(body: QueryRequest):
         session_id = body.session_id
         pin = body.pin
         selected_model = body.model
-        
+
+        # Mutable dict alias so all downstream req_body.get() calls keep working
+        req_body = body.model_dump()
+
         logger.info(f"[BOT] Selected Model: {selected_model}")
         
         # Set the active model on the semantic translator before processing
@@ -3050,7 +3053,6 @@ async def unified_query_processor(body: QueryRequest):
                             logger.info(f"[SYNC] Alternative result: success={alternative_result.get('success')}, features={len(alternative_result.get('features', []))}")
                         except Exception as alt_ex:
                             logger.error(f"[SYNC] EXCEPTION in try_alternative_queries: {type(alt_ex).__name__}: {alt_ex}")
-                            import traceback
                             logger.error(f"[SYNC] Traceback: {traceback.format_exc()}")
                             alternative_result = {"success": False, "features": []}
                         

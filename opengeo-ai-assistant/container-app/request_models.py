@@ -46,6 +46,14 @@ class QueryRequest(BaseModel):
     pin: Optional[Dict[str, Any]] = None
     model: str = "gpt-5"
     has_satellite_data: bool = False
+    # Map/vision context sent by the frontend
+    map_bounds: Optional[Dict[str, Any]] = None
+    imagery_url: Optional[str] = None
+    imagery_base64: Optional[str] = None
+    current_collection: Optional[str] = None
+    tile_urls: List[str] = Field(default_factory=list)
+    conversation_history: List[Any] = Field(default_factory=list)
+    messages: List[Any] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
