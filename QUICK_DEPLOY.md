@@ -20,7 +20,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-- Frontend will be available at [http://localhost:8000](http://localhost:8000)
+- Frontend will be available at [http://localhost:3000](http://localhost:3000)
 
 ### 4. Health Check
 
@@ -31,7 +31,7 @@ curl http://localhost:3000/api/health
 ### 5. Test a Prompt (Smoke Test)
 
 ```sh
-curl -X POST http://localhost:3000/api/query \
+curl -X POST http://localhost:8000/api/query \
  -H 'Content-Type: application/json' \
  -d '{"query": "Show me satellite imagery of Paris"}'
 ```
@@ -72,11 +72,11 @@ docker compose up --build
 
 ```sh
 # Should return 401 (unauthorized)
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/query \
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/query \
   -X POST -H 'Content-Type: application/json' -d '{}'
 
 # Should return 200 (ok)
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/query \
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/query \
   -X POST \
   -H 'Content-Type: application/json' \
   -H 'X-Api-Key: <your-api-key>' \
