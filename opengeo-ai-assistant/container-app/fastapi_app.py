@@ -5613,7 +5613,7 @@ async def geoint_terrain_chat(body: TerrainChatRequest):
         import traceback
 
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Terrain chat failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Terrain chat failed")
 
 
 @app.get("/api/geoint/terrain/chat/{session_id}/history")
@@ -5881,7 +5881,7 @@ async def geoint_vision_analysis(body: VisionRequest):
         logger.error(f"[EYE] [{request_id}] [FAIL] VISION ENDPOINT FAILED")
         logger.error(f"[EYE] [{request_id}] Error: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Vision analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Vision analysis failed")
 
 
 @app.post("/api/geoint/vision/chat")
