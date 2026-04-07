@@ -24,10 +24,17 @@ curl http://localhost:8000/api/health
 
 ### Testing
 
-Run all checks manually:
+Run all Python checks manually:
 
 ```bash
 pre-commit run --all-files
+```
+
+Run all TypeScript checks manually:
+
+```bash
+cd opengeo-ai-assistant/web-ui
+npx prettier --write .
 ```
 
 ## Architecture
