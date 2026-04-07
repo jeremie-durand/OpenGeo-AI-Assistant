@@ -40,8 +40,8 @@ interface HealthCheckInfoProps {
   apiBaseUrl?: string;
 }
 
-const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({ 
-  apiBaseUrl = import.meta.env.BACKEND_URL || 'http://localhost:8000'
+const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
+  apiBaseUrl = import.meta.env.BACKEND_URL || 'http://localhost:8000',
 }) => {
   const [healthData, setHealthData] = useState<HealthCheckData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -130,18 +130,18 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
       <div className="health-tooltip">
         <div className="health-tooltip-header">
           <span className="health-tooltip-title">System Status</span>
-          <span 
+          <span
             className="health-status-badge"
             style={{ backgroundColor: getStatusColor(healthData.status) }}
           >
             {getStatusIcon(healthData.status)} {healthData.status.toUpperCase()}
           </span>
         </div>
-        
+
         <div className="health-tooltip-content">
           <div className="health-section">
             <div className="health-section-title">Core Services</div>
-            
+
             {(() => {
               // Backend may return 'checks' or 'connectivity_tests'
               const svc = healthData.checks || healthData.connectivity_tests || {};
@@ -160,7 +160,9 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
                   {privateStac && privateStac.status !== 'not_configured' && (
                     <div className="health-status-item">
                       <span className="health-label">Private STAC API:</span>
-                      <span className={`health-value ${isServiceOk(privateStac.status) ? 'success' : 'error'}`}>
+                      <span
+                        className={`health-value ${isServiceOk(privateStac.status) ? 'success' : 'error'}`}
+                      >
                         {isServiceOk(privateStac.status) ? 'Connected' : 'Disconnected'}
                       </span>
                     </div>
@@ -168,11 +170,12 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
 
                   <div className="health-status-item">
                     <span className="health-label">Planetary Computer:</span>
-                    <span className={`health-value ${isServiceOk(svc.planetary_computer?.status) ? 'success' : 'error'}`}>
+                    <span
+                      className={`health-value ${isServiceOk(svc.planetary_computer?.status) ? 'success' : 'error'}`}
+                    >
                       {isServiceOk(svc.planetary_computer?.status) ? 'Connected' : 'Disconnected'}
                     </span>
                   </div>
-
                 </>
               );
             })()}
@@ -180,18 +183,21 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
 
           <div className="health-section">
             <div className="health-section-title">Last Check</div>
-            
+
             <div className="health-status-item">
-              <span className="health-value">{new Date(healthData.timestamp).toLocaleString('en-US', { 
-                timeZone: 'America/New_York',
-                month: '2-digit', 
-                day: '2-digit', 
-                year: 'numeric', 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit',
-                hour12: false
-              })} EST</span>
+              <span className="health-value">
+                {new Date(healthData.timestamp).toLocaleString('en-US', {
+                  timeZone: 'America/New_York',
+                  month: '2-digit',
+                  day: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false,
+                })}{' '}
+                EST
+              </span>
             </div>
           </div>
 
@@ -206,15 +212,15 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
   };
 
   return (
-    <div 
+    <div
       className="health-check-info"
       onMouseEnter={() => hasInitialLoad && setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
-      <div 
+      <div
         className="health-info-button"
-        style={{ 
-          cursor: 'pointer'
+        style={{
+          cursor: 'pointer',
         }}
         title="System Health Status"
       >

@@ -51,17 +51,17 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
       { name: 'B8A', description: 'Vegetation red edge (865nm)', bands: ['B8A'] },
       { name: 'B09', description: 'Water vapour (945nm)', bands: ['B09'] },
       { name: 'B11', description: 'SWIR (1610nm)', bands: ['B11'] },
-      { name: 'B12', description: 'SWIR (2190nm)', bands: ['B12'] }
+      { name: 'B12', description: 'SWIR (2190nm)', bands: ['B12'] },
     ],
     visualization: {
       emoji: '',
       color: '#e8f8f5',
-      defaultStyle: 'visual'
+      defaultStyle: 'visual',
     },
     tileFormat: 'png',
     requiresToken: true,
     maxZoom: 18,
-    attribution: 'ESA/Copernicus via Planetary Computer'
+    attribution: 'ESA/Copernicus via Planetary Computer',
   },
 
   'landsat-c2-l2': {
@@ -78,17 +78,17 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
       { name: 'nir08', description: 'Near infrared', bands: ['nir08'] },
       { name: 'swir16', description: 'SWIR 1.6μm', bands: ['swir16'] },
       { name: 'swir22', description: 'SWIR 2.2μm', bands: ['swir22'] },
-      { name: 'lwir11', description: 'Thermal infrared', bands: ['lwir11'] }
+      { name: 'lwir11', description: 'Thermal infrared', bands: ['lwir11'] },
     ],
     visualization: {
       emoji: '',
       color: '#e8f5e8',
-      defaultStyle: 'visual'
+      defaultStyle: 'visual',
     },
     tileFormat: 'png',
     requiresToken: true,
     maxZoom: 22, // Allow deep zoom to see full 30m resolution with @4x tile scaling
-    attribution: 'USGS/NASA via Planetary Computer'
+    attribution: 'USGS/NASA via Planetary Computer',
   },
 
   // Radar Collections
@@ -99,17 +99,17 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     defaultAssets: ['vh'],
     availableAssets: [
       { name: 'vh', description: 'VH polarization', bands: ['vh'], rescale: [-30, 0] },
-      { name: 'vv', description: 'VV polarization', bands: ['vv'], rescale: [-30, 0] }
+      { name: 'vv', description: 'VV polarization', bands: ['vv'], rescale: [-30, 0] },
     ],
     visualization: {
       emoji: '',
       color: '#f0f4ff',
-      defaultStyle: 'radar'
+      defaultStyle: 'radar',
     },
     tileFormat: 'png',
     requiresToken: true,
     maxZoom: 16,
-    attribution: 'ESA via Planetary Computer'
+    attribution: 'ESA via Planetary Computer',
   },
 
   // MODIS Surface Reflectance Collections
@@ -119,25 +119,63 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     description: 'MODIS Terra/Aqua Surface Reflectance 8-Day composite at 500m resolution',
     defaultAssets: ['visual'],
     availableAssets: [
-      { name: 'visual', description: 'True color composite (sur_refl_b01, sur_refl_b04, sur_refl_b03)' },
+      {
+        name: 'visual',
+        description: 'True color composite (sur_refl_b01, sur_refl_b04, sur_refl_b03)',
+      },
       { name: 'rendered_preview', description: 'Rendered preview image' },
-      { name: 'sur_refl_b01', description: 'Red (620-670nm)', bands: ['sur_refl_b01'], rescale: [0, 3000] },
-      { name: 'sur_refl_b02', description: 'NIR (841-876nm)', bands: ['sur_refl_b02'], rescale: [0, 3000] },
-      { name: 'sur_refl_b03', description: 'Blue (459-479nm)', bands: ['sur_refl_b03'], rescale: [0, 3000] },
-      { name: 'sur_refl_b04', description: 'Green (545-565nm)', bands: ['sur_refl_b04'], rescale: [0, 3000] },
-      { name: 'sur_refl_b05', description: 'NIR (1230-1250nm)', bands: ['sur_refl_b05'], rescale: [0, 3000] },
-      { name: 'sur_refl_b06', description: 'SWIR (1628-1652nm)', bands: ['sur_refl_b06'], rescale: [0, 3000] },
-      { name: 'sur_refl_b07', description: 'SWIR (2105-2155nm)', bands: ['sur_refl_b07'], rescale: [0, 3000] }
+      {
+        name: 'sur_refl_b01',
+        description: 'Red (620-670nm)',
+        bands: ['sur_refl_b01'],
+        rescale: [0, 3000],
+      },
+      {
+        name: 'sur_refl_b02',
+        description: 'NIR (841-876nm)',
+        bands: ['sur_refl_b02'],
+        rescale: [0, 3000],
+      },
+      {
+        name: 'sur_refl_b03',
+        description: 'Blue (459-479nm)',
+        bands: ['sur_refl_b03'],
+        rescale: [0, 3000],
+      },
+      {
+        name: 'sur_refl_b04',
+        description: 'Green (545-565nm)',
+        bands: ['sur_refl_b04'],
+        rescale: [0, 3000],
+      },
+      {
+        name: 'sur_refl_b05',
+        description: 'NIR (1230-1250nm)',
+        bands: ['sur_refl_b05'],
+        rescale: [0, 3000],
+      },
+      {
+        name: 'sur_refl_b06',
+        description: 'SWIR (1628-1652nm)',
+        bands: ['sur_refl_b06'],
+        rescale: [0, 3000],
+      },
+      {
+        name: 'sur_refl_b07',
+        description: 'SWIR (2105-2155nm)',
+        bands: ['sur_refl_b07'],
+        rescale: [0, 3000],
+      },
     ],
     visualization: {
       emoji: '',
       color: '#e8f5e8',
-      defaultStyle: 'visual'
+      defaultStyle: 'visual',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 12,
-    attribution: 'NASA via Planetary Computer'
+    attribution: 'NASA via Planetary Computer',
   },
 
   'modis-09Q1-061': {
@@ -148,18 +186,28 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     availableAssets: [
       { name: 'visual', description: 'True color composite (sur_refl_b01, sur_refl_b02)' },
       { name: 'rendered_preview', description: 'Rendered preview image' },
-      { name: 'sur_refl_b01', description: 'Red (620-670nm)', bands: ['sur_refl_b01'], rescale: [0, 3000] },
-      { name: 'sur_refl_b02', description: 'NIR (841-876nm)', bands: ['sur_refl_b02'], rescale: [0, 3000] }
+      {
+        name: 'sur_refl_b01',
+        description: 'Red (620-670nm)',
+        bands: ['sur_refl_b01'],
+        rescale: [0, 3000],
+      },
+      {
+        name: 'sur_refl_b02',
+        description: 'NIR (841-876nm)',
+        bands: ['sur_refl_b02'],
+        rescale: [0, 3000],
+      },
     ],
     visualization: {
       emoji: '',
       color: '#e8f8e8',
-      defaultStyle: 'visual'
+      defaultStyle: 'visual',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 12,
-    attribution: 'NASA via Planetary Computer'
+    attribution: 'NASA via Planetary Computer',
   },
 
   // MODIS Vegetation Indices
@@ -169,19 +217,35 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     description: 'MODIS Terra/Aqua Vegetation Indices 16-Day composite at 250m resolution',
     defaultAssets: ['250m_16_days_NDVI'],
     availableAssets: [
-      { name: '250m_16_days_NDVI', description: 'NDVI (Normalized Difference Vegetation Index)', bands: ['250m_16_days_NDVI'], rescale: [-2000, 10000], colormap: 'viridis' },
-      { name: '250m_16_days_EVI', description: 'EVI (Enhanced Vegetation Index)', bands: ['250m_16_days_EVI'], rescale: [-2000, 10000], colormap: 'viridis' },
-      { name: '250m_16_days_VI_Quality', description: 'VI Quality flags', bands: ['250m_16_days_VI_Quality'] }
+      {
+        name: '250m_16_days_NDVI',
+        description: 'NDVI (Normalized Difference Vegetation Index)',
+        bands: ['250m_16_days_NDVI'],
+        rescale: [-2000, 10000],
+        colormap: 'viridis',
+      },
+      {
+        name: '250m_16_days_EVI',
+        description: 'EVI (Enhanced Vegetation Index)',
+        bands: ['250m_16_days_EVI'],
+        rescale: [-2000, 10000],
+        colormap: 'viridis',
+      },
+      {
+        name: '250m_16_days_VI_Quality',
+        description: 'VI Quality flags',
+        bands: ['250m_16_days_VI_Quality'],
+      },
     ],
     visualization: {
       emoji: '',
       color: '#e8ffe8',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 12,
-    attribution: 'NASA via Planetary Computer'
+    attribution: 'NASA via Planetary Computer',
   },
 
   'modis-13A1-061': {
@@ -190,19 +254,35 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     description: 'MODIS Terra/Aqua Vegetation Indices 16-Day composite at 500m resolution',
     defaultAssets: ['500m_16_days_NDVI'],
     availableAssets: [
-      { name: '500m_16_days_NDVI', description: 'NDVI (Normalized Difference Vegetation Index)', bands: ['500m_16_days_NDVI'], rescale: [-2000, 10000], colormap: 'viridis' },
-      { name: '500m_16_days_EVI', description: 'EVI (Enhanced Vegetation Index)', bands: ['500m_16_days_EVI'], rescale: [-2000, 10000], colormap: 'viridis' },
-      { name: '500m_16_days_VI_Quality', description: 'VI Quality flags', bands: ['500m_16_days_VI_Quality'] }
+      {
+        name: '500m_16_days_NDVI',
+        description: 'NDVI (Normalized Difference Vegetation Index)',
+        bands: ['500m_16_days_NDVI'],
+        rescale: [-2000, 10000],
+        colormap: 'viridis',
+      },
+      {
+        name: '500m_16_days_EVI',
+        description: 'EVI (Enhanced Vegetation Index)',
+        bands: ['500m_16_days_EVI'],
+        rescale: [-2000, 10000],
+        colormap: 'viridis',
+      },
+      {
+        name: '500m_16_days_VI_Quality',
+        description: 'VI Quality flags',
+        bands: ['500m_16_days_VI_Quality'],
+      },
     ],
     visualization: {
       emoji: '',
       color: '#f0fff0',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 12,
-    attribution: 'NASA via Planetary Computer'
+    attribution: 'NASA via Planetary Computer',
   },
 
   // MODIS Leaf Area Index
@@ -212,20 +292,32 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     description: 'MODIS Terra/Aqua Leaf Area Index 8-Day composite at 500m resolution',
     defaultAssets: ['Lai_500m'],
     availableAssets: [
-      { name: 'Lai_500m', description: 'Leaf Area Index', bands: ['Lai_500m'], rescale: [0, 100], colormap: 'viridis' },
-      { name: 'Fpar_500m', description: 'Fraction of Photosynthetically Active Radiation', bands: ['Fpar_500m'], rescale: [0, 100], colormap: 'viridis' },
+      {
+        name: 'Lai_500m',
+        description: 'Leaf Area Index',
+        bands: ['Lai_500m'],
+        rescale: [0, 100],
+        colormap: 'viridis',
+      },
+      {
+        name: 'Fpar_500m',
+        description: 'Fraction of Photosynthetically Active Radiation',
+        bands: ['Fpar_500m'],
+        rescale: [0, 100],
+        colormap: 'viridis',
+      },
       { name: 'FparLai_QC', description: 'LAI/FPAR Quality flags', bands: ['FparLai_QC'] },
-      { name: 'FparExtra_QC', description: 'Extra Quality flags', bands: ['FparExtra_QC'] }
+      { name: 'FparExtra_QC', description: 'Extra Quality flags', bands: ['FparExtra_QC'] },
     ],
     visualization: {
       emoji: '',
       color: '#f0fff4',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 12,
-    attribution: 'NASA via Planetary Computer'
+    attribution: 'NASA via Planetary Computer',
   },
 
   // MODIS Gross Primary Productivity
@@ -235,19 +327,31 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     description: 'MODIS Terra/Aqua Gross Primary Productivity 8-Day composite at 500m resolution',
     defaultAssets: ['Gpp_500m'],
     availableAssets: [
-      { name: 'Gpp_500m', description: 'Gross Primary Productivity', bands: ['Gpp_500m'], rescale: [0, 30000], colormap: 'plasma' },
-      { name: 'PsnNet_500m', description: 'Net Photosynthesis', bands: ['PsnNet_500m'], rescale: [0, 30000], colormap: 'plasma' },
-      { name: 'Psn_QC_500m', description: 'Quality flags', bands: ['Psn_QC_500m'] }
+      {
+        name: 'Gpp_500m',
+        description: 'Gross Primary Productivity',
+        bands: ['Gpp_500m'],
+        rescale: [0, 30000],
+        colormap: 'plasma',
+      },
+      {
+        name: 'PsnNet_500m',
+        description: 'Net Photosynthesis',
+        bands: ['PsnNet_500m'],
+        rescale: [0, 30000],
+        colormap: 'plasma',
+      },
+      { name: 'Psn_QC_500m', description: 'Quality flags', bands: ['Psn_QC_500m'] },
     ],
     visualization: {
       emoji: '',
       color: '#e8f5e8',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 12,
-    attribution: 'NASA via Planetary Computer'
+    attribution: 'NASA via Planetary Computer',
   },
 
   // MODIS Net Primary Productivity
@@ -257,18 +361,24 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     description: 'MODIS Terra/Aqua Net Primary Productivity Annual composite at 500m resolution',
     defaultAssets: ['Npp_500m'],
     availableAssets: [
-      { name: 'Npp_500m', description: 'Net Primary Productivity', bands: ['Npp_500m'], rescale: [0, 32700], colormap: 'plasma' },
-      { name: 'Npp_QC_500m', description: 'Quality flags', bands: ['Npp_QC_500m'] }
+      {
+        name: 'Npp_500m',
+        description: 'Net Primary Productivity',
+        bands: ['Npp_500m'],
+        rescale: [0, 32700],
+        colormap: 'plasma',
+      },
+      { name: 'Npp_QC_500m', description: 'Quality flags', bands: ['Npp_QC_500m'] },
     ],
     visualization: {
       emoji: '',
       color: '#e6f3e6',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 12,
-    attribution: 'NASA via Planetary Computer'
+    attribution: 'NASA via Planetary Computer',
   },
 
   // MODIS Fire Detection
@@ -278,19 +388,30 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     description: 'MODIS Terra/Aqua Thermal Anomalies/Fire Daily L3 Global',
     defaultAssets: ['FireMask'],
     availableAssets: [
-      { name: 'FireMask', description: 'Fire detection mask', bands: ['FireMask'], colormap: 'hot' },
-      { name: 'MaxFRP', description: 'Maximum Fire Radiative Power', bands: ['MaxFRP'], rescale: [0, 1500], colormap: 'hot' },
-      { name: 'QA', description: 'Quality Assessment', bands: ['QA'] }
+      {
+        name: 'FireMask',
+        description: 'Fire detection mask',
+        bands: ['FireMask'],
+        colormap: 'hot',
+      },
+      {
+        name: 'MaxFRP',
+        description: 'Maximum Fire Radiative Power',
+        bands: ['MaxFRP'],
+        rescale: [0, 1500],
+        colormap: 'hot',
+      },
+      { name: 'QA', description: 'Quality Assessment', bands: ['QA'] },
     ],
     visualization: {
       emoji: '',
       color: '#ffe4e1',
-      defaultStyle: 'thermal'
+      defaultStyle: 'thermal',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 12,
-    attribution: 'NASA via Planetary Computer'
+    attribution: 'NASA via Planetary Computer',
   },
 
   'modis-14A2-061': {
@@ -299,23 +420,34 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     description: 'MODIS Terra/Aqua Thermal Anomalies/Fire 8-Day L3 Global',
     defaultAssets: ['FireMask'],
     availableAssets: [
-      { name: 'FireMask', description: 'Fire detection mask (8-day composite)', bands: ['FireMask'], colormap: 'hot' },
-      { name: 'MaxFRP', description: 'Maximum Fire Radiative Power', bands: ['MaxFRP'], rescale: [0, 1500], colormap: 'hot' },
-      { name: 'QA', description: 'Quality Assessment', bands: ['QA'] }
+      {
+        name: 'FireMask',
+        description: 'Fire detection mask (8-day composite)',
+        bands: ['FireMask'],
+        colormap: 'hot',
+      },
+      {
+        name: 'MaxFRP',
+        description: 'Maximum Fire Radiative Power',
+        bands: ['MaxFRP'],
+        rescale: [0, 1500],
+        colormap: 'hot',
+      },
+      { name: 'QA', description: 'Quality Assessment', bands: ['QA'] },
     ],
     visualization: {
       emoji: '',
       color: '#ffe4e1',
-      defaultStyle: 'thermal'
+      defaultStyle: 'thermal',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 12,
-    attribution: 'NASA via Planetary Computer'
+    attribution: 'NASA via Planetary Computer',
   },
 
   // Climate Collections
-  'modis': {
+  modis: {
     id: 'modis',
     title: 'MODIS',
     description: 'Global daily observations from Terra and Aqua',
@@ -324,17 +456,17 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
       { name: 'B01', description: 'Red (620-670nm)', bands: ['B01'] },
       { name: 'B02', description: 'NIR (841-876nm)', bands: ['B02'] },
       { name: 'B03', description: 'Blue (459-479nm)', bands: ['B03'] },
-      { name: 'B04', description: 'Green (545-565nm)', bands: ['B04'] }
+      { name: 'B04', description: 'Green (545-565nm)', bands: ['B04'] },
     ],
     visualization: {
       emoji: '',
       color: '#fff5e6',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 12,
-    attribution: 'NASA via Planetary Computer'
+    attribution: 'NASA via Planetary Computer',
   },
 
   'daymet-daily-na': {
@@ -346,17 +478,17 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
       { name: 'tmax', description: 'Maximum temperature', bands: ['tmax'], colormap: 'turbo' },
       { name: 'tmin', description: 'Minimum temperature', bands: ['tmin'], colormap: 'turbo' },
       { name: 'prcp', description: 'Precipitation', bands: ['prcp'], colormap: 'blues' },
-      { name: 'swe', description: 'Snow water equivalent', bands: ['swe'], colormap: 'winter' }
+      { name: 'swe', description: 'Snow water equivalent', bands: ['swe'], colormap: 'winter' },
     ],
     visualization: {
       emoji: '',
       color: '#f0f8ff',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 14,
-    attribution: 'ORNL DAAC via Planetary Computer'
+    attribution: 'ORNL DAAC via Planetary Computer',
   },
 
   'era5-pds': {
@@ -365,39 +497,59 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     description: 'Global atmospheric reanalysis data',
     defaultAssets: ['temperature_2m'],
     availableAssets: [
-      { name: 'temperature_2m', description: '2m temperature', bands: ['temperature_2m'], colormap: 'turbo' },
-      { name: 'precipitation', description: 'Total precipitation', bands: ['precipitation'], colormap: 'blues' },
-      { name: 'wind_speed_10m', description: '10m wind speed', bands: ['wind_speed_10m'], colormap: 'viridis' }
+      {
+        name: 'temperature_2m',
+        description: '2m temperature',
+        bands: ['temperature_2m'],
+        colormap: 'turbo',
+      },
+      {
+        name: 'precipitation',
+        description: 'Total precipitation',
+        bands: ['precipitation'],
+        colormap: 'blues',
+      },
+      {
+        name: 'wind_speed_10m',
+        description: '10m wind speed',
+        bands: ['wind_speed_10m'],
+        colormap: 'viridis',
+      },
     ],
     visualization: {
       emoji: '',
       color: '#f5f5ff',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 10,
-    attribution: 'ECMWF via Planetary Computer'
+    attribution: 'ECMWF via Planetary Computer',
   },
 
   // Elevation Collections
-  'nasadem': {
+  nasadem: {
     id: 'nasadem',
     title: 'NASADEM',
     description: 'Global elevation model at 30m resolution',
     defaultAssets: ['elevation'],
     availableAssets: [
-      { name: 'elevation', description: 'Elevation in meters', bands: ['elevation'], colormap: 'terrain' }
+      {
+        name: 'elevation',
+        description: 'Elevation in meters',
+        bands: ['elevation'],
+        colormap: 'terrain',
+      },
     ],
     visualization: {
       emoji: '',
       color: '#f5f0e8',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 16,
-    attribution: 'NASA via Planetary Computer'
+    attribution: 'NASA via Planetary Computer',
   },
 
   'cop-dem-glo-30': {
@@ -406,17 +558,17 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     description: 'Global digital elevation model at 30m',
     defaultAssets: ['data'],
     availableAssets: [
-      { name: 'data', description: 'Elevation data', bands: ['data'], colormap: 'terrain' }
+      { name: 'data', description: 'Elevation data', bands: ['data'], colormap: 'terrain' },
     ],
     visualization: {
       emoji: '',
       color: '#f5f5f0',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 16,
-    attribution: 'ESA via Planetary Computer'
+    attribution: 'ESA via Planetary Computer',
   },
 
   // Weather Collections
@@ -425,21 +577,19 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     title: 'GOES-R CMI',
     description: 'Real-time weather satellite imagery',
     defaultAssets: ['CMI'],
-    availableAssets: [
-      { name: 'CMI', description: 'Cloud and Moisture Imagery', bands: ['CMI'] }
-    ],
+    availableAssets: [{ name: 'CMI', description: 'Cloud and Moisture Imagery', bands: ['CMI'] }],
     visualization: {
       emoji: '',
       color: '#f8f8ff',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 12,
-    attribution: 'NOAA via Planetary Computer'
+    attribution: 'NOAA via Planetary Computer',
   },
 
-  'terraclimate': {
+  terraclimate: {
     id: 'terraclimate',
     title: 'TerraClimate',
     description: 'Monthly climate and water balance data',
@@ -448,17 +598,22 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
       { name: 'tmax', description: 'Maximum temperature', bands: ['tmax'], colormap: 'turbo' },
       { name: 'tmin', description: 'Minimum temperature', bands: ['tmin'], colormap: 'turbo' },
       { name: 'ppt', description: 'Precipitation', bands: ['ppt'], colormap: 'blues' },
-      { name: 'pet', description: 'Potential evapotranspiration', bands: ['pet'], colormap: 'greens' }
+      {
+        name: 'pet',
+        description: 'Potential evapotranspiration',
+        bands: ['pet'],
+        colormap: 'greens',
+      },
     ],
     visualization: {
       emoji: '',
       color: '#e8f4f8',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 12,
-    attribution: 'University of Idaho via Planetary Computer'
+    attribution: 'University of Idaho via Planetary Computer',
   },
 
   // Weather and Lightning Collections (data only - not visualizable)
@@ -466,23 +621,23 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     id: 'goes-glm',
     title: 'GOES Geostationary Lightning Mapper',
     description: 'Lightning detection and fire monitoring data (metadata only)',
-    defaultAssets: [],  // No visual assets available
+    defaultAssets: [], // No visual assets available
     availableAssets: [
-      { name: 'netcdf', description: 'NetCDF4 lightning data file (not visualizable)', bands: [] }
+      { name: 'netcdf', description: 'NetCDF4 lightning data file (not visualizable)', bands: [] },
     ],
     visualization: {
       emoji: '',
       color: '#fff8dc',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 10,
-    attribution: 'NOAA via Planetary Computer'
+    attribution: 'NOAA via Planetary Computer',
   },
 
   // Special Collections
-  'gbif': {
+  gbif: {
     id: 'gbif',
     title: 'GBIF Occurrence Data',
     description: 'Global species occurrence data points',
@@ -491,12 +646,12 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     visualization: {
       emoji: '',
       color: '#f0fff0',
-      defaultStyle: 'natural'
+      defaultStyle: 'natural',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 18,
-    attribution: 'GBIF via Planetary Computer'
+    attribution: 'GBIF via Planetary Computer',
   },
 
   'aster-l1t': {
@@ -510,18 +665,18 @@ export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
       { name: 'B3N', description: 'Near-infrared VNIR', bands: ['B3N'] },
       { name: 'B04', description: 'SWIR 1', bands: ['B04'] },
       { name: 'B05', description: 'SWIR 2', bands: ['B05'] },
-      { name: 'B10', description: 'Thermal infrared', bands: ['B10'] }
+      { name: 'B10', description: 'Thermal infrared', bands: ['B10'] },
     ],
     visualization: {
       emoji: '',
       color: '#fff8e8',
-      defaultStyle: 'false-color'
+      defaultStyle: 'false-color',
     },
     tileFormat: 'png',
     requiresToken: false,
     maxZoom: 16,
-    attribution: 'NASA/METI via Planetary Computer'
-  }
+    attribution: 'NASA/METI via Planetary Computer',
+  },
 };
 
 // Utility functions
@@ -536,11 +691,13 @@ export function getDefaultAssets(collectionId: string): string[] {
 
 export function getCollectionVisualization(collectionId: string) {
   const config = getCollectionConfig(collectionId);
-  return config?.visualization || {
-    emoji: '',
-    color: '#f8f9fa',
-    defaultStyle: 'visual' as const
-  };
+  return (
+    config?.visualization || {
+      emoji: '',
+      color: '#f8f9fa',
+      defaultStyle: 'visual' as const,
+    }
+  );
 }
 
 export function requiresAuthentication(collectionId: string): boolean {

@@ -6,7 +6,13 @@ import axios from 'axios';
 import type { CollectionInfo } from './App';
 import { API_BASE_URL } from '../services/api';
 
-export default function ChatPanel({ selected, onGeojson }: { selected: CollectionInfo | null; onGeojson: (g: any) => void }) {
+export default function ChatPanel({
+  selected,
+  onGeojson,
+}: {
+  selected: CollectionInfo | null;
+  onGeojson: (g: any) => void;
+}) {
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
@@ -21,7 +27,7 @@ export default function ChatPanel({ selected, onGeojson }: { selected: Collectio
     try {
       // Use API_BASE_URL for correct backend routing in all environments
       const res = await axios.post(`${API_BASE_URL}/api/query`, {
-        query: content
+        query: content,
       });
       const data = res.data;
 
@@ -35,7 +41,10 @@ export default function ChatPanel({ selected, onGeojson }: { selected: Collectio
       }
     } catch (e: any) {
       console.error('Chat error:', e);
-      setMessages((m) => [...m, { role: 'assistant', content: `Failed to send message. Error: ${e.message}` }]);
+      setMessages((m) => [
+        ...m,
+        { role: 'assistant', content: `Failed to send message. Error: ${e.message}` },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -45,12 +54,20 @@ export default function ChatPanel({ selected, onGeojson }: { selected: Collectio
     <div>
       <div className="chat-history">
         {messages.map((m, i) => (
-          <div key={i} className={`msg ${m.role}`}>{m.content}</div>
+          <div key={i} className={`msg ${m.role}`}>
+            {m.content}
+          </div>
         ))}
       </div>
       <div className="row">
-        <input className="input" ref={inputRef} placeholder={selected ? `Ask about ${selected.id}...` : 'Ask about satellite data...'} />
-        <button onClick={send} disabled={loading}>Send</button>
+        <input
+          className="input"
+          ref={inputRef}
+          placeholder={selected ? `Ask about ${selected.id}...` : 'Ask about satellite data...'}
+        />
+        <button onClick={send} disabled={loading}>
+          Send
+        </button>
       </div>
     </div>
   );

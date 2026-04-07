@@ -49,7 +49,7 @@ export class OpenGeoMapIntegration {
 
     // Try to extract structured data from text response
     const structuredResponse = this.extractDataFromResponse(response);
-    
+
     if (structuredResponse) {
       return structuredResponse;
     }
@@ -57,7 +57,7 @@ export class OpenGeoMapIntegration {
     // Fallback: create minimal response
     return {
       summary: typeof response === 'string' ? response : response.message || 'Data processed',
-      action: 'load'
+      action: 'load',
     };
   }
 
@@ -68,10 +68,12 @@ export class OpenGeoMapIntegration {
     try {
       // Look for JSON data in response
       const responseText = typeof response === 'string' ? response : response.message || '';
-      
+
       // Try to extract collection IDs
       const collectionMatch = responseText.match(/collection[s]?[:\s]*([a-z0-9-]+)/gi);
-      const collections = collectionMatch ? collectionMatch.map((m: string) => m.split(/[:\s]+/).pop()).filter(Boolean) : [];
+      const collections = collectionMatch
+        ? collectionMatch.map((m: string) => m.split(/[:\s]+/).pop()).filter(Boolean)
+        : [];
 
       // Try to extract bounding box
       const bboxMatch = responseText.match(/bbox[:\s]*\[([^\]]+)\]/i);
@@ -87,7 +89,7 @@ export class OpenGeoMapIntegration {
 
       // Determine action based on response content
       let action: 'load' | 'compare' | 'statistics' | 'tiles' | 'animation' = 'load';
-      
+
       if (responseText.includes('tile') || responseText.includes('mosaic')) {
         action = 'tiles';
       } else if (responseText.includes('animation') || responseText.includes('time-lapse')) {
@@ -100,7 +102,7 @@ export class OpenGeoMapIntegration {
 
       const result: OpenGeoMapResponse = {
         summary: responseText,
-        action: action
+        action: action,
       };
 
       if (collections.length > 0) {
@@ -114,21 +116,22 @@ export class OpenGeoMapIntegration {
       if (dates.length >= 2) {
         result.date_range = {
           start_date: dates[0],
-          end_date: dates[dates.length - 1]
+          end_date: dates[dates.length - 1],
         };
       }
 
       if (urls.length > 0) {
         result.visualization_data = {
           tile_urls: urls.filter((url: string) => url.includes('tile')),
-          preview_urls: urls.filter((url: string) => url.includes('preview') || url.includes('crop')),
+          preview_urls: urls.filter(
+            (url: string) => url.includes('preview') || url.includes('crop')
+          ),
           mosaic_urls: urls.filter((url: string) => url.includes('mosaic')),
-          legend_url: urls.find((url: string) => url.includes('legend'))
+          legend_url: urls.find((url: string) => url.includes('legend')),
         };
       }
 
       return result;
-
     } catch (error) {
       console.error('OpenGeo AI: Error extracting data from response:', error);
       return null;
@@ -140,33 +143,37 @@ export class OpenGeoMapIntegration {
    */
   private createBboxGeometry(bboxString: string): any {
     try {
-      const coords = bboxString.split(',').map(s => parseFloat(s.trim()));
-      
+      const coords = bboxString.split(',').map((s) => parseFloat(s.trim()));
+
       if (coords.length === 4) {
         const [west, south, east, north] = coords;
-        
+
         return {
           type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            geometry: {
-              type: 'Polygon',
-              coordinates: [[
-                [west, south],
-                [east, south], 
-                [east, north],
-                [west, north],
-                [west, south]
-              ]]
+          features: [
+            {
+              type: 'Feature',
+              geometry: {
+                type: 'Polygon',
+                coordinates: [
+                  [
+                    [west, south],
+                    [east, south],
+                    [east, north],
+                    [west, north],
+                    [west, south],
+                  ],
+                ],
+              },
+              properties: {},
             },
-            properties: {}
-          }]
+          ],
         };
       }
     } catch (error) {
       console.error('OpenGeo AI: Error creating bbox geometry:', error);
     }
-    
+
     return null;
   }
 
@@ -200,7 +207,6 @@ export class OpenGeoMapIntegration {
 
       // Update map data for the UI
       this.setMapData(data);
-
     } catch (error) {
       console.error('OpenGeo AI: Error visualizing data on map:', error);
     }
@@ -220,7 +226,7 @@ export class OpenGeoMapIntegration {
 
   private loadTilesOnMap(data: OpenGeoMapResponse): void {
     if (data.visualization_data?.tile_urls && this.mapInstance) {
-      data.visualization_data.tile_urls.forEach(url => {
+      data.visualization_data.tile_urls.forEach((url) => {
         console.log('OpenGeo AI: Adding tile layer:', url);
         // Add tile layer to map
       });
@@ -254,7 +260,7 @@ export class OpenGeoMapIntegration {
       if (this.mapInstance.getLayer && this.mapInstance.getLayer('opengeo-bbox')) {
         this.mapInstance.removeLayer('opengeo-bbox');
       }
-      
+
       if (this.mapInstance.getSource && this.mapInstance.getSource('opengeo-bbox')) {
         this.mapInstance.removeSource('opengeo-bbox');
       }
@@ -268,9 +274,9 @@ export class OpenGeoMapIntegration {
           strokeColor: '#ff6b6b',
           strokeWidth: 3,
           strokeOpacity: 0.8,
-          fillColor: 'transparent'
+          fillColor: 'transparent',
         });
-        
+
         this.mapInstance.layers.add(layer);
 
         // Fit map to bbox
@@ -278,21 +284,26 @@ export class OpenGeoMapIntegration {
           const feature = bbox.features[0];
           if (feature.geometry.type === 'Polygon') {
             const coordinates = feature.geometry.coordinates[0];
-            const bounds = coordinates.reduce((acc: number[][], coord: number[]) => {
-              return [
-                [Math.min(acc[0][0], coord[0]), Math.min(acc[0][1], coord[1])],
-                [Math.max(acc[1][0], coord[0]), Math.max(acc[1][1], coord[1])]
-              ];
-            }, [[Infinity, Infinity], [-Infinity, -Infinity]]);
+            const bounds = coordinates.reduce(
+              (acc: number[][], coord: number[]) => {
+                return [
+                  [Math.min(acc[0][0], coord[0]), Math.min(acc[0][1], coord[1])],
+                  [Math.max(acc[1][0], coord[0]), Math.max(acc[1][1], coord[1])],
+                ];
+              },
+              [
+                [Infinity, Infinity],
+                [-Infinity, -Infinity],
+              ]
+            );
 
             this.mapInstance.setCamera({
               bounds: bounds,
-              padding: 50
+              padding: 50,
             });
           }
         }
       }
-
     } catch (error) {
       console.error('OpenGeo AI: Error adding bbox to map:', error);
     }
@@ -302,7 +313,10 @@ export class OpenGeoMapIntegration {
 /**
  * Enhanced chat message processing for map integration
  */
-export function enhanceMessageForMapVisualization(message: string, response: any): OpenGeoMapResponse {
+export function enhanceMessageForMapVisualization(
+  message: string,
+  response: any
+): OpenGeoMapResponse {
   const integration = new OpenGeoMapIntegration(null, () => {});
   return integration.processResponse(response);
 }
@@ -312,19 +326,28 @@ export function enhanceMessageForMapVisualization(message: string, response: any
  */
 export function hasVisualizableData(response: any): boolean {
   if (!response) return false;
-  
+
   const text = typeof response === 'string' ? response : response.message || '';
-  
+
   // Check for indicators of visualizable data
   const indicators = [
-    'collection', 'bbox', 'tile', 'mosaic', 'crop', 'preview',
-    'longitude', 'latitude', 'coordinates', 'geometry',
-    'sentinel', 'landsat', 'modis', 'viirs'
+    'collection',
+    'bbox',
+    'tile',
+    'mosaic',
+    'crop',
+    'preview',
+    'longitude',
+    'latitude',
+    'coordinates',
+    'geometry',
+    'sentinel',
+    'landsat',
+    'modis',
+    'viirs',
   ];
-  
-  return indicators.some(indicator => 
-    text.toLowerCase().includes(indicator.toLowerCase())
-  );
+
+  return indicators.some((indicator) => text.toLowerCase().includes(indicator.toLowerCase()));
 }
 
 export default OpenGeoMapIntegration;

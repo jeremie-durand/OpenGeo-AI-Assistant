@@ -18,90 +18,96 @@ export default defineConfig(({ command, mode }) => {
   return {
     plugins: [react()],
     base: isProd ? './' : '/',
-    server: isDev ? {
-      port: 5173,
-      host: true, // Allow external connections for debugging
-      cors: true, // Enable CORS for debugging
-      open: false, // Don't auto-open browser during debugging
-      proxy: {
-        '/health': {
-          target: LOCAL_BACKEND,
-          changeOrigin: true,
-          configure: (proxy, _options) => {
-            proxy.on('error', (_err, _req, _res) => {});
-            proxy.on('proxyReq', (_proxyReq, _req, _res) => {});
-          }
-        },
-        '/debug': LOCAL_BACKEND,
-        '/maps-config': LOCAL_BACKEND,
-        '/collections': LOCAL_BACKEND,
-        '/unified-chat': LOCAL_BACKEND,
-        '/chat': LOCAL_BACKEND,
-        '/enhanced-chat': LOCAL_BACKEND,
-        '/api/v2/chat': LOCAL_BACKEND,
-        '/query': LOCAL_BACKEND,
-        '/api/chat': LOCAL_BACKEND,
-        '/api/health': {
-          target: LOCAL_BACKEND,
-          changeOrigin: true,
-          configure: (proxy, _options) => {
-            proxy.on('error', (_err, _req, _res) => {});
-          }
-        },
-        '/api/query': {
-          target: LOCAL_BACKEND,
-          changeOrigin: true,
-          configure: (proxy, _options) => {
-            proxy.on('error', (_err, _req, _res) => {});
-            proxy.on('proxyReq', (_proxyReq, _req, _res) => {});
-          }
-        },
-        '/stac-search': {
-          target: LOCAL_BACKEND,
-          changeOrigin: true,
-          configure: (proxy, _options) => {
-            proxy.on('error', (_err, _req, _res) => {});
-          }
-        },
-        '/api/stac-search': {
-          target: LOCAL_BACKEND,
-          changeOrigin: true,
-          configure: (proxy, _options) => {
-            proxy.on('error', (_err, _req, _res) => {});
-            proxy.on('proxyReq', (_proxyReq, _req, _res) => {});
-          }
-        },
-        // '/mcp-query': LOCAL_BACKEND, // DISABLED - MCP server functionality
-        // '/mcp-status': LOCAL_BACKEND, // DISABLED - MCP server functionality
-        '/intelligent-route': LOCAL_BACKEND,
-        '/veda': LOCAL_BACKEND,
-        '/search': LOCAL_BACKEND,
-        '/api/config': {
-          target: LOCAL_BACKEND,
-          changeOrigin: true,
-          configure: (proxy, _options) => {
-            proxy.on('proxyReq', (_proxyReq, _req, _res) => {});
-          }
+    server: isDev
+      ? {
+          port: 5173,
+          host: true, // Allow external connections for debugging
+          cors: true, // Enable CORS for debugging
+          open: false, // Don't auto-open browser during debugging
+          proxy: {
+            '/health': {
+              target: LOCAL_BACKEND,
+              changeOrigin: true,
+              configure: (proxy, _options) => {
+                proxy.on('error', (_err, _req, _res) => {});
+                proxy.on('proxyReq', (_proxyReq, _req, _res) => {});
+              },
+            },
+            '/debug': LOCAL_BACKEND,
+            '/maps-config': LOCAL_BACKEND,
+            '/collections': LOCAL_BACKEND,
+            '/unified-chat': LOCAL_BACKEND,
+            '/chat': LOCAL_BACKEND,
+            '/enhanced-chat': LOCAL_BACKEND,
+            '/api/v2/chat': LOCAL_BACKEND,
+            '/query': LOCAL_BACKEND,
+            '/api/chat': LOCAL_BACKEND,
+            '/api/health': {
+              target: LOCAL_BACKEND,
+              changeOrigin: true,
+              configure: (proxy, _options) => {
+                proxy.on('error', (_err, _req, _res) => {});
+              },
+            },
+            '/api/query': {
+              target: LOCAL_BACKEND,
+              changeOrigin: true,
+              configure: (proxy, _options) => {
+                proxy.on('error', (_err, _req, _res) => {});
+                proxy.on('proxyReq', (_proxyReq, _req, _res) => {});
+              },
+            },
+            '/stac-search': {
+              target: LOCAL_BACKEND,
+              changeOrigin: true,
+              configure: (proxy, _options) => {
+                proxy.on('error', (_err, _req, _res) => {});
+              },
+            },
+            '/api/stac-search': {
+              target: LOCAL_BACKEND,
+              changeOrigin: true,
+              configure: (proxy, _options) => {
+                proxy.on('error', (_err, _req, _res) => {});
+                proxy.on('proxyReq', (_proxyReq, _req, _res) => {});
+              },
+            },
+            // '/mcp-query': LOCAL_BACKEND, // DISABLED - MCP server functionality
+            // '/mcp-status': LOCAL_BACKEND, // DISABLED - MCP server functionality
+            '/intelligent-route': LOCAL_BACKEND,
+            '/veda': LOCAL_BACKEND,
+            '/search': LOCAL_BACKEND,
+            '/api/config': {
+              target: LOCAL_BACKEND,
+              changeOrigin: true,
+              configure: (proxy, _options) => {
+                proxy.on('proxyReq', (_proxyReq, _req, _res) => {});
+              },
+            },
+          },
         }
-      }
-    } : undefined,
+      : undefined,
     build: {
       outDir: 'dist',
       sourcemap: !isProd, // Disable source maps in production
       minify: isProd ? 'esbuild' : false,
       rollupOptions: {
         output: {
-          manualChunks: isProd ? {
-            vendor: ['react', 'react-dom'],
-            query: ['@tanstack/react-query'],
-            utils: ['axios']
-          } : undefined
-        }
-      }
+          manualChunks: isProd
+            ? {
+                vendor: ['react', 'react-dom'],
+                query: ['@tanstack/react-query'],
+                utils: ['axios'],
+              }
+            : undefined,
+        },
+      },
     },
-    esbuild: isProd ? {
-      drop: ['console', 'debugger'],
-    } : undefined,
+    esbuild: isProd
+      ? {
+          drop: ['console', 'debugger'],
+        }
+      : undefined,
     define: {
       // Environment-specific configurations
       __DEV__: JSON.stringify(isDev),
@@ -109,9 +115,9 @@ export default defineConfig(({ command, mode }) => {
       // VITE_API_BASE_URL is set by the deployment workflow at build time
       // For local development, use localhost backend
       'import.meta.env.VITE_API_BASE_URL': JSON.stringify(
-        isDev ? (env.BACKEND_URL || 'http://localhost:8000') : process.env.VITE_API_BASE_URL || ''
+        isDev ? env.BACKEND_URL || 'http://localhost:8000' : process.env.VITE_API_BASE_URL || ''
       ),
-      'import.meta.env.BACKEND_URL': JSON.stringify(env.BACKEND_URL || 'http://localhost:8000')
-    }
+      'import.meta.env.BACKEND_URL': JSON.stringify(env.BACKEND_URL || 'http://localhost:8000'),
+    },
   };
 });

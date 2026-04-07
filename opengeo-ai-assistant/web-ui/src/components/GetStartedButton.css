@@ -367,7 +367,7 @@
 }
 
 .example-card:hover::before {
-  opacity: 0.10;
+  opacity: 0.1;
 }
 
 .example-card:hover {
@@ -836,51 +836,51 @@
   .examples-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .learn-more-grid {
     grid-template-columns: 1fr;
   }
-  
+
   /* Two/Three column becomes single column with toggle */
   .two-column-header,
   .three-column-header {
     display: none;
   }
-  
+
   .column-toggle-mobile {
     display: flex;
   }
-  
+
   /* Row-based responsive */
   .example-row,
   .example-row.three-col {
     grid-template-columns: 1fr;
   }
-  
+
   .example-row .stac-card,
   .example-row .geoint-card,
   .example-row .raster-card,
   .example-row .screenshot-card {
     display: none;
   }
-  
+
   .example-row .stac-card.active,
   .example-row .geoint-card.active,
   .example-row .raster-card.active,
   .example-row .screenshot-card.active {
     display: flex;
   }
-  
+
   /* Legacy two-column-grid responsive */
   .two-column-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .stac-column,
   .geoint-column {
     display: none;
   }
-  
+
   .stac-column.active,
   .geoint-column.active {
     display: flex;
@@ -1189,7 +1189,7 @@
 .comparison-selector:hover,
 .comparison-selector.active {
   border-color: #3b82f6;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.10) 0%, rgba(59, 130, 246, 0.04) 100%);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.04) 100%);
 }
 .vision-selector.active .module-selector-label,
 .terrain-selector.active .module-selector-label,
@@ -1205,16 +1205,16 @@
   .module-selector-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .module-selector-btn {
     padding: 28px 18px;
     min-height: 130px;
   }
-  
+
   .module-selector-label {
     font-size: 18px;
   }
-  
+
   .module-selector-desc {
     font-size: 13px;
   }
@@ -1445,18 +1445,18 @@
   .module-tabs {
     flex-direction: column;
   }
-  
+
   .module-tab {
     text-align: center;
   }
-  
+
   .terrain-queries-grid,
   .mobility-queries-grid,
   .extreme-weather-queries-grid,
   .building-damage-queries-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .setup-query,
   .terrain-question,
   .mobility-question,
@@ -1465,7 +1465,7 @@
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .setup-query strong,
   .terrain-question strong,
   .mobility-question strong,

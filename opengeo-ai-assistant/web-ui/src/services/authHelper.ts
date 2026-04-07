@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
-
 // Stubbed authentication helpers for cloud-agnostic, no-auth setup.
 // All functions return null or do nothing.
 
@@ -31,7 +30,7 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 /**
  * Drop-in replacement for window.fetch that automatically attaches
  * the EasyAuth Bearer token when available.
- * 
+ *
  * Usage:  import { authenticatedFetch } from '../services/authHelper';
  *         const response = await authenticatedFetch(`${API_BASE_URL}/api/config`);
  */

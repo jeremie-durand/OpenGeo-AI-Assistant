@@ -37,7 +37,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   selectedDataset,
   entryTarget,
   onPrivateSearch,
-  onPCSearch
+  onPCSearch,
 }) => {
   const [dropdownSelectedDataset, setDropdownSelectedDataset] = useState<Dataset | null>(null);
   const [vedaSelectedDataset, setVedaSelectedDataset] = useState<Dataset | null>(null);
@@ -71,7 +71,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         license: 'Public Domain',
         dataFormat: 'Cloud Optimized GeoTIFF',
         applications: ['Land use mapping', 'Agriculture monitoring', 'Forest management'],
-        documentation: 'https://www.usgs.gov/landsat-missions'
+        documentation: 'https://www.usgs.gov/landsat-missions',
       },
       'sentinel-2-l2a': {
         provider: 'ESA',
@@ -84,7 +84,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         license: 'Open Data',
         dataFormat: 'Cloud Optimized GeoTIFF',
         applications: ['Agriculture', 'Forestry', 'Land cover mapping'],
-        documentation: 'https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-2'
+        documentation: 'https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-2',
       },
       'sentinel-1-rtc': {
         provider: 'ESA',
@@ -97,9 +97,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         license: 'Open Data',
         dataFormat: 'Cloud Optimized GeoTIFF',
         applications: ['Flood mapping', 'Ship detection', 'Land cover mapping'],
-        documentation: 'https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-1'
+        documentation: 'https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-1',
       },
-      'modis': {
+      modis: {
         provider: 'NASA',
         spatialResolution: '250m, 500m, 1km',
         temporalResolution: '1-2 days',
@@ -110,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         license: 'Public Domain',
         dataFormat: 'HDF, NetCDF',
         applications: ['Climate monitoring', 'Fire detection', 'Ocean color'],
-        documentation: 'https://modis.gsfc.nasa.gov/'
+        documentation: 'https://modis.gsfc.nasa.gov/',
       },
       'daymet-daily-na': {
         provider: 'NASA',
@@ -123,7 +123,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         license: 'Public Domain',
         dataFormat: 'NetCDF',
         applications: ['Climate research', 'Ecological modeling', 'Agriculture'],
-        documentation: 'https://daymet.ornl.gov/'
+        documentation: 'https://daymet.ornl.gov/',
       },
       'era5-pds': {
         provider: 'ECMWF',
@@ -136,9 +136,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         license: 'Copernicus License',
         dataFormat: 'NetCDF, GRIB',
         applications: ['Weather forecasting', 'Climate analysis', 'Renewable energy'],
-        documentation: 'https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/era5'
+        documentation: 'https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/era5',
       },
-      'nasadem': {
+      nasadem: {
         provider: 'NASA',
         spatialResolution: '30m',
         temporalResolution: 'Static',
@@ -149,7 +149,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         license: 'Public Domain',
         dataFormat: 'Cloud Optimized GeoTIFF',
         applications: ['Topography', 'Hydrology', 'Geology'],
-        documentation: 'https://lpdaac.usgs.gov/products/nasadem_hgtv001/'
+        documentation: 'https://lpdaac.usgs.gov/products/nasadem_hgtv001/',
       },
       'goes-cmi': {
         provider: 'NOAA',
@@ -162,9 +162,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         license: 'Public Domain',
         dataFormat: 'NetCDF',
         applications: ['Weather monitoring', 'Severe weather detection', 'Climate research'],
-        documentation: 'https://www.goes-r.gov/'
+        documentation: 'https://www.goes-r.gov/',
       },
-      'terraclimate': {
+      terraclimate: {
         provider: 'University of Idaho',
         spatialResolution: '4km',
         temporalResolution: 'Monthly',
@@ -175,9 +175,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         license: 'CC BY 4.0',
         dataFormat: 'NetCDF',
         applications: ['Climate analysis', 'Drought monitoring', 'Water resources'],
-        documentation: 'http://www.climatologylab.org/terraclimate.html'
+        documentation: 'http://www.climatologylab.org/terraclimate.html',
       },
-      'gbif': {
+      gbif: {
         provider: 'GBIF',
         spatialResolution: 'Point data',
         temporalResolution: 'Variable',
@@ -187,8 +187,12 @@ const Sidebar: React.FC<SidebarProps> = ({
         updateFrequency: 'Continuous',
         license: 'Various (CC0, CC BY)',
         dataFormat: 'Darwin Core',
-        applications: ['Biodiversity research', 'Conservation planning', 'Species distribution modeling'],
-        documentation: 'https://www.gbif.org/'
+        applications: [
+          'Biodiversity research',
+          'Conservation planning',
+          'Species distribution modeling',
+        ],
+        documentation: 'https://www.gbif.org/',
       },
       'aster-l1t': {
         provider: 'NASA',
@@ -201,7 +205,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         license: 'Public Domain',
         dataFormat: 'HDF',
         applications: ['Mineral mapping', 'Land surface temperature', 'Volcanic monitoring'],
-        documentation: 'https://lpdaac.usgs.gov/products/ast_l1tv003/'
+        documentation: 'https://lpdaac.usgs.gov/products/ast_l1tv003/',
       },
       'cop-dem-glo-30': {
         provider: 'ESA',
@@ -214,23 +218,25 @@ const Sidebar: React.FC<SidebarProps> = ({
         license: 'Copernicus License',
         dataFormat: 'Cloud Optimized GeoTIFF',
         applications: ['Topographic mapping', 'Hydrological modeling', 'Infrastructure planning'],
-        documentation: 'https://spacedata.copernicus.eu/web/cscda/dataset-details?articleId=394198'
-      }
+        documentation: 'https://spacedata.copernicus.eu/web/cscda/dataset-details?articleId=394198',
+      },
     };
 
-    return metadata[dataset.id as keyof typeof metadata] || {
-      provider: 'Microsoft Planetary Computer',
-      spatialResolution: 'Variable',
-      temporalResolution: 'Variable',
-      spectralBands: 'Variable',
-      coverage: 'Variable',
-      startDate: 'Variable',
-      updateFrequency: 'Variable',
-      license: 'Variable',
-      dataFormat: 'Variable',
-      applications: ['Earth observation', 'Environmental monitoring'],
-      documentation: 'https://planetarycomputer.microsoft.com/'
-    };
+    return (
+      metadata[dataset.id as keyof typeof metadata] || {
+        provider: 'Microsoft Planetary Computer',
+        spatialResolution: 'Variable',
+        temporalResolution: 'Variable',
+        spectralBands: 'Variable',
+        coverage: 'Variable',
+        startDate: 'Variable',
+        updateFrequency: 'Variable',
+        license: 'Variable',
+        dataFormat: 'Variable',
+        applications: ['Earth observation', 'Environmental monitoring'],
+        documentation: 'https://planetarycomputer.microsoft.com/',
+      }
+    );
   };
 
   return (
@@ -244,27 +250,32 @@ const Sidebar: React.FC<SidebarProps> = ({
               justifyContent: 'space-between',
               alignItems: 'center',
               cursor: 'pointer',
-              marginBottom: '16px'
+              marginBottom: '16px',
             }}
             onClick={onToggle}
           >
             Data Catalog
-            <span className="module-in-progress-badge" style={{
-              position: 'relative',
-              top: 'auto',
-              right: 'auto',
-              background: 'rgba(100, 116, 139, 0.12)',
-              color: '#64748b',
-              fontSize: '10px',
-              fontWeight: 600,
-              padding: '3px 9px',
-              borderRadius: '10px',
-              letterSpacing: '0.5px',
-              textTransform: 'uppercase' as const,
-              lineHeight: 1.4,
-              backdropFilter: 'blur(4px)',
-              marginLeft: '8px'
-            }}>In Progress</span>
+            <span
+              className="module-in-progress-badge"
+              style={{
+                position: 'relative',
+                top: 'auto',
+                right: 'auto',
+                background: 'rgba(100, 116, 139, 0.12)',
+                color: '#64748b',
+                fontSize: '10px',
+                fontWeight: 600,
+                padding: '3px 9px',
+                borderRadius: '10px',
+                letterSpacing: '0.5px',
+                textTransform: 'uppercase' as const,
+                lineHeight: 1.4,
+                backdropFilter: 'blur(4px)',
+                marginLeft: '8px',
+              }}
+            >
+              In Progress
+            </span>
           </div>
 
           {isLoading ? (
@@ -272,22 +283,23 @@ const Sidebar: React.FC<SidebarProps> = ({
           ) : (
             <>
               {/* Planetary Computer Search Panel */}
-              {onPCSearch && (
-                <PCSearchPanel onSearch={onPCSearch} />
-              )}
+              {onPCSearch && <PCSearchPanel onSearch={onPCSearch} />}
 
               {/* Private Section */}
               <div className="data-section private">
-                <div className="data-section-title">
-                  Private
-                </div>
+                <div className="data-section-title">Private</div>
 
                 {/* My Data Section */}
                 {shouldShowMyData && (
                   <div style={{ marginBottom: '8px' }}>
                     <div
                       className="title"
-                      style={{ fontSize: 14, marginBottom: 8, fontWeight: 'normal', cursor: 'pointer' }}
+                      style={{
+                        fontSize: 14,
+                        marginBottom: 8,
+                        fontWeight: 'normal',
+                        cursor: 'pointer',
+                      }}
                       onClick={() => {
                         console.log('My Data clicked - loading private datasets');
                       }}
@@ -297,7 +309,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                     {myDatasets.length > 0 ? (
                       <DatasetDropdown
                         datasets={myDatasets}
-                        selectedDataset={selectedDataset?.id && myDatasets.find(d => d.id === selectedDataset.id) ? selectedDataset : null}
+                        selectedDataset={
+                          selectedDataset?.id && myDatasets.find((d) => d.id === selectedDataset.id)
+                            ? selectedDataset
+                            : null
+                        }
                         onDatasetSelect={onDatasetSelect}
                         placeholder="Select a dataset..."
                       />
@@ -312,9 +328,22 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {/* Private STAC API collections */}
                 {onRefreshStacCollections && stacApiCollections.length === 0 && (
                   <div style={{ marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        fontSize: 14,
+                        marginBottom: 4,
+                      }}
+                    >
                       STAC API
-                      <button onClick={onRefreshStacCollections} style={{ fontSize: '11px', padding: '2px 8px', cursor: 'pointer' }}>Reload</button>
+                      <button
+                        onClick={onRefreshStacCollections}
+                        style={{ fontSize: '11px', padding: '2px 8px', cursor: 'pointer' }}
+                      >
+                        Reload
+                      </button>
                     </div>
                     <div style={{ fontSize: '11px', opacity: 0.6 }}>No collections loaded</div>
                   </div>
@@ -334,9 +363,21 @@ const Sidebar: React.FC<SidebarProps> = ({
                     >
                       STAC API
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', opacity: 0.6, fontStyle: 'italic' }}>Private</span>
+                        <span style={{ fontSize: '11px', opacity: 0.6, fontStyle: 'italic' }}>
+                          Private
+                        </span>
                         {onRefreshStacCollections && (
-                          <button onClick={onRefreshStacCollections} style={{ fontSize: '10px', padding: '1px 6px', cursor: 'pointer', opacity: 0.7 }}>↻</button>
+                          <button
+                            onClick={onRefreshStacCollections}
+                            style={{
+                              fontSize: '10px',
+                              padding: '1px 6px',
+                              cursor: 'pointer',
+                              opacity: 0.7,
+                            }}
+                          >
+                            ↻
+                          </button>
                         )}
                       </span>
                     </div>
@@ -352,7 +393,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                     {stacSelectedCollection && onPrivateSearch && (
                       <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'center' }}>
                         <button
-                          onClick={() => onPrivateSearch(`Search ${stacSelectedCollection.title}`, stacSelectedCollection)}
+                          onClick={() =>
+                            onPrivateSearch(
+                              `Search ${stacSelectedCollection.title}`,
+                              stacSelectedCollection
+                            )
+                          }
                           style={{
                             padding: '8px 16px',
                             backgroundColor: '#3b82f6',
@@ -363,8 +409,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                             cursor: 'pointer',
                             fontWeight: '500',
                           }}
-                          onMouseEnter={(e) => { (e.target as HTMLElement).style.backgroundColor = '#2563eb'; }}
-                          onMouseLeave={(e) => { (e.target as HTMLElement).style.backgroundColor = '#3b82f6'; }}
+                          onMouseEnter={(e) => {
+                            (e.target as HTMLElement).style.backgroundColor = '#2563eb';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.target as HTMLElement).style.backgroundColor = '#3b82f6';
+                          }}
                         >
                           Search
                         </button>
@@ -376,14 +426,15 @@ const Sidebar: React.FC<SidebarProps> = ({
 
               {/* Public Section */}
               <div className="data-section public">
-                <div className="data-section-title">
-                  Public
-                </div>
+                <div className="data-section-title">Public</div>
 
                 {/* Planetary Computer Section */}
                 {shouldShowPlanetaryComputer && (
                   <div style={{ marginBottom: '12px' }}>
-                    <div className="title" style={{ fontSize: 14, marginBottom: 8, fontWeight: 'normal' }}>
+                    <div
+                      className="title"
+                      style={{ fontSize: 14, marginBottom: 8, fontWeight: 'normal' }}
+                    >
                       Planetary Computer
                     </div>
                     {planetaryComputerDatasets.length > 0 ? (
@@ -414,11 +465,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                         fontWeight: 'normal',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'space-between'
+                        justifyContent: 'space-between',
                       }}
                     >
                       VEDA
-                      <span style={{ fontSize: '12px', opacity: 0.7, fontStyle: 'italic' }}>AI Search</span>
+                      <span style={{ fontSize: '12px', opacity: 0.7, fontStyle: 'italic' }}>
+                        AI Search
+                      </span>
                     </div>
                     <DatasetDropdown
                       datasets={vedaDatasets}
@@ -426,7 +479,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       onDatasetSelect={handleVedaSelect}
                       placeholder="Choose a VEDA dataset..."
                     />
-                    
+
                     {/* Search Button - Only show when a VEDA dataset is selected */}
                     {vedaSelectedDataset && (
                       <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center' }}>
@@ -449,7 +502,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             fontWeight: '500',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '8px'
+                            gap: '8px',
                           }}
                           title={`Search ${vedaSelectedDataset.title} data`}
                           onMouseEnter={(e) => {
@@ -486,16 +539,16 @@ const DatasetItem: React.FC<DatasetItemProps> = ({ dataset, isSelected, onClick 
       className="dataset-item"
       style={{
         backgroundColor: isSelected ? 'rgba(14, 165, 233, 0.1)' : undefined,
-        borderColor: isSelected ? 'var(--brand)' : undefined
+        borderColor: isSelected ? 'var(--brand)' : undefined,
       }}
       onClick={onClick}
     >
       <div className="dataset-title">{dataset.title}</div>
       <div className="dataset-description">
-        {dataset.description && typeof dataset.description === 'string' 
-          ? (dataset.description.length > 100 
-              ? dataset.description.substring(0, 100) + '...' 
-              : dataset.description)
+        {dataset.description && typeof dataset.description === 'string'
+          ? dataset.description.length > 100
+            ? dataset.description.substring(0, 100) + '...'
+            : dataset.description
           : 'No description available'}
       </div>
     </div>

@@ -5,8 +5,8 @@
 // In production, VITE_API_BASE_URL is set dynamically during GitHub Actions build
 const isDevelopment = import.meta.env.DEV;
 const API_BASE_URL = isDevelopment
-  ? (import.meta.env.BACKEND_URL || 'http://localhost:8000')
-  : import.meta.env.VITE_API_BASE_URL || '';  // Production: injected at build time, fallback to same-origin
+  ? import.meta.env.BACKEND_URL || 'http://localhost:8000'
+  : import.meta.env.VITE_API_BASE_URL || ''; // Production: injected at build time, fallback to same-origin
 
 // API endpoint configuration
 const createEndpoint = (path: string) => `${API_BASE_URL}${path}`;
@@ -30,7 +30,7 @@ const BASE_CONFIG = {
   // '/mcp-status': createEndpoint('/mcp-status'), // DISABLED - MCP server functionality
   '/intelligent-route': createEndpoint('/intelligent-route'),
   '/veda': createEndpoint('/veda'),
-  '/search': createEndpoint('/search')
+  '/search': createEndpoint('/search'),
 };
 
 // Helper function to get the full API URL for any endpoint
@@ -47,7 +47,7 @@ export const isDev = (): boolean => isDevelopment;
 export const getEnvironmentInfo = () => ({
   isDevelopment,
   apiBaseUrl: API_BASE_URL,
-  mode: import.meta.env.MODE
+  mode: import.meta.env.MODE,
 });
 
 export const API_ENDPOINTS = BASE_CONFIG;

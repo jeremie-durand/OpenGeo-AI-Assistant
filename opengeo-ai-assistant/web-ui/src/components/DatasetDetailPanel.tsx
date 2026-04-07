@@ -25,7 +25,7 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         license: 'Public Domain',
         dataFormat: 'Cloud Optimized GeoTIFF',
         applications: ['Land cover classification', 'Change detection', 'Environmental monitoring'],
-        documentation: 'https://www.usgs.gov/landsat-missions/landsat-collection-2'
+        documentation: 'https://www.usgs.gov/landsat-missions/landsat-collection-2',
       },
       'sentinel-2-l2a': {
         provider: 'ESA',
@@ -38,7 +38,7 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         license: 'Open Data',
         dataFormat: 'Cloud Optimized GeoTIFF',
         applications: ['Agriculture monitoring', 'Forest management', 'Disaster response'],
-        documentation: 'https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-2'
+        documentation: 'https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-2',
       },
       'sentinel-1-rtc': {
         provider: 'ESA',
@@ -51,9 +51,9 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         license: 'Open Data',
         dataFormat: 'Cloud Optimized GeoTIFF',
         applications: ['Flood mapping', 'Ship detection', 'Land cover mapping'],
-        documentation: 'https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-1'
+        documentation: 'https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-1',
       },
-      'modis': {
+      modis: {
         provider: 'NASA',
         spatialResolution: '250m, 500m, 1km',
         temporalResolution: '1-2 days',
@@ -64,7 +64,7 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         license: 'Public Domain',
         dataFormat: 'HDF, NetCDF',
         applications: ['Climate monitoring', 'Fire detection', 'Ocean color'],
-        documentation: 'https://modis.gsfc.nasa.gov/'
+        documentation: 'https://modis.gsfc.nasa.gov/',
       },
       'daymet-daily-na': {
         provider: 'NASA',
@@ -77,7 +77,7 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         license: 'Public Domain',
         dataFormat: 'NetCDF',
         applications: ['Climate research', 'Ecological modeling', 'Agriculture'],
-        documentation: 'https://daymet.ornl.gov/'
+        documentation: 'https://daymet.ornl.gov/',
       },
       'era5-pds': {
         provider: 'ECMWF',
@@ -90,9 +90,9 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         license: 'Copernicus License',
         dataFormat: 'NetCDF, GRIB',
         applications: ['Weather forecasting', 'Climate analysis', 'Renewable energy'],
-        documentation: 'https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/era5'
+        documentation: 'https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/era5',
       },
-      'nasadem': {
+      nasadem: {
         provider: 'NASA',
         spatialResolution: '30m',
         temporalResolution: 'Static',
@@ -103,7 +103,7 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         license: 'Public Domain',
         dataFormat: 'Cloud Optimized GeoTIFF',
         applications: ['Topographic analysis', 'Flood modeling', 'Viewshed analysis'],
-        documentation: 'https://lpdaac.usgs.gov/products/nasadem_hgtv001/'
+        documentation: 'https://lpdaac.usgs.gov/products/nasadem_hgtv001/',
       },
       'goes-cmi': {
         provider: 'NOAA',
@@ -116,9 +116,9 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         license: 'Public Domain',
         dataFormat: 'NetCDF',
         applications: ['Weather monitoring', 'Hurricane tracking', 'Fire detection'],
-        documentation: 'https://www.goes-r.gov/'
+        documentation: 'https://www.goes-r.gov/',
       },
-      'terraclimate': {
+      terraclimate: {
         provider: 'University of Idaho',
         spatialResolution: '4km',
         temporalResolution: 'Monthly',
@@ -129,9 +129,9 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         license: 'Public Domain',
         dataFormat: 'NetCDF',
         applications: ['Climate research', 'Drought monitoring', 'Water resources'],
-        documentation: 'https://www.climatologylab.org/terraclimate.html'
+        documentation: 'https://www.climatologylab.org/terraclimate.html',
       },
-      'gbif': {
+      gbif: {
         provider: 'GBIF',
         spatialResolution: 'Point data',
         temporalResolution: 'Variable',
@@ -142,7 +142,7 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         license: 'Various (CC licenses)',
         dataFormat: 'Parquet',
         applications: ['Biodiversity research', 'Species distribution modeling', 'Conservation'],
-        documentation: 'https://www.gbif.org/'
+        documentation: 'https://www.gbif.org/',
       },
       'aster-l1t': {
         provider: 'NASA/METI',
@@ -155,7 +155,7 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         license: 'Public Domain',
         dataFormat: 'HDF',
         applications: ['Mineral mapping', 'Land surface temperature', 'Volcanic monitoring'],
-        documentation: 'https://lpdaac.usgs.gov/products/ast_l1tv003/'
+        documentation: 'https://lpdaac.usgs.gov/products/ast_l1tv003/',
       },
       'cop-dem-glo-30': {
         provider: 'ESA',
@@ -168,18 +168,20 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         license: 'Copernicus License',
         dataFormat: 'Cloud Optimized GeoTIFF',
         applications: ['Topographic mapping', 'Hydrological modeling', 'Infrastructure planning'],
-        documentation: 'https://spacedata.copernicus.eu/web/cscda/dataset-details?articleId=394198'
-      }
+        documentation: 'https://spacedata.copernicus.eu/web/cscda/dataset-details?articleId=394198',
+      },
     };
 
-    return metadata[dataset.id] || {
-      provider: 'Microsoft Planetary Computer',
-      spatialResolution: 'Variable',
-      temporalResolution: 'Variable',
-      coverage: 'Variable',
-      license: 'Variable',
-      applications: ['Earth observation', 'Environmental monitoring']
-    };
+    return (
+      metadata[dataset.id] || {
+        provider: 'Microsoft Planetary Computer',
+        spatialResolution: 'Variable',
+        temporalResolution: 'Variable',
+        coverage: 'Variable',
+        license: 'Variable',
+        applications: ['Earth observation', 'Environmental monitoring'],
+      }
+    );
   };
 
   const metadata = getDatasetMetadata(dataset);
@@ -188,9 +190,11 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
     <div className="dataset-detail-panel">
       <div className="detail-header">
         <h2>{dataset.title}</h2>
-        <button className="close-btn" onClick={onClose}>×</button>
+        <button className="close-btn" onClick={onClose}>
+          ×
+        </button>
       </div>
-      
+
       <div className="detail-content">
         <div className="detail-section">
           <h3>Overview</h3>
@@ -248,9 +252,9 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
         {metadata.documentation && (
           <div className="detail-section">
             <h3>Documentation</h3>
-            <a 
-              href={metadata.documentation} 
-              target="_blank" 
+            <a
+              href={metadata.documentation}
+              target="_blank"
               rel="noopener noreferrer"
               className="doc-link"
             >
@@ -261,7 +265,10 @@ const DatasetDetailPanel: React.FC<DatasetDetailPanelProps> = ({ dataset, onClos
 
         <div className="detail-section">
           <h3>Data Access</h3>
-          <p>This dataset is available through Microsoft Planetary Computer's STAC API. You can query and analyze this data using the chat interface below.</p>
+          <p>
+            This dataset is available through Microsoft Planetary Computer's STAC API. You can query
+            and analyze this data using the chat interface below.
+          </p>
           <div className="access-buttons">
             <button className="btn primary">Query with AI</button>
             <button className="btn secondary">View Sample Code</button>

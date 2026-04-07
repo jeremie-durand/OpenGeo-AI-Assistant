@@ -29,12 +29,12 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
     onSuccess: (result) => {
       console.log('Routing mutation onSuccess called with result:', result);
       setRoutingResult(result);
-      
+
       // Notify parent component if callback provided
       if (onRouteResult) {
         onRouteResult(result);
       }
-      
+
       // Auto-redirect after showing the result for a moment
       setTimeout(() => {
         window.location.href = result.redirect_url;
@@ -46,13 +46,13 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
       setTimeout(() => {
         window.location.href = `/geocopilot?source=planetary_computer&query=${encodeURIComponent(query)}`;
       }, 1000);
-    }
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
-    
+
     routingMutation.mutate(query);
   };
 
@@ -65,69 +65,77 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
 
   const exampleQueries = [
     {
-      text: "Show me recent wildfire data in California",
-      icon: "",
-      expectedSource: "fire_events"
+      text: 'Show me recent wildfire data in California',
+      icon: '',
+      expectedSource: 'fire_events',
     },
     {
-      text: "Find Landsat imagery for forest change analysis",
-      icon: "",
-      expectedSource: "planetary_computer"
+      text: 'Find Landsat imagery for forest change analysis',
+      icon: '',
+      expectedSource: 'planetary_computer',
     },
     {
-      text: "Access NASA climate data for the Arctic region",
-      icon: "",
-      expectedSource: "veda"
+      text: 'Access NASA climate data for the Arctic region',
+      icon: '',
+      expectedSource: 'veda',
     },
     {
-      text: "Search our internal geospatial datasets",
-      icon: "",
-      expectedSource: "internal_search"
-    }
+      text: 'Search our internal geospatial datasets',
+      icon: '',
+      expectedSource: 'internal_search',
+    },
   ];
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem'
-    }}>
-      <div style={{
-        background: 'white',
-        borderRadius: '1rem',
-        padding: '3rem',
-        maxWidth: '800px',
-        width: '100%',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
-      }}>
-        
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2rem',
+      }}
+    >
+      <div
+        style={{
+          background: 'white',
+          borderRadius: '1rem',
+          padding: '3rem',
+          maxWidth: '800px',
+          width: '100%',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+        }}
+      >
         {/* Header */}
         <div style={{ position: 'relative', textAlign: 'center', marginBottom: '3rem' }}>
           {/* STAC Info Button - positioned in top right */}
           <div style={{ position: 'absolute', top: 0, right: 0 }}>
             <STACInfoButton />
           </div>
-          
-          <h1 style={{ 
-            fontSize: '3rem', 
-            margin: 0, 
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            fontWeight: 'bold'
-          }}>
+
+          <h1
+            style={{
+              fontSize: '3rem',
+              margin: 0,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              fontWeight: 'bold',
+            }}
+          >
             OpenGeo AI Assistant
           </h1>
-          <p style={{ 
-            fontSize: '1.2rem', 
-            color: '#666', 
-            margin: '1rem 0 0 0',
-            lineHeight: 1.6
-          }}>
-            Ask me anything about Earth science data. I'll intelligently route you to the best data source and interface.
+          <p
+            style={{
+              fontSize: '1.2rem',
+              color: '#666',
+              margin: '1rem 0 0 0',
+              lineHeight: 1.6,
+            }}
+          >
+            Ask me anything about Earth science data. I'll intelligently route you to the best data
+            source and interface.
           </p>
         </div>
 
@@ -151,7 +159,7 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
                     minHeight: '4rem',
                     fontFamily: 'inherit',
                     boxSizing: 'border-box',
-                    transition: 'border-color 0.3s ease'
+                    transition: 'border-color 0.3s ease',
                   }}
                   disabled={routingMutation.isPending}
                 />
@@ -171,7 +179,7 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
                     opacity: query.trim() && !routingMutation.isPending ? 1 : 0.6,
                     fontSize: '1rem',
                     fontWeight: 'bold',
-                    transition: 'opacity 0.3s ease'
+                    transition: 'opacity 0.3s ease',
                   }}
                 >
                   Analyze →
@@ -181,14 +189,14 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
 
             {/* Example Queries */}
             <div>
-              <h3 style={{ color: '#333', marginBottom: '1rem' }}>
-                Try these examples:
-              </h3>
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                gap: '1rem'
-              }}>
+              <h3 style={{ color: '#333', marginBottom: '1rem' }}>Try these examples:</h3>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                  gap: '1rem',
+                }}
+              >
                 {exampleQueries.map((example, index) => (
                   <button
                     key={index}
@@ -200,14 +208,12 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
                       background: 'white',
                       textAlign: 'left',
                       cursor: 'pointer',
-                      transition: 'all 0.3s ease'
+                      transition: 'all 0.3s ease',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <span style={{ fontSize: '1.5rem' }}>{example.icon}</span>
-                      <span style={{ fontSize: '0.9rem', color: '#333' }}>
-                        {example.text}
-                      </span>
+                      <span style={{ fontSize: '0.9rem', color: '#333' }}>{example.text}</span>
                     </div>
                   </button>
                 ))}
@@ -219,16 +225,14 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
         {/* Loading State */}
         {routingMutation.isPending && (
           <div style={{ textAlign: 'center', padding: '3rem' }}>
-            <div style={{ 
-              fontSize: '3rem', 
-              marginBottom: '1rem',
-              animation: 'spin 2s linear infinite'
-            }}>
-              
-            </div>
-            <h3 style={{ color: '#333', marginBottom: '0.5rem' }}>
-              Analyzing your query...
-            </h3>
+            <div
+              style={{
+                fontSize: '3rem',
+                marginBottom: '1rem',
+                animation: 'spin 2s linear infinite',
+              }}
+            ></div>
+            <h3 style={{ color: '#333', marginBottom: '0.5rem' }}>Analyzing your query...</h3>
             <p style={{ color: '#666' }}>
               Using intelligent routing to find the best data source for you
             </p>
@@ -238,34 +242,42 @@ const IntelligentLandingPage: React.FC<IntelligentLandingPageProps> = ({ onRoute
         {/* Routing Result */}
         {routingResult && (
           <div style={{ textAlign: 'center', padding: '2rem' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>
-              ✓
-            </div>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✓</div>
             <h3 style={{ color: '#333', marginBottom: '1rem' }}>
               Perfect! I found the right data source for you
             </h3>
-            <div style={{
-              background: '#f8f9fa',
-              padding: '1.5rem',
-              borderRadius: '0.5rem',
-              marginBottom: '1.5rem',
-              textAlign: 'left'
-            }}>
-              <p><strong>Data Source:</strong> {routingResult.primary_source}</p>
-              <p><strong>Confidence:</strong> {Math.round(routingResult.confidence * 100)}%</p>
-              <p><strong>Reasoning:</strong> {routingResult.reasoning}</p>
+            <div
+              style={{
+                background: '#f8f9fa',
+                padding: '1.5rem',
+                borderRadius: '0.5rem',
+                marginBottom: '1.5rem',
+                textAlign: 'left',
+              }}
+            >
+              <p>
+                <strong>Data Source:</strong> {routingResult.primary_source}
+              </p>
+              <p>
+                <strong>Confidence:</strong> {Math.round(routingResult.confidence * 100)}%
+              </p>
+              <p>
+                <strong>Reasoning:</strong> {routingResult.reasoning}
+              </p>
             </div>
             <p style={{ color: '#666', marginBottom: '1rem' }}>
               Redirecting you to the specialized OpenGeo AI Assistant interface...
             </p>
-            <div style={{ 
-              display: 'inline-block',
-              padding: '0.5rem 1rem',
-              background: '#667eea',
-              color: 'white',
-              borderRadius: '0.25rem',
-              fontSize: '0.9rem'
-            }}>
+            <div
+              style={{
+                display: 'inline-block',
+                padding: '0.5rem 1rem',
+                background: '#667eea',
+                color: 'white',
+                borderRadius: '0.25rem',
+                fontSize: '0.9rem',
+              }}
+            >
               Loading OpenGeo AI Assistant...
             </div>
           </div>

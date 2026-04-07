@@ -14,7 +14,7 @@ const ClarificationQuestions: React.FC<ClarificationQuestionsProps> = ({
   questions,
   originalQuery,
   onAnswersSubmitted,
-  onSkip
+  onSkip,
 }) => {
   const [answers, setAnswers] = useState<string[]>(new Array(questions.length).fill(''));
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,16 +27,17 @@ const ClarificationQuestions: React.FC<ClarificationQuestionsProps> = ({
 
   const handleSubmit = () => {
     setIsSubmitting(true);
-    
+
     // Create a refined query by combining the original query with answers
     const answeredQuestions = questions
-      .map((question, index) => answers[index] ? `${question}: ${answers[index]}` : '')
+      .map((question, index) => (answers[index] ? `${question}: ${answers[index]}` : ''))
       .filter(Boolean);
-    
-    const refinedQuery = answeredQuestions.length > 0 
-      ? `${originalQuery}. Additional details: ${answeredQuestions.join(', ')}`
-      : originalQuery;
-    
+
+    const refinedQuery =
+      answeredQuestions.length > 0
+        ? `${originalQuery}. Additional details: ${answeredQuestions.join(', ')}`
+        : originalQuery;
+
     onAnswersSubmitted(refinedQuery);
   };
 
@@ -44,14 +45,24 @@ const ClarificationQuestions: React.FC<ClarificationQuestionsProps> = ({
     onSkip();
   };
 
-  const hasAnswers = answers.some(answer => answer.trim().length > 0);
+  const hasAnswers = answers.some((answer) => answer.trim().length > 0);
 
   return (
     <div className="clarification-questions-container bg-blue-50 border border-blue-200 rounded-lg p-4 my-4">
       <div className="flex items-start space-x-3">
         <div className="flex-shrink-0">
-          <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            className="w-6 h-6 text-blue-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
         </div>
         <div className="flex-1">
@@ -61,13 +72,11 @@ const ClarificationQuestions: React.FC<ClarificationQuestionsProps> = ({
           <p className="text-blue-700 mb-4">
             Please provide additional details to refine your search:
           </p>
-          
+
           <div className="space-y-3">
             {questions.map((question, index) => (
               <div key={index} className="flex flex-col">
-                <label className="text-sm font-medium text-blue-800 mb-1">
-                  {question}
-                </label>
+                <label className="text-sm font-medium text-blue-800 mb-1">{question}</label>
                 <input
                   type="text"
                   value={answers[index]}
@@ -78,7 +87,7 @@ const ClarificationQuestions: React.FC<ClarificationQuestionsProps> = ({
               </div>
             ))}
           </div>
-          
+
           <div className="flex space-x-3 mt-4">
             <button
               onClick={handleSubmit}

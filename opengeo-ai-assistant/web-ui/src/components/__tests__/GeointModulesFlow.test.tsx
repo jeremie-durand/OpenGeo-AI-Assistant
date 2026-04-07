@@ -7,7 +7,7 @@ import MainApp from '../MainApp';
 
 /**
  * Comprehensive End-to-End Tests for GEOINT Modules Flow
- * 
+ *
  * Tests the complete user journey:
  * 1. User clicks pin button
  * 2. Modules menu appears (if no module selected)
@@ -24,7 +24,6 @@ import MainApp from '../MainApp';
  * 13. Chat receives "complete" notification with results
  */
 
-
 // Mock Leaflet
 const mockLeaflet = {
   map: vi.fn().mockReturnValue({
@@ -32,14 +31,14 @@ const mockLeaflet = {
     off: vi.fn(),
     setView: vi.fn(),
     addLayer: vi.fn(),
-    removeLayer: vi.fn()
+    removeLayer: vi.fn(),
   }),
   marker: vi.fn().mockReturnValue({
     addTo: vi.fn().mockReturnThis(),
     bindPopup: vi.fn().mockReturnThis(),
-    openPopup: vi.fn().mockReturnThis()
+    openPopup: vi.fn().mockReturnThis(),
   }),
-  icon: vi.fn().mockReturnValue({})
+  icon: vi.fn().mockReturnValue({}),
 };
 
 // Mock API service
@@ -50,10 +49,10 @@ const mockApiService = {
       features_identified: ['hills', 'valleys', 'water'],
       imagery_metadata: {
         source: 'Sentinel-2',
-        date: '2025-10-21'
-      }
-    }
-  })
+        date: '2025-10-21',
+      },
+    },
+  }),
 };
 
 describe('GEOINT Modules End-to-End Flow', () => {
@@ -72,17 +71,13 @@ describe('GEOINT Modules End-to-End Flow', () => {
   describe('Module Selection Flow', () => {
     it('should show modules menu when pin button clicked without module selected', async () => {
       const onGeointAnalysis = vi.fn();
-      
-      const { container } = render(
-        <MapView 
-          onGeointAnalysis={onGeointAnalysis}
-        />
-      );
+
+      const { container } = render(<MapView onGeointAnalysis={onGeointAnalysis} />);
 
       // Find and click pin button
       const pinButton = container.querySelector('[title*="Select GEOINT Module"]');
       expect(pinButton).toBeInTheDocument();
-      
+
       fireEvent.click(pinButton!);
 
       // Wait for modules menu to appear
@@ -95,19 +90,15 @@ describe('GEOINT Modules End-to-End Flow', () => {
       expect(onGeointAnalysis).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'info',
-          message: expect.stringContaining('select a geointelligence module')
+          message: expect.stringContaining('select a geointelligence module'),
         })
       );
     });
 
     it('should send "module_selected" notification when terrain module is selected', async () => {
       const onGeointAnalysis = vi.fn();
-      
-      const { container } = render(
-        <MapView 
-          onGeointAnalysis={onGeointAnalysis}
-        />
-      );
+
+      const { container } = render(<MapView onGeointAnalysis={onGeointAnalysis} />);
 
       // Open modules menu
       const pinButton = container.querySelector('[title*="Select GEOINT Module"]');
@@ -123,19 +114,15 @@ describe('GEOINT Modules End-to-End Flow', () => {
       expect(onGeointAnalysis).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'module_selected',
-          message: expect.stringContaining('')
+          message: expect.stringContaining(''),
         })
       );
     });
 
     it('should send "module_selected" notification when mobility module is selected', async () => {
       const onGeointAnalysis = vi.fn();
-      
-      const { container } = render(
-        <MapView 
-          onGeointAnalysis={onGeointAnalysis}
-        />
-      );
+
+      const { container } = render(<MapView onGeointAnalysis={onGeointAnalysis} />);
 
       // Open modules menu
       const pinButton = container.querySelector('[title*="Select GEOINT Module"]');
@@ -151,19 +138,15 @@ describe('GEOINT Modules End-to-End Flow', () => {
       expect(onGeointAnalysis).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'module_selected',
-          message: expect.stringContaining('[CAR]')
+          message: expect.stringContaining('[CAR]'),
         })
       );
     });
 
     it('should send "module_selected" notification when building damage module is selected', async () => {
       const onGeointAnalysis = vi.fn();
-      
-      const { container } = render(
-        <MapView 
-          onGeointAnalysis={onGeointAnalysis}
-        />
-      );
+
+      const { container } = render(<MapView onGeointAnalysis={onGeointAnalysis} />);
 
       // Open modules menu
       const pinButton = container.querySelector('[title*="Select GEOINT Module"]');
@@ -179,7 +162,7 @@ describe('GEOINT Modules End-to-End Flow', () => {
       expect(onGeointAnalysis).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'module_selected',
-          message: expect.stringContaining('[BUILD]')
+          message: expect.stringContaining('[BUILD]'),
         })
       );
     });
@@ -188,12 +171,8 @@ describe('GEOINT Modules End-to-End Flow', () => {
   describe('Pin Mode Activation Flow', () => {
     it('should enable pin mode and turn button green when pin clicked after module selection', async () => {
       const onGeointAnalysis = vi.fn();
-      
-      const { container } = render(
-        <MapView 
-          onGeointAnalysis={onGeointAnalysis}
-        />
-      );
+
+      const { container } = render(<MapView onGeointAnalysis={onGeointAnalysis} />);
 
       // Select a module first
       const pinButton = container.querySelector('[title*="Select GEOINT Module"]') as HTMLElement;
@@ -209,7 +188,9 @@ describe('GEOINT Modules End-to-End Flow', () => {
 
       // Click pin button again to enable pin mode
       await waitFor(() => {
-        const enablePinButton = container.querySelector('[title*="Enable Pin Mode"]') as HTMLElement;
+        const enablePinButton = container.querySelector(
+          '[title*="Enable Pin Mode"]'
+        ) as HTMLElement;
         expect(enablePinButton).toBeInTheDocument();
         fireEvent.click(enablePinButton);
       });
@@ -218,7 +199,7 @@ describe('GEOINT Modules End-to-End Flow', () => {
       expect(onGeointAnalysis).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'info',
-          message: expect.stringContaining('[PIN]')
+          message: expect.stringContaining('[PIN]'),
         })
       );
 
@@ -226,7 +207,7 @@ describe('GEOINT Modules End-to-End Flow', () => {
       await waitFor(() => {
         const activeButton = container.querySelector('[title*="Pin Mode: ON"]');
         expect(activeButton).toBeInTheDocument();
-        
+
         // Check button has green background
         const buttonStyle = window.getComputedStyle(activeButton!);
         expect(buttonStyle.background).toContain('rgb(34, 197, 94)'); // Green color
@@ -234,9 +215,7 @@ describe('GEOINT Modules End-to-End Flow', () => {
     });
 
     it('should NOT turn green when only module is selected but pin mode not activated', async () => {
-      const { container } = render(
-        <MapView />
-      );
+      const { container } = render(<MapView />);
 
       // Select a module
       const pinButton = container.querySelector('[title*="Select GEOINT Module"]') as HTMLElement;
@@ -251,7 +230,7 @@ describe('GEOINT Modules End-to-End Flow', () => {
       await waitFor(() => {
         const button = container.querySelector('[title*="Enable Pin Mode"]') as HTMLElement;
         expect(button).toBeInTheDocument();
-        
+
         const buttonStyle = window.getComputedStyle(button);
         expect(buttonStyle.background).not.toContain('rgb(34, 197, 94)');
         expect(buttonStyle.background).toContain('rgba(255, 255, 255'); // White background
@@ -263,17 +242,14 @@ describe('GEOINT Modules End-to-End Flow', () => {
     it('should place pin marker when map is clicked in pin mode', async () => {
       const onGeointAnalysis = vi.fn();
       const onPinChange = vi.fn();
-      
+
       // Mock API import
       vi.mock('../../services/api', () => ({
-        triggerGeointAnalysis: mockApiService.triggerGeointAnalysis
+        triggerGeointAnalysis: mockApiService.triggerGeointAnalysis,
       }));
 
       const { container } = render(
-        <MapView 
-          onGeointAnalysis={onGeointAnalysis}
-          onPinChange={onPinChange}
-        />
+        <MapView onGeointAnalysis={onGeointAnalysis} onPinChange={onPinChange} />
       );
 
       // 1. Select module
@@ -293,13 +269,11 @@ describe('GEOINT Modules End-to-End Flow', () => {
 
       // 3. Simulate map click
       const testLat = 40.7128;
-      const testLng = -74.0060;
+      const testLng = -74.006;
 
       // Get map instance and trigger click event
       const mapInstance = mockLeaflet.map.mock.results[0].value;
-      const clickHandler = mapInstance.on.mock.calls.find(
-        (call: any) => call[0] === 'click'
-      )?.[1];
+      const clickHandler = mapInstance.on.mock.calls.find((call: any) => call[0] === 'click')?.[1];
 
       if (clickHandler) {
         clickHandler({ latlng: { lat: testLat, lng: testLng } });
@@ -313,7 +287,7 @@ describe('GEOINT Modules End-to-End Flow', () => {
       // 5. Verify onPinChange callback
       expect(onPinChange).toHaveBeenCalledWith({
         lat: testLat,
-        lng: testLng
+        lng: testLng,
       });
 
       // 6. Verify "pin_dropped" notification
@@ -321,15 +295,13 @@ describe('GEOINT Modules End-to-End Flow', () => {
         expect.objectContaining({
           type: 'pin_dropped',
           message: expect.stringContaining('[PIN]'),
-          coordinates: { lat: testLat, lng: testLng }
+          coordinates: { lat: testLat, lng: testLng },
         })
       );
     });
 
     it('should display pin coordinate indicator when pin is active', async () => {
-      const { container } = render(
-        <MapView />
-      );
+      const { container } = render(<MapView />);
 
       // Place a pin (simulate the flow)
       const pinButton = container.querySelector('[title*="Select GEOINT Module"]') as HTMLElement;
@@ -347,12 +319,10 @@ describe('GEOINT Modules End-to-End Flow', () => {
 
       // Simulate pin placement
       const mapInstance = mockLeaflet.map.mock.results[0].value;
-      const clickHandler = mapInstance.on.mock.calls.find(
-        (call: any) => call[0] === 'click'
-      )?.[1];
+      const clickHandler = mapInstance.on.mock.calls.find((call: any) => call[0] === 'click')?.[1];
 
       if (clickHandler) {
-        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.006 } });
       }
 
       // Verify pin coordinate indicator appears
@@ -366,16 +336,12 @@ describe('GEOINT Modules End-to-End Flow', () => {
   describe('GEOINT Analysis Trigger Flow', () => {
     it('should automatically trigger terrain analysis when pin is dropped', async () => {
       const onGeointAnalysis = vi.fn();
-      
+
       vi.mock('../../services/api', () => ({
-        triggerGeointAnalysis: mockApiService.triggerGeointAnalysis
+        triggerGeointAnalysis: mockApiService.triggerGeointAnalysis,
       }));
 
-      const { container } = render(
-        <MapView 
-          onGeointAnalysis={onGeointAnalysis}
-        />
-      );
+      const { container } = render(<MapView onGeointAnalysis={onGeointAnalysis} />);
 
       // Complete the flow: select module -> enable pin mode -> drop pin
       const pinButton = container.querySelector('[title*="Select GEOINT Module"]') as HTMLElement;
@@ -393,12 +359,10 @@ describe('GEOINT Modules End-to-End Flow', () => {
 
       // Drop pin
       const mapInstance = mockLeaflet.map.mock.results[0].value;
-      const clickHandler = mapInstance.on.mock.calls.find(
-        (call: any) => call[0] === 'click'
-      )?.[1];
+      const clickHandler = mapInstance.on.mock.calls.find((call: any) => call[0] === 'click')?.[1];
 
       if (clickHandler) {
-        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.006 } });
       }
 
       // Verify "pending" notification (thinking...)
@@ -406,7 +370,7 @@ describe('GEOINT Modules End-to-End Flow', () => {
         expect(onGeointAnalysis).toHaveBeenCalledWith(
           expect.objectContaining({
             type: 'pending',
-            message: expect.stringContaining('[THINK]')
+            message: expect.stringContaining('[THINK]'),
           })
         );
       });
@@ -415,7 +379,7 @@ describe('GEOINT Modules End-to-End Flow', () => {
       await waitFor(() => {
         expect(mockApiService.triggerGeointAnalysis).toHaveBeenCalledWith(
           40.7128,
-          -74.0060,
+          -74.006,
           'terrain_analysis',
           expect.any(String),
           expect.any(String)
@@ -428,8 +392,8 @@ describe('GEOINT Modules End-to-End Flow', () => {
           expect.objectContaining({
             type: 'complete',
             data: expect.objectContaining({
-              result: expect.any(Object)
-            })
+              result: expect.any(Object),
+            }),
           })
         );
       });
@@ -437,16 +401,12 @@ describe('GEOINT Modules End-to-End Flow', () => {
 
     it('should trigger mobility analysis with correct API module name', async () => {
       const onGeointAnalysis = vi.fn();
-      
+
       vi.mock('../../services/api', () => ({
-        triggerGeointAnalysis: mockApiService.triggerGeointAnalysis
+        triggerGeointAnalysis: mockApiService.triggerGeointAnalysis,
       }));
 
-      const { container } = render(
-        <MapView 
-          onGeointAnalysis={onGeointAnalysis}
-        />
-      );
+      const { container } = render(<MapView onGeointAnalysis={onGeointAnalysis} />);
 
       // Select mobility module
       const pinButton = container.querySelector('[title*="Select GEOINT Module"]') as HTMLElement;
@@ -464,19 +424,17 @@ describe('GEOINT Modules End-to-End Flow', () => {
 
       // Drop pin
       const mapInstance = mockLeaflet.map.mock.results[0].value;
-      const clickHandler = mapInstance.on.mock.calls.find(
-        (call: any) => call[0] === 'click'
-      )?.[1];
+      const clickHandler = mapInstance.on.mock.calls.find((call: any) => call[0] === 'click')?.[1];
 
       if (clickHandler) {
-        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.006 } });
       }
 
       // Verify API called with 'mobility_analysis'
       await waitFor(() => {
         expect(mockApiService.triggerGeointAnalysis).toHaveBeenCalledWith(
           40.7128,
-          -74.0060,
+          -74.006,
           'mobility_analysis', // API module name
           expect.any(String),
           expect.any(String)
@@ -486,16 +444,12 @@ describe('GEOINT Modules End-to-End Flow', () => {
 
     it('should trigger building damage analysis with correct API module name', async () => {
       const onGeointAnalysis = vi.fn();
-      
+
       vi.mock('../../services/api', () => ({
-        triggerGeointAnalysis: mockApiService.triggerGeointAnalysis
+        triggerGeointAnalysis: mockApiService.triggerGeointAnalysis,
       }));
 
-      const { container } = render(
-        <MapView 
-          onGeointAnalysis={onGeointAnalysis}
-        />
-      );
+      const { container } = render(<MapView onGeointAnalysis={onGeointAnalysis} />);
 
       // Select building damage module
       const pinButton = container.querySelector('[title*="Select GEOINT Module"]') as HTMLElement;
@@ -513,19 +467,17 @@ describe('GEOINT Modules End-to-End Flow', () => {
 
       // Drop pin
       const mapInstance = mockLeaflet.map.mock.results[0].value;
-      const clickHandler = mapInstance.on.mock.calls.find(
-        (call: any) => call[0] === 'click'
-      )?.[1];
+      const clickHandler = mapInstance.on.mock.calls.find((call: any) => call[0] === 'click')?.[1];
 
       if (clickHandler) {
-        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.006 } });
       }
 
       // Verify API called with 'building_damage'
       await waitFor(() => {
         expect(mockApiService.triggerGeointAnalysis).toHaveBeenCalledWith(
           40.7128,
-          -74.0060,
+          -74.006,
           'building_damage', // API module name
           expect.any(String),
           expect.any(String)
@@ -543,38 +495,48 @@ describe('GEOINT Modules End-to-End Flow', () => {
       });
 
       // Mock useState for messages
-      vi.spyOn(require('react'), 'useState')
-        .mockImplementation((initial) => {
-          if (Array.isArray(initial)) {
-            return [messages, mockSetMessages];
-          }
-          return [initial, vi.fn()];
-        });
+      vi.spyOn(require('react'), 'useState').mockImplementation((initial) => {
+        if (Array.isArray(initial)) {
+          return [messages, mockSetMessages];
+        }
+        return [initial, vi.fn()];
+      });
 
       const mobilityAnalysisResults = [
         { type: 'info', message: 'Please select a geointelligence module to analyze.' },
-        { type: 'module_selected', message: '**Terrain Analysis Selected**\n\nPlease drop a pin on the location to perform terrain analysis.' },
-        { type: 'info', message: '[PIN] **Pin Mode Activated** - Click on the map to drop your pin.' },
-        { type: 'pin_dropped', message: '[PIN] **Coordinates stored.**', coordinates: { lat: 40.7128, lng: -74.0060 } },
-        { type: 'pending', message: '[THINK] **Thinking...**\n\nPerforming Terrain Analysis using GPT-5 Vision on satellite imagery.' },
-        { 
-          type: 'complete', 
-          data: { 
-            result: { 
+        {
+          type: 'module_selected',
+          message:
+            '**Terrain Analysis Selected**\n\nPlease drop a pin on the location to perform terrain analysis.',
+        },
+        {
+          type: 'info',
+          message: '[PIN] **Pin Mode Activated** - Click on the map to drop your pin.',
+        },
+        {
+          type: 'pin_dropped',
+          message: '[PIN] **Coordinates stored.**',
+          coordinates: { lat: 40.7128, lng: -74.006 },
+        },
+        {
+          type: 'pending',
+          message:
+            '[THINK] **Thinking...**\n\nPerforming Terrain Analysis using GPT-5 Vision on satellite imagery.',
+        },
+        {
+          type: 'complete',
+          data: {
+            result: {
               analysis: 'Test analysis result',
-              features_identified: ['hills', 'valleys']
-            } 
-          } 
-        }
+              features_identified: ['hills', 'valleys'],
+            },
+          },
+        },
       ];
 
       for (const result of mobilityAnalysisResults) {
         const { rerender } = render(
-          <Chat 
-            mobilityAnalysisResult={result}
-            chatMode="geoint"
-            selectedModule="terrain"
-          />
+          <Chat mobilityAnalysisResult={result} chatMode="geoint" selectedModule="terrain" />
         );
 
         await waitFor(() => {
@@ -592,21 +554,17 @@ describe('GEOINT Modules End-to-End Flow', () => {
   describe('Error Handling', () => {
     it('should handle GEOINT analysis API failure gracefully', async () => {
       const onGeointAnalysis = vi.fn();
-      
+
       // Mock API to fail
       const failingApiService = {
-        triggerGeointAnalysis: vi.fn().mockRejectedValue(new Error('API connection failed'))
+        triggerGeointAnalysis: vi.fn().mockRejectedValue(new Error('API connection failed')),
       };
-      
+
       vi.mock('../../services/api', () => ({
-        triggerGeointAnalysis: failingApiService.triggerGeointAnalysis
+        triggerGeointAnalysis: failingApiService.triggerGeointAnalysis,
       }));
 
-      const { container } = render(
-        <MapView 
-          onGeointAnalysis={onGeointAnalysis}
-        />
-      );
+      const { container } = render(<MapView onGeointAnalysis={onGeointAnalysis} />);
 
       // Complete flow to trigger analysis
       const pinButton = container.querySelector('[title*="Select GEOINT Module"]') as HTMLElement;
@@ -623,12 +581,10 @@ describe('GEOINT Modules End-to-End Flow', () => {
       });
 
       const mapInstance = mockLeaflet.map.mock.results[0].value;
-      const clickHandler = mapInstance.on.mock.calls.find(
-        (call: any) => call[0] === 'click'
-      )?.[1];
+      const clickHandler = mapInstance.on.mock.calls.find((call: any) => call[0] === 'click')?.[1];
 
       if (clickHandler) {
-        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.006 } });
       }
 
       // Verify error is handled and sent to chat
@@ -638,9 +594,9 @@ describe('GEOINT Modules End-to-End Flow', () => {
             type: 'complete',
             data: expect.objectContaining({
               result: expect.objectContaining({
-                analysis: expect.stringContaining('failed')
-              })
-            })
+                analysis: expect.stringContaining('failed'),
+              }),
+            }),
           })
         );
       });
@@ -648,62 +604,54 @@ describe('GEOINT Modules End-to-End Flow', () => {
 
     it('should NOT place pin if pin mode is not enabled', async () => {
       const onPinChange = vi.fn();
-      
-      const { container } = render(
-        <MapView 
-          onPinChange={onPinChange}
-        />
-      );
+
+      const { container } = render(<MapView onPinChange={onPinChange} />);
 
       // Try to click map without enabling pin mode
       const mapInstance = mockLeaflet.map.mock.results[0].value;
-      const clickHandler = mapInstance.on.mock.calls.find(
-        (call: any) => call[0] === 'click'
-      )?.[1];
+      const clickHandler = mapInstance.on.mock.calls.find((call: any) => call[0] === 'click')?.[1];
 
       if (clickHandler) {
-        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.006 } });
       }
 
       // Verify no pin was created
-      await waitFor(() => {
-        expect(mockLeaflet.marker).not.toHaveBeenCalled();
-        expect(onPinChange).not.toHaveBeenCalled();
-      }, { timeout: 1000 });
+      await waitFor(
+        () => {
+          expect(mockLeaflet.marker).not.toHaveBeenCalled();
+          expect(onPinChange).not.toHaveBeenCalled();
+        },
+        { timeout: 1000 }
+      );
     });
 
     it('should NOT place pin if no module is selected', async () => {
       const onPinChange = vi.fn();
-      
-      const { container } = render(
-        <MapView 
-          onPinChange={onPinChange}
-        />
-      );
+
+      const { container } = render(<MapView onPinChange={onPinChange} />);
 
       // Enable pin mode without selecting module (this should not be possible in UI, but test the guard)
       const mapInstance = mockLeaflet.map.mock.results[0].value;
-      const clickHandler = mapInstance.on.mock.calls.find(
-        (call: any) => call[0] === 'click'
-      )?.[1];
+      const clickHandler = mapInstance.on.mock.calls.find((call: any) => call[0] === 'click')?.[1];
 
       if (clickHandler) {
-        clickHandler({ latlng: { lat: 40.7128, lng: -74.0060 } });
+        clickHandler({ latlng: { lat: 40.7128, lng: -74.006 } });
       }
 
       // Verify no pin was created
-      await waitFor(() => {
-        expect(mockLeaflet.marker).not.toHaveBeenCalled();
-        expect(onPinChange).not.toHaveBeenCalled();
-      }, { timeout: 1000 });
+      await waitFor(
+        () => {
+          expect(mockLeaflet.marker).not.toHaveBeenCalled();
+          expect(onPinChange).not.toHaveBeenCalled();
+        },
+        { timeout: 1000 }
+      );
     });
   });
 
   describe('Visual Feedback', () => {
     it('should show different button states throughout the flow', async () => {
-      const { container } = render(
-        <MapView />
-      );
+      const { container } = render(<MapView />);
 
       // State 1: No module selected
       let pinButton = container.querySelector('[title*="Select GEOINT Module"]') as HTMLElement;

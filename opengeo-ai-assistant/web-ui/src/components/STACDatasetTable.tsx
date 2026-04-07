@@ -40,20 +40,23 @@ const STACDatasetTable: React.FC = () => {
 
   useEffect(() => {
     // Load comprehensive dataset table from unified rendering config
-    console.log('[STACDatasetTable] Fetching collections from:', `${API_BASE_URL}/pc_rendering_config.json`);
+    console.log(
+      '[STACDatasetTable] Fetching collections from:',
+      `${API_BASE_URL}/pc_rendering_config.json`
+    );
     authenticatedFetch(`${API_BASE_URL}/pc_rendering_config.json`)
-      .then(response => {
+      .then((response) => {
         console.log('[STACDatasetTable] Response status:', response.status);
         return response.json();
       })
       .then((config: RenderingConfig) => {
         console.log('[STACDatasetTable] Received config:', {
           hasCollections: !!config.collections,
-          collectionCount: Object.keys(config.collections || {}).length
+          collectionCount: Object.keys(config.collections || {}).length,
         });
 
         // Convert collections object to array with defensive checks
-        const collectionsArray = Object.values(config.collections || {}).filter(c => {
+        const collectionsArray = Object.values(config.collections || {}).filter((c) => {
           if (!c || !c.collection_id) {
             console.warn('[STACDatasetTable] Invalid collection found:', c);
             return false;
@@ -69,36 +72,40 @@ const STACDatasetTable: React.FC = () => {
         setDatasets(collectionsArray);
         setLoading(false);
       })
-      .catch(error => {
+      .catch((error) => {
         console.error('[STACDatasetTable] Error loading PC rendering config:', error);
         setLoading(false);
       });
   }, []);
 
   // Get unique categories
-  const categories = ['ALL', ...Array.from(new Set(datasets.map(d => d.category)))].sort();
+  const categories = ['ALL', ...Array.from(new Set(datasets.map((d) => d.category)))].sort();
 
   // Filter datasets based on search and category
-  const filteredDatasets = datasets.filter(dataset => {
+  const filteredDatasets = datasets.filter((dataset) => {
     const assetsStr = dataset.assets?.join(', ') || '';
-    const matchesSearch = searchTerm === '' || 
+    const matchesSearch =
+      searchTerm === '' ||
       dataset.collection_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       dataset.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       assetsStr.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesCategory = selectedCategory === 'ALL' || dataset.category === selectedCategory;
-    
+
     return matchesSearch && matchesCategory;
   });
 
   // Group by category for display
-  const groupedDatasets = filteredDatasets.reduce((acc, dataset) => {
-    if (!acc[dataset.category]) {
-      acc[dataset.category] = [];
-    }
-    acc[dataset.category].push(dataset);
-    return acc;
-  }, {} as Record<string, CollectionData[]>);
+  const groupedDatasets = filteredDatasets.reduce(
+    (acc, dataset) => {
+      if (!acc[dataset.category]) {
+        acc[dataset.category] = [];
+      }
+      acc[dataset.category].push(dataset);
+      return acc;
+    },
+    {} as Record<string, CollectionData[]>
+  );
 
   return (
     <>
@@ -107,14 +114,14 @@ const STACDatasetTable: React.FC = () => {
         className="stac-info-button"
         title="View STAC Collections Reference"
       >
-        <svg 
-          width="20" 
-          height="20" 
-          viewBox="0 0 24 24" 
-          fill="none" 
-          stroke="currentColor" 
-          strokeWidth="2" 
-          strokeLinecap="round" 
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
           strokeLinejoin="round"
         >
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -131,8 +138,8 @@ const STACDatasetTable: React.FC = () => {
           <div className="stac-modal-content-large" onClick={(e) => e.stopPropagation()}>
             <div className="stac-modal-header">
               <h2>�️ STAC Data Collection Availability</h2>
-              <button 
-                onClick={() => setShowModal(false)} 
+              <button
+                onClick={() => setShowModal(false)}
                 className="stac-modal-close"
                 title="Close"
               >
@@ -157,16 +164,18 @@ const STACDatasetTable: React.FC = () => {
                         className="stac-search-input"
                       />
                     </div>
-                    
+
                     <div className="stac-category-filter">
                       <label>Category:</label>
-                      <select 
-                        value={selectedCategory} 
+                      <select
+                        value={selectedCategory}
                         onChange={(e) => setSelectedCategory(e.target.value)}
                         className="stac-category-select"
                       >
-                        {categories.map(cat => (
-                          <option key={cat} value={cat}>{cat}</option>
+                        {categories.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -184,7 +193,7 @@ const STACDatasetTable: React.FC = () => {
                     {Object.entries(groupedDatasets).map(([category, categoryDatasets]) => (
                       <div key={category} className="stac-category-section">
                         <h3 className="stac-category-title">{category}</h3>
-                        
+
                         <table className="stac-collections-table">
                           <thead>
                             <tr>
@@ -199,7 +208,7 @@ const STACDatasetTable: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {(categoryDatasets as CollectionData[]).map(dataset => {
+                            {(categoryDatasets as CollectionData[]).map((dataset) => {
                               // Defensive null check
                               if (!dataset || !dataset.collection_id) {
                                 return null;
@@ -210,9 +219,14 @@ const STACDatasetTable: React.FC = () => {
                                   <td className="collection-id-cell">
                                     <code>{dataset.collection_id}</code>
                                   </td>
-                                  <td className="description-cell" title={dataset.description || 'No description'}>
-                                    {dataset.description && typeof dataset.description === 'string' && dataset.description.length > 200 
-                                      ? dataset.description.substring(0, 200) + '...' 
+                                  <td
+                                    className="description-cell"
+                                    title={dataset.description || 'No description'}
+                                  >
+                                    {dataset.description &&
+                                    typeof dataset.description === 'string' &&
+                                    dataset.description.length > 200
+                                      ? dataset.description.substring(0, 200) + '...'
                                       : dataset.description || 'No description available'}
                                   </td>
                                   <td className="temporal-cell">Varies by dataset</td>
@@ -221,7 +235,9 @@ const STACDatasetTable: React.FC = () => {
                                   <td className="colormap-cell">
                                     <code>{dataset.colormap || 'N/A'}</code>
                                   </td>
-                                  <td className="assets-cell">{dataset.assets?.join(', ') || 'N/A'}</td>
+                                  <td className="assets-cell">
+                                    {dataset.assets?.join(', ') || 'N/A'}
+                                  </td>
                                   <td className="zoom-cell">1-14</td>
                                 </tr>
                               );
@@ -243,8 +259,15 @@ const STACDatasetTable: React.FC = () => {
 
             <div className="stac-modal-footer">
               <p className="stac-footer-text">
-                [DOCS] <strong>{datasets.length}</strong> total collections | 
-                Data from <a href="https://planetarycomputer.microsoft.com/" target="_blank" rel="noopener noreferrer">Planetary Computer</a> STAC API
+                [DOCS] <strong>{datasets.length}</strong> total collections | Data from{' '}
+                <a
+                  href="https://planetarycomputer.microsoft.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Planetary Computer
+                </a>{' '}
+                STAC API
               </p>
             </div>
           </div>

@@ -1,19 +1,60 @@
-* { box-sizing: border-box; }
-html, body, #root { height: 100%; }
-body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #111; }
-button { cursor: pointer; }
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    sans-serif;
+  color: #111;
+}
+button {
+  cursor: pointer;
+}
 .app {
   display: grid;
   grid-template-columns: 360px 1fr 420px;
   grid-template-rows: 100vh;
 }
-.panel { padding: 12px; overflow: auto; border-right: 1px solid #eee; }
-.panel.right { border-right: none; border-left: 1px solid #eee; }
-.h2 { margin: 0 0 8px 0; font-size: 18px; }
-.input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
-.list { border: 1px solid #eee; border-radius: 6px; overflow: auto; max-height: 40vh; }
-.list-item { padding: 8px 10px; border-bottom: 1px solid #f4f4f4; }
-.list-item:hover { background: #fafafa; }
+.panel {
+  padding: 12px;
+  overflow: auto;
+  border-right: 1px solid #eee;
+}
+.panel.right {
+  border-right: none;
+  border-left: 1px solid #eee;
+}
+.h2 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+}
+.input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+.list {
+  border: 1px solid #eee;
+  border-radius: 6px;
+  overflow: auto;
+  max-height: 40vh;
+}
+.list-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f4f4f4;
+}
+.list-item:hover {
+  background: #fafafa;
+}
 /* Chat styling improvements for better UX */
 .chat-container {
   display: flex;
@@ -205,7 +246,7 @@ button { cursor: pointer; }
 .leaflet-container text,
 .leaflet-container .leaflet-marker-pane .leaflet-marker-icon,
 .leaflet-container .leaflet-popup-content {
-  text-shadow: 
+  text-shadow:
     2px 2px 4px rgba(0, 0, 0, 0.9),
     -2px -2px 4px rgba(0, 0, 0, 0.9),
     2px -2px 4px rgba(0, 0, 0, 0.9),
@@ -447,7 +488,7 @@ button { cursor: pointer; }
 }
 
 /* Empty States */
-.data-section div[style*="font-style: italic"] {
+.data-section div[style*='font-style: italic'] {
   font-size: 12px !important;
   color: #9ca3af !important;
   padding: 8px 12px;
@@ -484,8 +525,12 @@ button { cursor: pointer; }
 
 /* Spinner animation for map tile expansion */
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* =============================================================================
@@ -497,7 +542,12 @@ button { cursor: pointer; }
   top: 10px;
   right: 10px;
   width: 320px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(248, 250, 252, 0.7) 50%, rgba(241, 245, 249, 0.8) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(248, 250, 252, 0.7) 50%,
+    rgba(241, 245, 249, 0.8) 100%
+  );
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   backdrop-filter: blur(12px);
@@ -709,11 +759,11 @@ button { cursor: pointer; }
     right: 5px;
     top: 5px;
   }
-  
+
   .geoint-content {
     max-height: 300px;
   }
-  
+
   .terrain-legend .legend-items {
     grid-template-columns: 1fr;
   }

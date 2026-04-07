@@ -10,11 +10,7 @@ interface RestartButtonProps {
 
 const RestartButton: React.FC<RestartButtonProps> = ({ onRestart }) => {
   return (
-    <div 
-      className="restart-button"
-      onClick={onRestart}
-      title="Clear chat and start a new session"
-    >
+    <div className="restart-button" onClick={onRestart} title="Clear chat and start a new session">
       <span className="restart-button-label">Restart</span>
     </div>
   );

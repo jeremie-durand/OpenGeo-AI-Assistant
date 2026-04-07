@@ -10,6 +10,6 @@ import React from 'react';
 const UserAccountMenu: React.FC = () => {
   // Authentication logic removed; render nothing
   return null;
-}
+};
 
 export default UserAccountMenu;

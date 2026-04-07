@@ -4,7 +4,13 @@
 // Enhanced tile URL generation supporting all STAC collection types
 // Based on Microsoft Planetary Computer Titiler API patterns
 
-import { getCollectionConfig, getDefaultAssets, getTileFormat, requiresAuthentication, AssetConfig } from '../config/collectionConfig';
+import {
+  getCollectionConfig,
+  getDefaultAssets,
+  getTileFormat,
+  requiresAuthentication,
+  AssetConfig,
+} from '../config/collectionConfig';
 
 export interface TileUrlOptions {
   collection: string;
@@ -53,7 +59,7 @@ export class TileUrlGenerator {
    */
   static generateMosaicTileUrl(options: MosaicUrlOptions): string {
     const config = getCollectionConfig(options.collection);
-    
+
     // Use collection-specific defaults
     const assets = options.assets || getDefaultAssets(options.collection);
     const format = options.format || getTileFormat(options.collection);
@@ -62,15 +68,15 @@ export class TileUrlGenerator {
 
     // Build base URL
     let url = `${this.PC_BASE_URL}/mosaic/tiles/WebMercatorQuad/{z}/{x}/{y}@${scale}x`;
-    
+
     // Add query parameters
     const params = new URLSearchParams();
     params.set('collection', options.collection);
-    
+
     if (assets.length > 0) {
       params.set('assets', assets.join(','));
     }
-    
+
     params.set('format', format);
     params.set('max_items', maxItems.toString());
 
@@ -89,7 +95,7 @@ export class TileUrlGenerator {
       if (options.collection === 'sentinel-1-rtc' && !options.rescale) {
         params.set('rescale', '-30,0');
       }
-      
+
       if (['daymet-daily-na', 'era5-pds', 'terraclimate'].includes(options.collection)) {
         const asset = assets[0];
         const assetConfig = config.availableAssets.find((a: AssetConfig) => a.name === asset);
@@ -97,7 +103,7 @@ export class TileUrlGenerator {
           params.set('colormap', assetConfig.colormap);
         }
       }
-      
+
       if (['nasadem', 'cop-dem-glo-30'].includes(options.collection) && !options.colormap) {
         params.set('colormap', 'terrain');
       }
@@ -119,14 +125,14 @@ export class TileUrlGenerator {
     const format = options.format || getTileFormat(options.collection);
 
     let url = `${this.PC_BASE_URL}/item/preview.${format}`;
-    
+
     const params = new URLSearchParams();
     params.set('collection', options.collection);
-    
+
     if (options.item) {
       params.set('item', options.item);
     }
-    
+
     if (assets.length > 0) {
       params.set('assets', assets.join(','));
     }
@@ -137,7 +143,7 @@ export class TileUrlGenerator {
       if (options.collection === 'sentinel-1-rtc' && !options.rescale) {
         params.set('rescale', '-30,0');
       }
-      
+
       if (['daymet-daily-na', 'era5-pds', 'terraclimate'].includes(options.collection)) {
         const asset = assets[0];
         const assetConfig = config.availableAssets.find((a: AssetConfig) => a.name === asset);
@@ -145,7 +151,7 @@ export class TileUrlGenerator {
           params.set('colormap', assetConfig.colormap);
         }
       }
-      
+
       if (['nasadem', 'cop-dem-glo-30'].includes(options.collection) && !options.colormap) {
         params.set('colormap', 'terrain');
       }
@@ -167,33 +173,39 @@ export class TileUrlGenerator {
     let assets = options.assets || getDefaultAssets(options.collection);
     const format = options.format || getTileFormat(options.collection);
     const scale = options.scale || 2; // Use scale 2 for high-resolution tiles (512x512)
-    
+
     // Fix incorrect asset combinations for specific collections
-    if (options.collection === 'sentinel-2-l2a' && 
-        assets.length === 3 && 
-        assets.includes('red') && assets.includes('green') && assets.includes('blue')) {
+    if (
+      options.collection === 'sentinel-2-l2a' &&
+      assets.length === 3 &&
+      assets.includes('red') &&
+      assets.includes('green') &&
+      assets.includes('blue')
+    ) {
       // Use 'visual' asset instead of individual RGB bands for Sentinel-2
       assets = ['visual'];
-      console.log('TileUrlGenerator: Corrected Sentinel-2 L2A assets from [red,green,blue] to [visual]');
+      console.log(
+        'TileUrlGenerator: Corrected Sentinel-2 L2A assets from [red,green,blue] to [visual]'
+      );
     }
-    
+
     let url = `${this.PC_BASE_URL}/item/tilejson.json`;
-    
+
     const params = new URLSearchParams();
-    
+
     // Core parameters following MPC pattern
     params.set('collection', options.collection);
     // Add tile_scale=2 for high-resolution tiles (makes returned tile template use @2x)
     params.set('tile_scale', scale.toString());
-    
+
     if (options.item) {
       params.set('item', options.item);
     }
-    
+
     if (assets.length > 0) {
       // Use individual asset parameters instead of comma-separated
       // This avoids asset_bidx generation
-      assets.forEach(asset => {
+      assets.forEach((asset) => {
         params.append('assets', asset);
       });
     }
@@ -209,7 +221,7 @@ export class TileUrlGenerator {
       if (options.collection === 'sentinel-1-rtc' && !options.rescale) {
         params.set('rescale', '-30,0');
       }
-      
+
       if (['daymet-daily-na', 'era5-pds', 'terraclimate'].includes(options.collection)) {
         const asset = assets[0];
         const assetConfig = config.availableAssets.find((a: AssetConfig) => a.name === asset);
@@ -217,7 +229,7 @@ export class TileUrlGenerator {
           params.set('colormap', assetConfig.colormap);
         }
       }
-      
+
       if (['nasadem', 'cop-dem-glo-30'].includes(options.collection) && !options.colormap) {
         params.set('colormap', 'terrain');
       }
@@ -252,7 +264,7 @@ export class TileUrlGenerator {
       return this.generateItemTileUrl({
         collection,
         item: items[0].id,
-        assets
+        assets,
       });
     } else if (items && items.length > 1) {
       // Multiple items - use mosaic endpoint
@@ -261,7 +273,7 @@ export class TileUrlGenerator {
         bbox,
         datetime,
         assets,
-        max_items: Math.min(items.length, 50) // Limit for performance
+        max_items: Math.min(items.length, 50), // Limit for performance
       });
     } else {
       // No specific items - use collection mosaic
@@ -269,7 +281,7 @@ export class TileUrlGenerator {
         collection,
         bbox,
         datetime,
-        assets
+        assets,
       });
     }
   }
@@ -277,7 +289,10 @@ export class TileUrlGenerator {
   /**
    * Get collection-specific asset recommendations
    */
-  static getAssetRecommendations(collection: string, useCase: 'visual' | 'analysis' | 'false-color' | 'radar' | 'thermal'): string[] {
+  static getAssetRecommendations(
+    collection: string,
+    useCase: 'visual' | 'analysis' | 'false-color' | 'radar' | 'thermal'
+  ): string[] {
     const config = getCollectionConfig(collection);
     if (!config) return ['visual'];
 

@@ -2,7 +2,7 @@
 
 .pc-search-panel {
   background: white;
-  border: 2px solid #4A90E2;
+  border: 2px solid #4a90e2;
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 16px;
@@ -11,7 +11,7 @@
 
 .pc-search-header {
   margin-bottom: 16px;
-  border-bottom: 2px solid #4A90E2;
+  border-bottom: 2px solid #4a90e2;
   padding-bottom: 12px;
 }
 
@@ -19,7 +19,7 @@
   margin: 0 0 4px 0;
   font-size: 18px;
   font-weight: 600;
-  color: #2C5282;
+  color: #2c5282;
 }
 
 .pc-search-subtitle {
@@ -44,7 +44,7 @@
 .pc-search-field label {
   font-size: 14px;
   font-weight: 600;
-  color: #2D3748;
+  color: #2d3748;
   margin-bottom: 2px;
 }
 
@@ -52,10 +52,10 @@
 .pc-search-input {
   width: 100%;
   padding: 10px 12px;
-  border: 1.5px solid #CBD5E0;
+  border: 1.5px solid #cbd5e0;
   border-radius: 6px;
   font-size: 14px;
-  color: #2D3748;
+  color: #2d3748;
   background: white;
   transition: all 0.2s ease;
 }
@@ -63,13 +63,13 @@
 .pc-search-select:focus,
 .pc-search-input:focus {
   outline: none;
-  border-color: #4A90E2;
+  border-color: #4a90e2;
   box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
 }
 
 .pc-search-select:hover,
 .pc-search-input:hover {
-  border-color: #4A90E2;
+  border-color: #4a90e2;
 }
 
 .pc-search-select {
@@ -83,13 +83,13 @@
 
 .pc-search-select optgroup {
   font-weight: bold;
-  color: #2C5282;
-  background: #EBF8FF;
+  color: #2c5282;
+  background: #ebf8ff;
 }
 
 .pc-search-select option {
   font-weight: normal;
-  color: #2D3748;
+  color: #2d3748;
   background: white;
   padding: 4px;
 }
@@ -110,9 +110,9 @@
 }
 
 .pc-search-range-toggle {
-  background: #E2E8F0;
-  border: 1.5px solid #CBD5E0;
-  color: #2D3748;
+  background: #e2e8f0;
+  border: 1.5px solid #cbd5e0;
+  color: #2d3748;
   padding: 4px 12px;
   border-radius: 6px;
   font-size: 12px;
@@ -122,13 +122,13 @@
 }
 
 .pc-search-range-toggle:hover {
-  background: #CBD5E0;
-  border-color: #4A90E2;
+  background: #cbd5e0;
+  border-color: #4a90e2;
 }
 
 .pc-search-range-toggle.active {
-  background: #4A90E2;
-  border-color: #2C5282;
+  background: #4a90e2;
+  border-color: #2c5282;
   color: white;
 }
 
@@ -154,7 +154,7 @@
 .pc-search-button {
   width: 100%;
   padding: 12px 20px;
-  background: linear-gradient(135deg, #4A90E2 0%, #357ABD 100%);
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -171,7 +171,7 @@
 }
 
 .pc-search-button:hover:not(:disabled) {
-  background: linear-gradient(135deg, #357ABD 0%, #2C5282 100%);
+  background: linear-gradient(135deg, #357abd 0%, #2c5282 100%);
   box-shadow: 0 4px 8px rgba(74, 144, 226, 0.3);
   transform: translateY(-1px);
 }
@@ -182,7 +182,7 @@
 }
 
 .pc-search-button:disabled {
-  background: #CBD5E0;
+  background: #cbd5e0;
   cursor: not-allowed;
   box-shadow: none;
 }

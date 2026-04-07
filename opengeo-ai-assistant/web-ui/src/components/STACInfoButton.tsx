@@ -82,9 +82,12 @@ const STACInfoButton: React.FC = () => {
 
   useEffect(() => {
     // Load collections metadata from unified golden source JSON and transform it
-    console.log('[STACInfoButton] Fetching collections from:', `${API_BASE_URL}/pc_rendering_config.json`);
+    console.log(
+      '[STACInfoButton] Fetching collections from:',
+      `${API_BASE_URL}/pc_rendering_config.json`
+    );
     authenticatedFetch(`${API_BASE_URL}/pc_rendering_config.json`)
-      .then(response => {
+      .then((response) => {
         console.log('[STACInfoButton] Response status:', response.status);
         return response.json();
       })
@@ -94,7 +97,7 @@ const STACInfoButton: React.FC = () => {
           hasCategories: !!goldenSource?.categories,
           hasCollections: !!goldenSource?.collections,
           categoriesCount: goldenSource?.categories?.length,
-          collectionsKeys: Object.keys(goldenSource?.collections || {}).length
+          collectionsKeys: Object.keys(goldenSource?.collections || {}).length,
         });
 
         // Defensive null checks throughout transformation
@@ -106,44 +109,55 @@ const STACInfoButton: React.FC = () => {
 
         // Transform golden source data to match component expectations
         const transformedData: PCCollectionsData = {
-          metadata: goldenSource.metadata || { total_collections: 0, last_updated: 'Unknown', source: '', note: '' },
-          categories: (goldenSource.categories || []).map(category => ({
-            name: category?.name || 'Unknown',
-            count: category?.count || 0,
-            collections: (category?.collections || []).map(simpleCol => {
-              // Get full details from collections object - with null safety
-              const fullDetails = simpleCol?.id ? goldenSource.collections[simpleCol.id] : null;
-              
-              // Ensure keywords is always an array
-              let safeKeywords: string[] = [];
-              if (simpleCol?.keywords) {
-                if (Array.isArray(simpleCol.keywords)) {
-                  safeKeywords = simpleCol.keywords.filter(k => typeof k === 'string');
-                }
-              }
-              
-              return {
-                id: simpleCol?.id || 'unknown',
-                title: simpleCol?.title || 'Unknown Collection',
-                description: simpleCol?.description || 'No description available',
-                temporal_extent: fullDetails?.classification?.is_static ? 'Static' : '2000-present',
-                is_static: fullDetails?.classification?.is_static || false,
-                keywords: safeKeywords,
-                assets: fullDetails?.rendering?.assets || [],
-                required_params: {
-                  location: true,
-                  datetime: !(fullDetails?.classification?.is_static),
-                  datetime_optional: !(fullDetails?.classification?.is_static)
-                }
-              };
-            }).filter(col => col.id !== 'unknown') // Remove any malformed collections
-          })).filter(cat => cat.collections.length > 0) // Remove empty categories
+          metadata: goldenSource.metadata || {
+            total_collections: 0,
+            last_updated: 'Unknown',
+            source: '',
+            note: '',
+          },
+          categories: (goldenSource.categories || [])
+            .map((category) => ({
+              name: category?.name || 'Unknown',
+              count: category?.count || 0,
+              collections: (category?.collections || [])
+                .map((simpleCol) => {
+                  // Get full details from collections object - with null safety
+                  const fullDetails = simpleCol?.id ? goldenSource.collections[simpleCol.id] : null;
+
+                  // Ensure keywords is always an array
+                  let safeKeywords: string[] = [];
+                  if (simpleCol?.keywords) {
+                    if (Array.isArray(simpleCol.keywords)) {
+                      safeKeywords = simpleCol.keywords.filter((k) => typeof k === 'string');
+                    }
+                  }
+
+                  return {
+                    id: simpleCol?.id || 'unknown',
+                    title: simpleCol?.title || 'Unknown Collection',
+                    description: simpleCol?.description || 'No description available',
+                    temporal_extent: fullDetails?.classification?.is_static
+                      ? 'Static'
+                      : '2000-present',
+                    is_static: fullDetails?.classification?.is_static || false,
+                    keywords: safeKeywords,
+                    assets: fullDetails?.rendering?.assets || [],
+                    required_params: {
+                      location: true,
+                      datetime: !fullDetails?.classification?.is_static,
+                      datetime_optional: !fullDetails?.classification?.is_static,
+                    },
+                  };
+                })
+                .filter((col) => col.id !== 'unknown'), // Remove any malformed collections
+            }))
+            .filter((cat) => cat.collections.length > 0), // Remove empty categories
         };
-        
+
         setCollectionsData(transformedData);
         setLoading(false);
       })
-      .catch(error => {
+      .catch((error) => {
         console.error('Error loading collections metadata:', error);
         setLoading(false);
       });
@@ -151,7 +165,7 @@ const STACInfoButton: React.FC = () => {
 
   return (
     <>
-      <div 
+      <div
         className="stac-info-button"
         onClick={() => setShowModal(true)}
         title="View STAC Collection Availability Guide"
@@ -165,7 +179,7 @@ const STACInfoButton: React.FC = () => {
             <div className="stac-modal-header">
               <div>
                 <h2>
-                  <a 
+                  <a
                     href="https://planetarycomputer.microsoft.com/catalog"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -177,8 +191,8 @@ const STACInfoButton: React.FC = () => {
                   </a>
                 </h2>
               </div>
-              <button 
-                className="stac-close-btn" 
+              <button
+                className="stac-close-btn"
                 onClick={() => setShowModal(false)}
                 aria-label="Close"
               >
@@ -189,16 +203,19 @@ const STACInfoButton: React.FC = () => {
             <div className="stac-modal-body">
               {/* All Collections from Planetary Computer */}
               <div className="stac-all-collections-section">
-                <h3 className="stac-section-title">Planetary Computer Collections ({collectionsData?.metadata.total_collections || 47})</h3>
+                <h3 className="stac-section-title">
+                  Planetary Computer Collections (
+                  {collectionsData?.metadata.total_collections || 47})
+                </h3>
                 <p className="stac-section-subtitle">
-                  Complete catalog of STAC collections available through Microsoft Planetary Computer. 
-                  All collections support location-based queries; datetime is optional.
+                  Complete catalog of STAC collections available through Microsoft Planetary
+                  Computer. All collections support location-based queries; datetime is optional.
                 </p>
 
                 {/* Category Filter Buttons */}
                 {collectionsData && (
                   <div className="stac-category-filters">
-                    <button 
+                    <button
                       className={`stac-filter-btn ${selectedCategory === null ? 'active' : ''}`}
                       onClick={() => setSelectedCategory(null)}
                     >
@@ -219,72 +236,88 @@ const STACInfoButton: React.FC = () => {
                 {loading && <div className="stac-loading">Loading collections...</div>}
 
                 {collectionsData?.categories
-                  .filter(category => selectedCategory === null || category.name === selectedCategory)
+                  .filter(
+                    (category) => selectedCategory === null || category.name === selectedCategory
+                  )
                   .map((category, idx) => (
-                  <div key={idx} className="stac-category">
-                    <h3 className="stac-category-title">{category.name} ({category.count} collections)</h3>
-                    <div className="stac-table">
-                      <div className="stac-table-header">
-                        <div className="stac-col-id">Collection ID</div>
-                        <div className="stac-col-description">Description</div>
-                        <div className="stac-col-temporal">Temporal Coverage</div>
-                        <div className="stac-col-params">Required Parameters</div>
-                      </div>
-                      {category.collections.map((collection, collIdx) => {
-                        // Extra defensive check for collection object
-                        if (!collection || !collection.id) {
-                          return null;
-                        }
+                    <div key={idx} className="stac-category">
+                      <h3 className="stac-category-title">
+                        {category.name} ({category.count} collections)
+                      </h3>
+                      <div className="stac-table">
+                        <div className="stac-table-header">
+                          <div className="stac-col-id">Collection ID</div>
+                          <div className="stac-col-description">Description</div>
+                          <div className="stac-col-temporal">Temporal Coverage</div>
+                          <div className="stac-col-params">Required Parameters</div>
+                        </div>
+                        {category.collections.map((collection, collIdx) => {
+                          // Extra defensive check for collection object
+                          if (!collection || !collection.id) {
+                            return null;
+                          }
 
-                        return (
-                          <div key={collIdx} className="stac-table-row">
-                            <div className="stac-col-id">
-                              <code>{collection.id}</code>
-                              {Array.isArray(collection.keywords) && collection.keywords.length > 0 && (
-                                <div className="stac-keywords">
-                                  {collection.keywords.slice(0, 3).map((keyword, kidx) => {
-                                    if (typeof keyword !== 'string') return null;
-                                    return <span key={kidx} className="keyword-tag">{keyword}</span>;
-                                  })}
-                                </div>
-                              )}
+                          return (
+                            <div key={collIdx} className="stac-table-row">
+                              <div className="stac-col-id">
+                                <code>{collection.id}</code>
+                                {Array.isArray(collection.keywords) &&
+                                  collection.keywords.length > 0 && (
+                                    <div className="stac-keywords">
+                                      {collection.keywords.slice(0, 3).map((keyword, kidx) => {
+                                        if (typeof keyword !== 'string') return null;
+                                        return (
+                                          <span key={kidx} className="keyword-tag">
+                                            {keyword}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                              </div>
+                              <div className="stac-col-description">
+                                <strong>{collection.title || 'Unknown'}</strong>
+                                <p className="collection-desc">
+                                  {collection.description &&
+                                  typeof collection.description === 'string' &&
+                                  collection.description.length > 200
+                                    ? collection.description.substring(0, 200) + '...'
+                                    : collection.description || 'No description available'}
+                                </p>
+                              </div>
+                              <div className="stac-col-temporal">
+                                <span className="temporal-badge">
+                                  {collection.temporal_extent || 'Variable'}
+                                </span>
+                              </div>
+                              <div className="stac-col-params">
+                                {collection.is_static
+                                  ? 'Location only'
+                                  : 'Location, DateTime (optional)'}
+                              </div>
                             </div>
-                            <div className="stac-col-description">
-                              <strong>{collection.title || 'Unknown'}</strong>
-                              <p className="collection-desc">
-                                {collection.description && typeof collection.description === 'string' && collection.description.length > 200 
-                                  ? collection.description.substring(0, 200) + '...'
-                                  : collection.description || 'No description available'}
-                              </p>
-                            </div>
-                            <div className="stac-col-temporal">
-                              <span className="temporal-badge">
-                                {collection.temporal_extent || 'Variable'}
-                              </span>
-                            </div>
-                            <div className="stac-col-params">
-                              {collection.is_static 
-                                ? 'Location only' 
-                                : 'Location, DateTime (optional)'}
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
 
             <div className="stac-modal-footer">
               <div className="stac-footer-info">
-                <span>{collectionsData?.metadata.total_collections || 47}/{collectionsData?.metadata.total_collections || 47} Collections Operational</span>
+                <span>
+                  {collectionsData?.metadata.total_collections || 47}/
+                  {collectionsData?.metadata.total_collections || 47} Collections Operational
+                </span>
                 <span>-</span>
-                <span>Last Updated: {collectionsData?.metadata.last_updated || 'November 2025'}</span>
+                <span>
+                  Last Updated: {collectionsData?.metadata.last_updated || 'November 2025'}
+                </span>
                 <span>-</span>
-                <a 
-                  href="https://planetarycomputer.microsoft.com/catalog" 
-                  target="_blank" 
+                <a
+                  href="https://planetarycomputer.microsoft.com/catalog"
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="footer-link"
                 >

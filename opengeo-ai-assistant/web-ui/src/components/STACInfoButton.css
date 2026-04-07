@@ -123,7 +123,7 @@
 }
 
 .stac-header-link:hover::before {
-  content: "→ ";
+  content: '→ ';
   margin-right: 4px;
   animation: slideInArrow 0.3s ease;
 }
@@ -541,7 +541,7 @@
 }
 
 .stac-tips li:before {
-  content: "💡";
+  content: '💡';
   position: absolute;
   left: 0;
   top: 0;
@@ -639,13 +639,13 @@
   }
 
   .stac-col-res:before {
-    content: "Resolution: ";
+    content: 'Resolution: ';
     font-weight: 600;
     color: #64748b;
   }
 
   .stac-col-why:before {
-    content: "Why: ";
+    content: 'Why: ';
     font-weight: 600;
     color: #64748b;
   }

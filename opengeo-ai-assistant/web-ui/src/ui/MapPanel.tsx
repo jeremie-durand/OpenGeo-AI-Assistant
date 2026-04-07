@@ -5,7 +5,13 @@ declare const atlas: any;
 import React, { useEffect, useRef } from 'react';
 import type { CollectionInfo } from './App';
 
-export default function MapPanel({ geojson, selected }: { geojson: any | null; selected: CollectionInfo | null }) {
+export default function MapPanel({
+  geojson,
+  selected,
+}: {
+  geojson: any | null;
+  selected: CollectionInfo | null;
+}) {
   const mapDivRef = useRef<any>(null);
   const leafletMapRef = useRef<any>(null);
   const geoJsonLayerRef = useRef<any>(null);
@@ -17,12 +23,15 @@ export default function MapPanel({ geojson, selected }: { geojson: any | null; s
       const map = window.L.map(mapDivRef.current, {
         center: [37.0902, -95.7129],
         zoom: 3,
-        zoomControl: true
+        zoomControl: true,
       });
-      window.L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: '© Esri World Imagery',
-        maxZoom: 22
-      }).addTo(map);
+      window.L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        {
+          attribution: '© Esri World Imagery',
+          maxZoom: 22,
+        }
+      ).addTo(map);
       leafletMapRef.current = map;
     }
   }, []);
@@ -42,8 +51,8 @@ export default function MapPanel({ geojson, selected }: { geojson: any | null; s
           color: 'orange',
           weight: 2,
           fillColor: 'rgba(255,165,0,0.2)',
-          fillOpacity: 0.7
-        }
+          fillOpacity: 0.7,
+        },
       }).addTo(map);
       geoJsonLayerRef.current = geoLayer;
       // Fit map to features
@@ -58,7 +67,13 @@ export default function MapPanel({ geojson, selected }: { geojson: any | null; s
   useEffect(() => {
     if (selected?.extent_bbox && leafletMapRef.current) {
       const b = selected.extent_bbox;
-      leafletMapRef.current.fitBounds([[b[1], b[0]], [b[3], b[2]]], { padding: [50, 50] });
+      leafletMapRef.current.fitBounds(
+        [
+          [b[1], b[0]],
+          [b[3], b[2]],
+        ],
+        { padding: [50, 50] }
+      );
     }
   }, [selected]);
 

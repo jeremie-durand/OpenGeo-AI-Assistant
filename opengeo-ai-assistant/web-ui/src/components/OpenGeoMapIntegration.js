@@ -1,6 +1,6 @@
 /**
  * Enhanced OpenGeo AI Assistant Map Integration
- * 
+ *
  * This module bridges OpenGeo AI Assistant's PC tools with map visualization,
  * following the same patterns as VEDA GeoCoPilot for seamless integration.
  */
@@ -24,7 +24,7 @@ export class OpenGeoMapIntegration {
 
     // Try to extract structured data from text response
     const structuredResponse = this.extractDataFromResponse(response);
-    
+
     if (structuredResponse) {
       return structuredResponse;
     }
@@ -32,7 +32,7 @@ export class OpenGeoMapIntegration {
     // Fallback: create minimal response
     return {
       summary: typeof response === 'string' ? response : response.message || 'Data processed',
-      action: 'load'
+      action: 'load',
     };
   }
 
@@ -43,10 +43,12 @@ export class OpenGeoMapIntegration {
     try {
       // Look for JSON data in response
       const responseText = typeof response === 'string' ? response : response.message || '';
-      
+
       // Try to extract collection IDs
       const collectionMatch = responseText.match(/collection[s]?[:\s]*([a-z0-9-]+)/gi);
-      const collections = collectionMatch ? collectionMatch.map(m => m.split(/[:\s]+/).pop()) : [];
+      const collections = collectionMatch
+        ? collectionMatch.map((m) => m.split(/[:\s]+/).pop())
+        : [];
 
       // Try to extract bounding box
       const bboxMatch = responseText.match(/bbox[:\s]*\[([^\]]+)\]/i);
@@ -62,7 +64,7 @@ export class OpenGeoMapIntegration {
 
       // Determine action based on response content
       let action = 'load';
-      
+
       if (responseText.includes('tile') || responseText.includes('mosaic')) {
         action = 'tiles';
       } else if (responseText.includes('animation') || responseText.includes('time-lapse')) {
@@ -75,7 +77,7 @@ export class OpenGeoMapIntegration {
 
       const result = {
         summary: responseText,
-        action: action
+        action: action,
       };
 
       if (collections.length > 0) {
@@ -89,21 +91,20 @@ export class OpenGeoMapIntegration {
       if (dates.length >= 2) {
         result.date_range = {
           start_date: dates[0],
-          end_date: dates[dates.length - 1]
+          end_date: dates[dates.length - 1],
         };
       }
 
       if (urls.length > 0) {
         result.visualization_data = {
-          tile_urls: urls.filter(url => url.includes('tile')),
-          preview_urls: urls.filter(url => url.includes('preview') || url.includes('crop')),
-          mosaic_urls: urls.filter(url => url.includes('mosaic')),
-          legend_url: urls.find(url => url.includes('legend'))
+          tile_urls: urls.filter((url) => url.includes('tile')),
+          preview_urls: urls.filter((url) => url.includes('preview') || url.includes('crop')),
+          mosaic_urls: urls.filter((url) => url.includes('mosaic')),
+          legend_url: urls.find((url) => url.includes('legend')),
         };
       }
 
       return result;
-
     } catch (error) {
       console.error('OpenGeo AI: Error extracting data from response:', error);
       return null;
@@ -115,33 +116,37 @@ export class OpenGeoMapIntegration {
    */
   createBboxGeometry(bboxString) {
     try {
-      const coords = bboxString.split(',').map(s => parseFloat(s.trim()));
-      
+      const coords = bboxString.split(',').map((s) => parseFloat(s.trim()));
+
       if (coords.length === 4) {
         const [west, south, east, north] = coords;
-        
+
         return {
           type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            geometry: {
-              type: 'Polygon',
-              coordinates: [[
-                [west, south],
-                [east, south], 
-                [east, north],
-                [west, north],
-                [west, south]
-              ]]
+          features: [
+            {
+              type: 'Feature',
+              geometry: {
+                type: 'Polygon',
+                coordinates: [
+                  [
+                    [west, south],
+                    [east, south],
+                    [east, north],
+                    [west, north],
+                    [west, south],
+                  ],
+                ],
+              },
+              properties: {},
             },
-            properties: {}
-          }]
+          ],
         };
       }
     } catch (error) {
       console.error('OpenGeo AI: Error creating bbox geometry:', error);
     }
-    
+
     return null;
   }
 
@@ -175,7 +180,6 @@ export class OpenGeoMapIntegration {
 
       // Update map data for the UI
       this.setMapData(data);
-
     } catch (error) {
       console.error('OpenGeo AI: Error visualizing data on map:', error);
     }
@@ -195,7 +199,7 @@ export class OpenGeoMapIntegration {
 
   loadTilesOnMap(data) {
     if (data.visualization_data?.tile_urls && this.mapInstance) {
-      data.visualization_data.tile_urls.forEach(url => {
+      data.visualization_data.tile_urls.forEach((url) => {
         console.log('OpenGeo AI: Adding tile layer:', url);
         // Add tile layer to map
       });
@@ -229,14 +233,14 @@ export class OpenGeoMapIntegration {
       if (this.mapInstance.getLayer('opengeo-bbox')) {
         this.mapInstance.removeLayer('opengeo-bbox');
       }
-      
+
       if (this.mapInstance.getSource('opengeo-bbox')) {
         this.mapInstance.removeSource('opengeo-bbox');
       }
 
       this.mapInstance.addSource('opengeo-bbox', {
         type: 'geojson',
-        data: bbox
+        data: bbox,
       });
 
       this.mapInstance.addLayer({
@@ -246,8 +250,8 @@ export class OpenGeoMapIntegration {
         paint: {
           'line-color': '#ff6b6b',
           'line-width': 3,
-          'line-opacity': 0.8
-        }
+          'line-opacity': 0.8,
+        },
       });
 
       // Fit map to bbox
@@ -255,17 +259,22 @@ export class OpenGeoMapIntegration {
         const feature = bbox.features[0];
         if (feature.geometry.type === 'Polygon') {
           const coordinates = feature.geometry.coordinates[0];
-          const bounds = coordinates.reduce((acc, coord) => {
-            return [
-              [Math.min(acc[0][0], coord[0]), Math.min(acc[0][1], coord[1])],
-              [Math.max(acc[1][0], coord[0]), Math.max(acc[1][1], coord[1])]
-            ];
-          }, [[Infinity, Infinity], [-Infinity, -Infinity]]);
+          const bounds = coordinates.reduce(
+            (acc, coord) => {
+              return [
+                [Math.min(acc[0][0], coord[0]), Math.min(acc[0][1], coord[1])],
+                [Math.max(acc[1][0], coord[0]), Math.max(acc[1][1], coord[1])],
+              ];
+            },
+            [
+              [Infinity, Infinity],
+              [-Infinity, -Infinity],
+            ]
+          );
 
           this.mapInstance.fitBounds(bounds, { padding: 50 });
         }
       }
-
     } catch (error) {
       console.error('OpenGeo AI: Error adding bbox to map:', error);
     }
@@ -285,19 +294,28 @@ export function enhanceMessageForMapVisualization(message, response) {
  */
 export function hasVisualizableData(response) {
   if (!response) return false;
-  
+
   const text = typeof response === 'string' ? response : response.message || '';
-  
+
   // Check for indicators of visualizable data
   const indicators = [
-    'collection', 'bbox', 'tile', 'mosaic', 'crop', 'preview',
-    'longitude', 'latitude', 'coordinates', 'geometry',
-    'sentinel', 'landsat', 'modis', 'viirs'
+    'collection',
+    'bbox',
+    'tile',
+    'mosaic',
+    'crop',
+    'preview',
+    'longitude',
+    'latitude',
+    'coordinates',
+    'geometry',
+    'sentinel',
+    'landsat',
+    'modis',
+    'viirs',
   ];
-  
-  return indicators.some(indicator => 
-    text.toLowerCase().includes(indicator.toLowerCase())
-  );
+
+  return indicators.some((indicator) => text.toLowerCase().includes(indicator.toLowerCase()));
 }
 
 export default OpenGeoMapIntegration;

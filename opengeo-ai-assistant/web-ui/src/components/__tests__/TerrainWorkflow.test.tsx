@@ -39,30 +39,26 @@ describe('Terrain Analysis Workflow - End to End', () => {
   // Mock MainApp's handleMobilityAnalysisResult (the handler for geoint events)
   const mockHandleMobilityAnalysisResult = (result: MobilityAnalysisResult) => {
     console.log('MainApp: handleMobilityAnalysisResult called:', result);
-    
+
     // THIS IS THE FIX - Handle 'thinking', 'assistant', and 'error' types
     if (result.type === 'thinking') {
       // Add thinking message to chat
       const message = result.message || 'Analyzing...';
       chatMessages.push(message);
       console.log('[MSG] Chat: Added thinking message:', message);
-    } 
-    else if (result.type === 'assistant') {
+    } else if (result.type === 'assistant') {
       // Add analysis result to chat
       const message = result.message || result.analysis || 'Analysis completed';
       chatMessages.push(message);
       console.log('[MSG] Chat: Added assistant message:', message);
-    }
-    else if (result.type === 'error') {
+    } else if (result.type === 'error') {
       // Add error message to chat
       const errorMessage = result.message || 'Analysis failed';
       chatMessages.push(`${errorMessage}`);
       console.log('[MSG] Chat: Added error message:', errorMessage);
-    }
-    else if (result.type === 'pin_dropped') {
+    } else if (result.type === 'pin_dropped') {
       console.log('[PIN] Pin dropped at location');
-    }
-    else if (result.type === 'complete') {
+    } else if (result.type === 'complete') {
       const message = result.analysis || 'Analysis completed';
       chatMessages.push(message);
       console.log('[MSG] Chat: Analysis complete:', message);
@@ -98,10 +94,10 @@ describe('Terrain Analysis Workflow - End to End', () => {
         'Rolling terrain',
         'Pond networks',
         'Forest roads',
-        'Low development density'
+        'Low development density',
       ],
-      confidence: 0.92
-    }
+      confidence: 0.92,
+    },
   };
 
   it('should complete full terrain analysis workflow: Pin -> Thinking -> Analysis -> Chat Display', async () => {
@@ -109,19 +105,19 @@ describe('Terrain Analysis Workflow - End to End', () => {
 
     // STEP 1: User drops pin on map (MapView.tsx handleTerrainAnalysisClick)
     console.log('[PIN] STEP 1: User drops pin at coordinates (41.648002, -71.716736)');
-    
+
     // STEP 2: MapView sends "thinking" event
     console.log('STEP 2: MapView sends thinking event to Chat');
     mockOnGeointAnalysis({
       type: 'thinking',
-      message: 'Analyzing terrain features with GPT-5 Vision...'
+      message: 'Analyzing terrain features with GPT-5 Vision...',
     });
-    
+
     // STEP 3: MainApp forwards to Chat via handleMobilityAnalysisResult
     console.log('STEP 3: MainApp processes thinking event');
     mockHandleMobilityAnalysisResult({
       type: 'thinking',
-      message: onGeointAnalysisCalls[0].message
+      message: onGeointAnalysisCalls[0].message,
     });
 
     // Verify thinking message appears in chat
@@ -131,23 +127,26 @@ describe('Terrain Analysis Workflow - End to End', () => {
 
     // STEP 4: Backend API call completes (simulated)
     console.log('[WEB] STEP 4: Backend API returns terrain analysis result');
-    
+
     // STEP 5: MapView sends "assistant" event with results
     console.log('STEP 5: MapView sends assistant event with analysis');
-    
+
     // Format numbered section headers to be bold (matching MapView logic)
-    const formattedAnalysis = mockBackendResponse.result.analysis.replace(/^(\d+\.\s+[^\n]+)/gm, '**$1**');
+    const formattedAnalysis = mockBackendResponse.result.analysis.replace(
+      /^(\d+\.\s+[^\n]+)/gm,
+      '**$1**'
+    );
 
     mockOnGeointAnalysis({
       type: 'assistant',
-      message: formattedAnalysis
+      message: formattedAnalysis,
     });
 
     // STEP 6: MainApp forwards to Chat
     console.log('STEP 6: MainApp processes assistant event');
     mockHandleMobilityAnalysisResult({
       type: 'assistant',
-      message: onGeointAnalysisCalls[1].message
+      message: onGeointAnalysisCalls[1].message,
     });
 
     // Verify analysis appears in chat
@@ -163,12 +162,12 @@ describe('Terrain Analysis Workflow - End to End', () => {
     console.log(`   - Chat messages added: ${chatMessages.length}`);
     console.log(`   - Message 1 (thinking): ${chatMessages[0].substring(0, 50)}...`);
     console.log(`   - Message 2 (results): ${chatMessages[1].substring(0, 50)}...`);
-    
+
     expect(onGeointAnalysisCalls).toHaveLength(2);
     expect(onGeointAnalysisCalls[0].type).toBe('thinking');
     expect(onGeointAnalysisCalls[1].type).toBe('assistant');
     expect(chatMessages).toHaveLength(2);
-    
+
     console.log('ALL CHECKS PASSED - Terrain workflow complete!\n');
   });
 
@@ -178,22 +177,22 @@ describe('Terrain Analysis Workflow - End to End', () => {
     // STEP 1: Thinking message
     mockOnGeointAnalysis({
       type: 'thinking',
-      message: 'Analyzing terrain features with GPT-5 Vision...'
+      message: 'Analyzing terrain features with GPT-5 Vision...',
     });
     mockHandleMobilityAnalysisResult({
       type: 'thinking',
-      message: onGeointAnalysisCalls[0].message
+      message: onGeointAnalysisCalls[0].message,
     });
 
     // STEP 2: API error occurs
     console.log('STEP 2: Backend API returns error');
     mockOnGeointAnalysis({
       type: 'error',
-      message: 'Failed to analyze terrain: Network timeout'
+      message: 'Failed to analyze terrain: Network timeout',
     });
     mockHandleMobilityAnalysisResult({
       type: 'error',
-      message: onGeointAnalysisCalls[1].message
+      message: onGeointAnalysisCalls[1].message,
     });
 
     // Verify error message appears
@@ -209,22 +208,22 @@ describe('Terrain Analysis Workflow - End to End', () => {
 
     // MapView sends these event types
     const mapViewEventTypes = ['thinking', 'assistant', 'error'];
-    
+
     // MainApp should handle these same types
     const handledTypes: string[] = [];
 
     // Test each event type
-    mapViewEventTypes.forEach(eventType => {
+    mapViewEventTypes.forEach((eventType) => {
       const testEvent: GeointAnalysisEvent = {
         type: eventType as any,
-        message: `Test ${eventType} message`
+        message: `Test ${eventType} message`,
       };
-      
+
       mockOnGeointAnalysis(testEvent);
       const beforeCount = chatMessages.length;
       mockHandleMobilityAnalysisResult({
         type: eventType,
-        message: testEvent.message
+        message: testEvent.message,
       });
       const afterCount = chatMessages.length;
 
