@@ -698,6 +698,20 @@ async def execute_direct_stac_search(
                         "results": {"type": "FeatureCollection", "features": []},
                     }
 
+    except asyncio.TimeoutError:
+        logger.error("[FAIL] STAC search timed out")
+        return {
+            "success": False,
+            "error": "STAC search timed out",
+            "results": {"type": "FeatureCollection", "features": []},
+        }
+    except aiohttp.ClientError as e:
+        logger.error(f"[FAIL] STAC network error: {e}")
+        return {
+            "success": False,
+            "error": "STAC service unavailable",
+            "results": {"type": "FeatureCollection", "features": []},
+        }
     except Exception as e:
         logger.error(f"[FAIL] STAC search error: {e}")
         return {
@@ -892,8 +906,12 @@ def generate_contextual_empty_response(
                     suggestions.append(
                         f"**Expand the date range**: Currently searching {days} days ({start_date} to {end_date}). Try expanding to 6 months or 1 year for more results."
                     )
-            except Exception as e:
+            except (ValueError, TypeError) as e:
                 logger.warning("Failed to parse date range for suggestion: %s", e)
+            except Exception as e:
+                logger.warning(
+                    "Unexpected error parsing date range for suggestion: %s", e
+                )
 
         # Check cloud cover constraints
         cloud_filter = stac_query.get("filter", {})
@@ -1443,6 +1461,9 @@ def generate_fallback_response(
 
         return final_response
 
+    except (KeyError, AttributeError, TypeError) as e:
+        logger.error(f"Data error in fallback response generation: {e}")
+        return f"Found {len(features)} satellite images for '{query}'. The imagery shows excellent coverage of the requested area and is ready for analysis on the map."
     except Exception as e:
         logger.error(f"Error in fallback response generation: {e}")
         return f"Found {len(features)} satellite images for '{query}'. The imagery shows excellent coverage of the requested area and is ready for analysis on the map."
@@ -1653,9 +1674,11 @@ def clean_tilejson_urls(stac_results: Dict[str, Any]) -> Dict[str, Any]:
         )
         return cleaned_results
 
+    except (ValueError, KeyError) as e:
+        logger.error(f"[CLEAN] [FAIL] Data error cleaning tilejson URLs: {e}")
+        return stac_results
     except Exception as e:
         logger.error(f"[CLEAN] [FAIL] Error cleaning tilejson URLs: {e}")
-        # Return original results if cleaning fails
         return stac_results
 
 
@@ -1758,10 +1781,15 @@ def _enhance_tilejson_url(url: str, collection_id: str) -> str:
 
         return enhanced_url
 
+    except (ValueError, AttributeError) as e:
+        logger.error(
+            f"[FAIL] URL parse error enhancing tilejson URL for {collection_id}: {e}"
+        )
+        return url
     except Exception as e:
         logger.error(f"[FAIL] Error enhancing tilejson URL for {collection_id}: {e}")
         logger.exception("Full exception details:")
-        return url  # Return original URL if enhancement fails
+        return url
 
 
 # ============================================================================
@@ -4574,6 +4602,10 @@ async def unified_query_processor(body: QueryRequest):
                                     logger.info(
                                         f"[OK] MOSAIC: PC fallback mosaic registered for {pc_collection_id}"
                                     )
+                            except aiohttp.ClientError as e:
+                                logger.warning(
+                                    f"[WARN] MOSAIC: PC fallback mosaic registration network error: {e}"
+                                )
                             except Exception as e:
                                 logger.warning(
                                     f"[WARN] MOSAIC: PC fallback mosaic registration failed: {e}"
@@ -4731,6 +4763,12 @@ async def unified_query_processor(body: QueryRequest):
 
     except HTTPException:
         raise
+    except asyncio.TimeoutError:
+        logger.error("[FAIL] Unified query processor timed out")
+        raise HTTPException(status_code=504, detail="Query processing timed out")
+    except aiohttp.ClientError as e:
+        logger.error(f"[FAIL] Unified query processor network error: {e}")
+        raise HTTPException(status_code=502, detail="Upstream service unavailable")
     except Exception as e:
         logger.error(f"[FAIL] Unified query processor error: {str(e)}")
         logger.error(traceback.format_exc())
@@ -4759,6 +4797,9 @@ async def sign_mosaic_url(body: SignMosaicUrlRequest):
 
     except HTTPException:
         raise
+    except asyncio.TimeoutError:
+        logger.error("[FAIL] sign-mosaic-url timed out")
+        raise HTTPException(status_code=504, detail="URL signing timed out")
     except Exception as e:
         logger.error(f"[FAIL] sign-mosaic-url error: {e}")
         raise HTTPException(status_code=500, detail="URL signing failed")
@@ -5162,6 +5203,9 @@ async def process_comparison_query(body: ComparisonQueryRequest):
 
     except HTTPException:
         raise
+    except asyncio.TimeoutError:
+        logger.error("[CHART] [COMPARISON] [FAIL] Request timed out")
+        raise HTTPException(status_code=504, detail="Comparison query timed out")
     except Exception as e:
         logger.error(f"[CHART] [COMPARISON] [FAIL] {type(e).__name__}: {e}")
         raise HTTPException(
@@ -6332,12 +6376,15 @@ async def geoint_building_damage_analysis(body: BuildingDamageRequest):
 
     except HTTPException:
         raise
+    except asyncio.TimeoutError:
+        logger.error("Building Damage endpoint timed out")
+        raise HTTPException(
+            status_code=504, detail="Building damage analysis timed out"
+        )
     except Exception as e:
         logger.error(f"Building Damage endpoint failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(
-            status_code=500, detail=f"Building damage analysis failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Building damage analysis failed")
 
 
 @app.post("/api/geoint/extreme-weather")
@@ -7003,14 +7050,17 @@ async def geoint_extreme_weather_analysis(body: ExtremeWeatherRequest):
 
     except HTTPException:
         raise
+    except asyncio.TimeoutError:
+        logger.error(
+            f"[STORM] [{request_id}] [FAIL] Extreme weather endpoint timed out"
+        )
+        raise HTTPException(status_code=504, detail="Climate analysis timed out")
     except Exception as e:
         logger.error(
             f"[STORM] [{request_id}] [FAIL] EXTREME WEATHER ENDPOINT FAILED: {e}"
         )
         logger.error(traceback.format_exc())
-        raise HTTPException(
-            status_code=500, detail=f"Climate analysis failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Climate analysis failed")
 
 
 @app.get("/api/geoint/cmip6-test")
