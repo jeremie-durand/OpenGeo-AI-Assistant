@@ -13,14 +13,6 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
-# Load environment variables
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:
-    pass  # dotenv not available in production
-
 
 class LocationCache:
     """In-memory location cache with TTL and persistence"""
