@@ -1,15 +1,15 @@
 cachetools==5.5.2
 fastapi==0.135.3
 uvicorn[standard]==0.42.0
-pydantic==2.11.9  # CRITICAL: Compatible version for semantic-kernel 1.36.2
+pydantic==2.11.9
 aiohttp==3.13.5
 httpx==0.28.1
 requests==2.33.1
 python-dotenv==1.2.2
 numpy==2.4.4
-openai==1.107.2
+openai==2.30.0
 anthropic==0.87.0
-semantic-kernel==1.41.1  # CRITICAL: Latest stable version with updated API
+semantic-kernel==1.41.1
 planetary-computer==1.0.0
 pystac-client==0.9.0
 stac-pydantic==3.5.0
