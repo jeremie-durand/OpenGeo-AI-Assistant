@@ -2540,21 +2540,21 @@ ESSENTIAL FIRE:
 
         await self._ensure_kernel_initialized()
 
-        print(
+        logger.debug(
             f"[ALERT] DEBUG: After _ensure_kernel_initialized() - _kernel_initialized={self._kernel_initialized}, kernel={self.kernel is not None}"
         )
 
         if not self._kernel_initialized or self.kernel is None:
-            print(
+            logger.debug(
                 "[FAIL][ALERT] DEBUG: KERNEL NOT INITIALIZED! Using fallback basic query builder"
             )
-            print(f"   _kernel_initialized: {self._kernel_initialized}")
-            print(f"   self.kernel: {self.kernel}")
+            logger.debug(f"   _kernel_initialized: {self._kernel_initialized}")
+            logger.debug(f"   self.kernel: {self.kernel}")
             logger.warning("[WARN] Kernel not initialized - using basic query builder")
             return await self._build_stac_query_basic(query, collections)
 
         try:
-            print(
+            logger.debug(
                 f"[ALERT][ALERT][ALERT] DEBUG: AGENT 2 STARTING - Query: '{query}', Collections: {collections}"
             )
             logger.info("=" * 100)
@@ -2575,7 +2575,9 @@ ESSENTIAL FIRE:
             logger.info(
                 "[BOT] AGENT 2 STEPS 1-3: Running location, datetime, and cloud agents IN PARALLEL..."
             )
-            print("[LAUNCH] DEBUG: AGENT 2 - Starting PARALLEL execution of 3 agents")
+            logger.debug(
+                "[LAUNCH] DEBUG: AGENT 2 - Starting PARALLEL execution of 3 agents"
+            )
 
             # Run all three agents concurrently
             entities_task = self.location_extraction_agent(query)
@@ -2587,7 +2589,7 @@ ESSENTIAL FIRE:
                 entities_task, datetime_task, cloud_task
             )
 
-            print("[OK] DEBUG: AGENT 2 - PARALLEL execution complete")
+            logger.debug("[OK] DEBUG: AGENT 2 - PARALLEL execution complete")
 
             # Extract location from entities
             location = entities.get("location", {})
@@ -2597,36 +2599,38 @@ ESSENTIAL FIRE:
                 logger.info(
                     f"[PIN] AGENT 2: Location extracted: '{location_name}' (type: {location.get('type')}, confidence: {location.get('confidence')})"
                 )
-                print(
+                logger.debug(
                     f"[OK] DEBUG: AGENT 2 STEP 1 SUCCESS - Location: '{location_name}'"
                 )
             else:
                 logger.info("[PIN] AGENT 2: No location found in query")
-                print("ℹ️ DEBUG: AGENT 2 STEP 1 - No location in query")
+                logger.debug("ℹ️ DEBUG: AGENT 2 STEP 1 - No location in query")
 
             if datetime_range:
                 logger.info(f"[OK] Datetime translation: {datetime_range}")
-                print(f"[OK] DEBUG: AGENT 2.2 SUCCESS - Datetime: {datetime_range}")
+                logger.debug(
+                    f"[OK] DEBUG: AGENT 2.2 SUCCESS - Datetime: {datetime_range}"
+                )
             else:
                 logger.info(
                     "ℹ️ No datetime filter (will get most recent or use sortby)"
                 )
-                print("ℹ️ DEBUG: AGENT 2.2 - No datetime filter")
+                logger.debug("ℹ️ DEBUG: AGENT 2.2 - No datetime filter")
 
             if cloud_filter:
                 logger.info(f"[OK] Cloud filter: {cloud_filter}")
-                print("[OK] DEBUG: AGENT 2.3 SUCCESS - Cloud filter determined")
+                logger.debug("[OK] DEBUG: AGENT 2.3 SUCCESS - Cloud filter determined")
             else:
                 logger.info("ℹ️ No cloud filter")
-                print("ℹ️ DEBUG: AGENT 2.3 - No cloud filtering")
+                logger.debug("ℹ️ DEBUG: AGENT 2.3 - No cloud filtering")
 
             # STEP 4: Build STAC query parameters (PURE FUNCTION - No GPT)
             logger.info("[TOOL] UTILITY: Building STAC parameters (deterministic)")
-            print("[TOOL] DEBUG: Building STAC parameters")
+            logger.debug("[TOOL] DEBUG: Building STAC parameters")
             stac_query = await self._build_stac_parameters(
                 query, collections, entities, datetime_range
             )
-            print("[OK] DEBUG: STAC parameters built")
+            logger.debug("[OK] DEBUG: STAC parameters built")
 
             # STEP 5: Apply cloud filter if determined by agent
             if cloud_filter:
@@ -2636,7 +2640,7 @@ ESSENTIAL FIRE:
                         stac_query["query"] = {}
                     stac_query["query"].update(filter_dict)
                     logger.info(f"[OK] Applied cloud filter: {filter_dict}")
-                    print("[OK] DEBUG: Cloud filter applied to STAC query")
+                    logger.debug("[OK] DEBUG: Cloud filter applied to STAC query")
 
             # STEP 5.1: Apply USDA CDL type filter if applicable
             # =================================================================
@@ -2656,7 +2660,7 @@ ESSENTIAL FIRE:
                 logger.info(
                     "[CROP] USDA CDL: Added filter for 'cropland' type items (required for render config)"
                 )
-                print("[OK] DEBUG: USDA CDL type filter applied to STAC query")
+                logger.debug("[OK] DEBUG: USDA CDL type filter applied to STAC query")
 
             # STEP 6: Resolve location to bbox if present
             # ========================================================================
@@ -2669,7 +2673,7 @@ ESSENTIAL FIRE:
                 logger.info(
                     f"[TOOL] UTILITY: Resolving '{location_name}' to coordinates..."
                 )
-                print("[TOOL] DEBUG: STEP 6 - Resolving location to bbox")
+                logger.debug("[TOOL] DEBUG: STEP 6 - Resolving location to bbox")
                 bbox = await self.resolve_location_to_bbox(location_name, "region")
 
                 if bbox and self._validate_bbox(bbox):
@@ -2739,17 +2743,19 @@ ESSENTIAL FIRE:
                     logger.info(
                         f"   Items requested (grid cells × {acquisitions_multiplier}): {dynamic_limit}"
                     )
-                    print(
+                    logger.debug(
                         f"[CHART] Dynamic limit: {dynamic_limit} tiles (based on {bbox_area_degrees:.1f} sq deg area)"
                     )
 
                     logger.info(f"[OK] Resolved '{location_name}' -> bbox: {bbox}")
-                    print(f"[OK] DEBUG: STEP 6 SUCCESS - bbox: {bbox}")
+                    logger.debug(f"[OK] DEBUG: STEP 6 SUCCESS - bbox: {bbox}")
                 else:
                     logger.error(
                         f"[FAIL] Failed to resolve '{location_name}' to coordinates"
                     )
-                    print("[FAIL][ALERT] DEBUG: STEP 6 FAILED - Could not resolve bbox")
+                    logger.error(
+                        "[FAIL][ALERT] DEBUG: STEP 6 FAILED - Could not resolve bbox"
+                    )
                     raise ValueError(
                         f"Unable to resolve location '{location_name}'. Check API keys."
                     )
@@ -2758,7 +2764,7 @@ ESSENTIAL FIRE:
                 logger.warning(
                     f"[WARN] LOCATION REQUIRED: No location found in query '{query}'"
                 )
-                print(
+                logger.debug(
                     "[FAIL][ALERT] DEBUG: STEP 6 FAILED - No location in query (REQUIRED)"
                 )
 
@@ -2782,22 +2788,24 @@ ESSENTIAL FIRE:
             logger.info(f"[SEARCH] Full Query JSON: {json.dumps(stac_query, indent=2)}")
             logger.info("=" * 80)
 
-            print("[OK] DEBUG: AGENT 2 COMPLETE")
-            print(
+            logger.debug("[OK] DEBUG: AGENT 2 COMPLETE")
+            logger.debug(
                 f"  - Agent 2.1 (Location): {'[OK]' if location_name else 'ℹ️ skipped'}"
             )
-            print(
+            logger.debug(
                 f"  - Agent 2.2 (Datetime): {'[OK]' if datetime_range else 'ℹ️ skipped'}"
             )
-            print(f"  - Agent 2.3 (Cloud): {'[OK]' if cloud_filter else 'ℹ️ skipped'}")
-            print(f"  - Final STAC query: {stac_query}")
+            logger.debug(
+                f"  - Agent 2.3 (Cloud): {'[OK]' if cloud_filter else 'ℹ️ skipped'}"
+            )
+            logger.debug(f"  - Final STAC query: {stac_query}")
             return stac_query
 
         except Exception as e:
-            print("[FAIL][ALERT] DEBUG: AGENT 2 EXCEPTION CAUGHT!")
-            print(f"[FAIL][ALERT] Exception type: {type(e).__name__}")
-            print(f"[FAIL][ALERT] Exception message: {str(e)}")
-            print(f"[FAIL][ALERT] Traceback: {traceback.format_exc()}")
+            logger.error("[FAIL][ALERT] DEBUG: AGENT 2 EXCEPTION CAUGHT!")
+            logger.error(f"[FAIL][ALERT] Exception type: {type(e).__name__}")
+            logger.error(f"[FAIL][ALERT] Exception message: {str(e)}")
+            logger.error(f"[FAIL][ALERT] Traceback: {traceback.format_exc()}")
             logger.error(f"[FAIL] AGENT 2 failed: {e}")
             logger.error(f"[FAIL] Full exception details: {traceback.format_exc()}")
             logger.info("[LIST] Falling back to basic query builder")
@@ -3006,9 +3014,9 @@ Return only the JSON object. No explanations or additional text."""
             logger.info(
                 f"[SEARCH] DEBUG: Raw GPT-5 response (first 500 chars): {content[:500]}"
             )
-            print("[SEARCH] DEBUG: ===== RAW GPT-5 RESPONSE =====")
-            print(content[:1000] if len(content) > 1000 else content)
-            print("[SEARCH] DEBUG: ================================")
+            logger.debug("[SEARCH] DEBUG: ===== RAW GPT-5 RESPONSE =====")
+            logger.debug(content[:1000] if len(content) > 1000 else content)
+            logger.debug("[SEARCH] DEBUG: ================================")
 
             # Clean JSON markers
             if "```json" in content:
@@ -3020,7 +3028,7 @@ Return only the JSON object. No explanations or additional text."""
             logger.info(
                 f"[SEARCH] DEBUG: Cleaned content before JSON parse: {content[:500]}"
             )
-            print(f"[SEARCH] DEBUG: Cleaned content: {content}")
+            logger.debug(f"[SEARCH] DEBUG: Cleaned content: {content}")
 
             # Parse JSON
             entities = json.loads(content)
@@ -3029,9 +3037,9 @@ Return only the JSON object. No explanations or additional text."""
             logger.info(
                 f"[SEARCH] DEBUG: Parsed entities: {json.dumps(entities, indent=2)}"
             )
-            print("[SEARCH] DEBUG: ===== PARSED ENTITIES =====")
-            print(json.dumps(entities, indent=2))
-            print("[SEARCH] DEBUG: ===========================")
+            logger.debug("[SEARCH] DEBUG: ===== PARSED ENTITIES =====")
+            logger.debug(json.dumps(entities, indent=2))
+            logger.debug("[SEARCH] DEBUG: ===========================")
 
             # Log extracted entities
             location = entities.get("location", {})
@@ -3041,7 +3049,7 @@ Return only the JSON object. No explanations or additional text."""
                 logger.info(
                     f"[PIN] Location: {location.get('name')} ({location.get('type')}, confidence: {location.get('confidence')})"
                 )
-                print(
+                logger.debug(
                     f"[OK] DEBUG: Entity extraction - Location: {location.get('name')}"
                 )
 
@@ -3053,16 +3061,16 @@ Return only the JSON object. No explanations or additional text."""
                 logger.info(
                     f"[DATE] Temporal: year={temporal.get('year')}, month={temporal.get('month')}, relative={temporal.get('relative')}"
                 )
-                print(f"[OK] DEBUG: Entity extraction - Temporal: {temporal}")
+                logger.debug(f"[OK] DEBUG: Entity extraction - Temporal: {temporal}")
 
             return entities
 
         except json.JSONDecodeError as e:
             logger.error(f"[FAIL] JSON parsing failed: {e}")
             logger.error(f"Raw content: {content[:500]}")
-            print("[FAIL][ALERT] DEBUG: JSON parsing failed!")
-            print(f"[FAIL][ALERT] Error: {e}")
-            print(f"[FAIL][ALERT] Raw content: {content[:500]}")
+            logger.error("[FAIL][ALERT] DEBUG: JSON parsing failed!")
+            logger.error(f"[FAIL][ALERT] Error: {e}")
+            logger.error(f"[FAIL][ALERT] Raw content: {content[:500]}")
             return {
                 "location": {"name": None, "type": None, "confidence": 0.0},
                 "temporal": {},
@@ -3073,9 +3081,9 @@ Return only the JSON object. No explanations or additional text."""
         except Exception as e:
             logger.error(f"[FAIL] Entity extraction failed: {type(e).__name__}: {e}")
             logger.error(f"Full traceback: {traceback.format_exc()}")
-            print("[FAIL][ALERT] DEBUG: Entity extraction EXCEPTION!")
-            print(f"[FAIL][ALERT] Exception: {type(e).__name__}: {e}")
-            print(f"[FAIL][ALERT] Traceback: {traceback.format_exc()}")
+            logger.error("[FAIL][ALERT] DEBUG: Entity extraction EXCEPTION!")
+            logger.error(f"[FAIL][ALERT] Exception: {type(e).__name__}: {e}")
+            logger.error(f"[FAIL][ALERT] Traceback: {traceback.format_exc()}")
             return {
                 "location": {"name": None, "type": None, "confidence": 0.0},
                 "temporal": {},
@@ -3738,9 +3746,9 @@ IMPORTANT:
         logger.info("� UTILITY: _build_stac_parameters (deterministic)")
         logger.info(f"� Collections: {collections}")
         logger.info(f"� Datetime range: {datetime_range}")
-        print("� DEBUG: ===== BUILD STAC PARAMETERS (PURE FUNCTION) =====")
-        print(f"� DEBUG: Collections: {collections}")
-        print(f"� DEBUG: Datetime: {datetime_range}")
+        logger.debug("� DEBUG: ===== BUILD STAC PARAMETERS (PURE FUNCTION) =====")
+        logger.debug(f"� DEBUG: Collections: {collections}")
+        logger.debug(f"� DEBUG: Datetime: {datetime_range}")
 
         # Build base parameters
         stac_query = {
@@ -3760,12 +3768,12 @@ IMPORTANT:
                 logger.info(f"   |--- Start Date: {start}")
                 logger.info(f"   \--- End Date:   {end}")
             logger.info("=" * 80)
-            print(f"[OK] Datetime added to STAC query: {datetime_range}")
+            logger.debug(f"[OK] Datetime added to STAC query: {datetime_range}")
         else:
             logger.info("=" * 80)
             logger.info("ℹ️ NO DATETIME FILTER - Will use sortby to get most recent")
             logger.info("=" * 80)
-            print("ℹ️ No datetime filter")
+            logger.debug("ℹ️ No datetime filter")
 
         # DEFAULT LIMIT: 50 tiles as fallback
         # This will be overridden by dynamic calculation after bbox is resolved
@@ -3775,13 +3783,15 @@ IMPORTANT:
         logger.info(
             "[OK] Default query limit: 50 (will be adjusted based on bbox size)"
         )
-        print("[OK] Default limit: 50 tiles (dynamic adjustment after bbox resolution)")
+        logger.debug(
+            "[OK] Default limit: 50 tiles (dynamic adjustment after bbox resolution)"
+        )
 
         # [SEARCH] DEBUG: Log final parameters
         logger.info(f"� STAC parameters built (deterministic): {stac_query}")
-        print("� DEBUG: ===== BUILT STAC PARAMETERS =====")
-        print(json.dumps(stac_query, indent=2))
-        print("� DEBUG: ====================================")
+        logger.debug("� DEBUG: ===== BUILT STAC PARAMETERS =====")
+        logger.debug(json.dumps(stac_query, indent=2))
+        logger.debug("� DEBUG: ====================================")
 
         return stac_query
 
@@ -4393,10 +4403,10 @@ IMPORTANT:
         logger.info("[SEARCH] DEBUG: _resolve_temporal_to_datetime called")
         logger.info(f"[SEARCH] DEBUG: Collections: {collections}")
         logger.info(f"[SEARCH] DEBUG: Entities: {entities}")
-        print(
+        logger.debug(
             f"[SEARCH] DEBUG: _resolve_temporal_to_datetime - Collections: {collections}"
         )
-        print(
+        logger.debug(
             f"[SEARCH] DEBUG: _resolve_temporal_to_datetime - Entities: {json.dumps(entities, indent=2) if entities else 'None'}"
         )
 
@@ -4422,7 +4432,7 @@ IMPORTANT:
 
         if all_static:
             logger.info("[DATE] Static collections (DEM) -> No datetime filter")
-            print(
+            logger.debug(
                 "[DATE] DEBUG: Static collections detected - no datetime filter needed"
             )
             return None
@@ -4431,7 +4441,7 @@ IMPORTANT:
             logger.info(
                 "[DATE] Composite collections (MODIS) -> No datetime filter (use sortby instead)"
             )
-            print(
+            logger.debug(
                 "[DATE] DEBUG: Composite collections detected - no datetime filter needed"
             )
             return None
@@ -4441,7 +4451,7 @@ IMPORTANT:
             logger.info(
                 "[DATE] No temporal entities extracted -> No datetime filter (will return most recent)"
             )
-            print(
+            logger.debug(
                 "[DATE] DEBUG: No temporal entities found - will return most recent data"
             )
             return None
@@ -4455,10 +4465,10 @@ IMPORTANT:
         logger.info(
             f"[SEARCH] DEBUG: Extracted temporal values - year: {year}, month: {month}, relative: {relative}"
         )
-        print("[SEARCH] DEBUG: Temporal values extracted:")
-        print(f"  - year: {year}")
-        print(f"  - month: {month}")
-        print(f"  - relative: {relative}")
+        logger.debug("[SEARCH] DEBUG: Temporal values extracted:")
+        logger.debug(f"  - year: {year}")
+        logger.debug(f"  - month: {month}")
+        logger.debug(f"  - relative: {relative}")
 
         import calendar
         from datetime import datetime
@@ -4469,7 +4479,9 @@ IMPORTANT:
             logger.info(
                 f"[SEARCH] DEBUG: Entering Case 1 (Year + Month): year={year}, month={month}"
             )
-            print(f"[SEARCH] DEBUG: Case 1 (Year + Month) - year={year}, month={month}")
+            logger.debug(
+                f"[SEARCH] DEBUG: Case 1 (Year + Month) - year={year}, month={month}"
+            )
 
             try:
                 year_int = int(year)
@@ -4479,7 +4491,7 @@ IMPORTANT:
                 logger.info(
                     f"[SEARCH] DEBUG: Converted to integers - year_int={year_int}, month_int={month_int}"
                 )
-                print(
+                logger.debug(
                     f"[SEARCH] DEBUG: Converted values - year_int={year_int}, month_int={month_int}"
                 )
 
@@ -4489,7 +4501,7 @@ IMPORTANT:
                 logger.info(
                     f"[SEARCH] DEBUG: Last day of {calendar.month_name[month_int]} {year_int}: {last_day}"
                 )
-                print(f"[SEARCH] DEBUG: Last day of month: {last_day}")
+                logger.debug(f"[SEARCH] DEBUG: Last day of month: {last_day}")
 
                 datetime_range = f"{year_int}-{month_int:02d}-01/{year_int}-{month_int:02d}-{last_day}"
 
@@ -4501,31 +4513,33 @@ IMPORTANT:
                 logger.info(
                     f"[SEARCH] DEBUG: Case 1 RESULT - datetime_range: {datetime_range}"
                 )
-                print(
+                logger.debug(
                     f"[SEARCH] DEBUG: Case 1 RESULT - datetime_range: {datetime_range}"
                 )
-                print(f"  [OK] Start: {year_int}-{month_int:02d}-01")
-                print(f"  [OK] End: {year_int}-{month_int:02d}-{last_day}")
+                logger.debug(f"  [OK] Start: {year_int}-{month_int:02d}-01")
+                logger.debug(f"  [OK] End: {year_int}-{month_int:02d}-{last_day}")
 
                 return datetime_range
             except (ValueError, TypeError) as e:
                 logger.warning(
                     f"[WARN] Failed to parse year={year}, month={month}: {e}"
                 )
-                print(f"[WARN] ERROR: Failed to parse year={year}, month={month}: {e}")
+                logger.warning(
+                    f"[WARN] ERROR: Failed to parse year={year}, month={month}: {e}"
+                )
                 return None
 
         # Case 2: Year only
         if year:
             # [SEARCH] DEBUG: Log Case 2 entry
             logger.info(f"[SEARCH] DEBUG: Entering Case 2 (Year only): year={year}")
-            print(f"[SEARCH] DEBUG: Case 2 (Year only) - year={year}")
+            logger.debug(f"[SEARCH] DEBUG: Case 2 (Year only) - year={year}")
 
             try:
                 year_int = int(year)
 
                 logger.info(f"[SEARCH] DEBUG: Converted year to int: {year_int}")
-                print(f"[SEARCH] DEBUG: Year as int: {year_int}")
+                logger.debug(f"[SEARCH] DEBUG: Year as int: {year_int}")
 
                 datetime_range = f"{year_int}-01-01/{year_int}-12-31"
 
@@ -4537,22 +4551,22 @@ IMPORTANT:
                 logger.info(
                     f"[SEARCH] DEBUG: Case 2 RESULT - datetime_range: {datetime_range}"
                 )
-                print(
+                logger.debug(
                     f"[SEARCH] DEBUG: Case 2 RESULT - datetime_range: {datetime_range}"
                 )
-                print(f"  [OK] Full year: {year_int}")
+                logger.debug(f"  [OK] Full year: {year_int}")
 
                 return datetime_range
             except (ValueError, TypeError) as e:
                 logger.warning(f"[WARN] Failed to parse year={year}: {e}")
-                print(f"[WARN] ERROR: Failed to parse year={year}: {e}")
+                logger.warning(f"[WARN] ERROR: Failed to parse year={year}: {e}")
                 return None
 
         # Case 3: Month only (current year)
         if month:
             # [SEARCH] DEBUG: Log Case 3 entry
             logger.info(f"[SEARCH] DEBUG: Entering Case 3 (Month only): month={month}")
-            print(f"[SEARCH] DEBUG: Case 3 (Month only) - month={month}")
+            logger.debug(f"[SEARCH] DEBUG: Case 3 (Month only) - month={month}")
 
             try:
                 current_year = datetime.now().year
@@ -4561,7 +4575,7 @@ IMPORTANT:
                 logger.info(
                     f"[SEARCH] DEBUG: Using current year {current_year}, month_int={month_int}"
                 )
-                print(
+                logger.debug(
                     f"[SEARCH] DEBUG: Current year: {current_year}, month_int: {month_int}"
                 )
 
@@ -4576,14 +4590,14 @@ IMPORTANT:
                 logger.info(
                     f"[SEARCH] DEBUG: Case 3 RESULT - datetime_range: {datetime_range}"
                 )
-                print(
+                logger.debug(
                     f"[SEARCH] DEBUG: Case 3 RESULT - datetime_range: {datetime_range}"
                 )
 
                 return datetime_range
             except (ValueError, TypeError) as e:
                 logger.warning(f"[WARN] Failed to parse month={month}: {e}")
-                print(f"[WARN] ERROR: Failed to parse month={month}: {e}")
+                logger.warning(f"[WARN] ERROR: Failed to parse month={month}: {e}")
                 return None
 
         # Case 4: Relative time (e.g., "recent")
@@ -4600,14 +4614,16 @@ IMPORTANT:
             logger.info(
                 f"[SEARCH] DEBUG: Using {lookback_days}-day lookback for 'recent' (optical imagery lag)"
             )
-            print(
+            logger.debug(
                 f"[SEARCH] DEBUG: Case 4 (Relative 'recent') - last {lookback_days} days for optical data"
             )
 
             logger.info(
                 f"[SEARCH] DEBUG: Date range - start: {start_date}, end: {end_date}"
             )
-            print(f"[SEARCH] DEBUG: Start date: {start_date}, End date: {end_date}")
+            logger.debug(
+                f"[SEARCH] DEBUG: Start date: {start_date}, End date: {end_date}"
+            )
 
             datetime_range = (
                 f"{start_date.strftime('%Y-%m-%d')}/{end_date.strftime('%Y-%m-%d')}"
@@ -4621,13 +4637,15 @@ IMPORTANT:
             logger.info(
                 f"[SEARCH] DEBUG: Case 4 RESULT - datetime_range: {datetime_range}"
             )
-            print(f"[SEARCH] DEBUG: Case 4 RESULT - datetime_range: {datetime_range}")
+            logger.debug(
+                f"[SEARCH] DEBUG: Case 4 RESULT - datetime_range: {datetime_range}"
+            )
 
             return datetime_range
 
         # Case 5: No usable temporal info
         logger.info("[DATE] No usable temporal info -> No datetime filter")
-        print("[SEARCH] DEBUG: Case 5 - No usable temporal info, returning None")
+        logger.debug("[SEARCH] DEBUG: Case 5 - No usable temporal info, returning None")
         return None
 
     async def datetime_translation_agent(
@@ -4678,10 +4696,10 @@ IMPORTANT:
         )
         logger.info(f"[DATE] CONTEXT - Current Year: {datetime.now().year}")
         logger.info("=" * 80)
-        print("[BOT] DEBUG: ========== DATETIME AGENT START ==========")
-        print(f"[BOT] DEBUG: Query: '{query}'")
-        print(f"[BOT] DEBUG: Collections: {collections}")
-        print(f"[BOT] DEBUG: Mode: {mode}")
+        logger.debug("[BOT] DEBUG: ========== DATETIME AGENT START ==========")
+        logger.debug(f"[BOT] DEBUG: Query: '{query}'")
+        logger.debug(f"[BOT] DEBUG: Collections: {collections}")
+        logger.debug(f"[BOT] DEBUG: Mode: {mode}")
 
         # Validate mode
         if mode not in ["single", "comparison"]:
@@ -4741,13 +4759,13 @@ IMPORTANT:
             logger.info(
                 "[DATE] User explicitly mentioned date/time -> FORCING datetime filter"
             )
-            print(
+            logger.debug(
                 "[DATE] DEBUG: Explicit date detected in query - will apply datetime filter"
             )
 
         if all_static:
             logger.info("[DATE] Static collections (DEM) -> No datetime filter")
-            print("[DATE] DEBUG: Static collections - no datetime needed")
+            logger.debug("[DATE] DEBUG: Static collections - no datetime needed")
             return None
 
         # [OK] ONLY skip datetime if ALL collections are composite AND user didn't explicitly specify a date
@@ -4755,7 +4773,7 @@ IMPORTANT:
             logger.info(
                 "[DATE] All composite collections AND no explicit date -> No datetime filter"
             )
-            print(
+            logger.debug(
                 "[DATE] DEBUG: Composite collections with no explicit date - no datetime needed"
             )
             return None
@@ -4821,7 +4839,7 @@ IMPORTANT:
 
             # [SEARCH] DEBUG: Log raw GPT response
             logger.info(f"[SEARCH] DEBUG: Raw datetime agent response: {content}")
-            print(f"[SEARCH] DEBUG: Raw response: {content}")
+            logger.debug(f"[SEARCH] DEBUG: Raw response: {content}")
 
             # Clean JSON markers
             if "```json" in content:
@@ -4840,12 +4858,12 @@ IMPORTANT:
         except json.JSONDecodeError as e:
             logger.error(f"[FAIL] Datetime agent JSON parse error: {e}")
             logger.error(f"Raw content: {content}")
-            print(f"[FAIL] ERROR: JSON parse failed - {e}")
+            logger.error(f"[FAIL] ERROR: JSON parse failed - {e}")
             return None
 
         except Exception as e:
             logger.error(f"[FAIL] Datetime translation failed: {e}")
-            print(f"[FAIL] ERROR: Datetime agent failed - {e}")
+            logger.error(f"[FAIL] ERROR: Datetime agent failed - {e}")
             return None
 
     def _build_single_datetime_prompt(
@@ -5027,28 +5045,28 @@ Return ONLY a JSON object with "before", "after", and "explanation". If ambiguou
         logger.info(f"[OUTBOX] OUTPUT - datetime_range: {datetime_range}")
         logger.info(f"� OUTPUT - explanation: {explanation}")
         logger.info("=" * 80)
-        print("[BOT] DEBUG: ========== DATETIME AGENT OUTPUT ==========")
-        print(f"� DEBUG: datetime_range = '{datetime_range}'")
-        print(f"� DEBUG: explanation = '{explanation}'")
+        logger.debug("[BOT] DEBUG: ========== DATETIME AGENT OUTPUT ==========")
+        logger.debug(f"� DEBUG: datetime_range = '{datetime_range}'")
+        logger.debug(f"� DEBUG: explanation = '{explanation}'")
 
         if datetime_range == "none" or not datetime_range:
             logger.info(
                 "[DATE] RESULT: No temporal info -> No datetime filter will be applied to STAC query"
             )
-            print(
+            logger.debug(
                 "[DATE] DEBUG: No temporal info found - STAC query will use sortby=desc to get most recent"
             )
             logger.info("=" * 80)
-            print("[BOT] DEBUG: ========== DATETIME AGENT END ==========")
+            logger.debug("[BOT] DEBUG: ========== DATETIME AGENT END ==========")
             return None
 
         logger.info("[OK] RESULT: Datetime filter will be applied to STAC query")
         logger.info(f"   ISO 8601 Range: {datetime_range}")
         logger.info(f"   Human Readable: {explanation}")
         logger.info("=" * 80)
-        print("[OK] DEBUG: DATETIME AGENT SUCCESS")
-        print(f"   Filter: {datetime_range}")
-        print("[BOT] DEBUG: ========== DATETIME AGENT END ==========")
+        logger.debug("[OK] DEBUG: DATETIME AGENT SUCCESS")
+        logger.debug(f"   Filter: {datetime_range}")
+        logger.debug("[BOT] DEBUG: ========== DATETIME AGENT END ==========")
 
         return datetime_range
 
@@ -5060,8 +5078,8 @@ Return ONLY a JSON object with "before", "after", and "explanation". If ambiguou
         # Check if clarification is needed
         if response.get("needs_clarification"):
             logger.warning("[WARN] Ambiguous temporal query - clarification needed")
-            print("[WARN] WARNING: Ambiguous temporal query")
-            print(f"[INFO] Suggestion: {response.get('suggestion')}")
+            logger.warning("[WARN] WARNING: Ambiguous temporal query")
+            logger.debug(f"[INFO] Suggestion: {response.get('suggestion')}")
 
             # Use fallback dates if provided
             before = response.get("fallback_before")
@@ -5070,7 +5088,7 @@ Return ONLY a JSON object with "before", "after", and "explanation". If ambiguou
 
             if not before or not after:
                 logger.error("[FAIL] No fallback dates provided for ambiguous query")
-                print("[FAIL] ERROR: Cannot extract dates from ambiguous query")
+                logger.error("[FAIL] ERROR: Cannot extract dates from ambiguous query")
                 return None
 
             result = {
@@ -5090,7 +5108,7 @@ Return ONLY a JSON object with "before", "after", and "explanation". If ambiguou
                 logger.error(
                     "[FAIL] Missing before or after datetime in comparison response"
                 )
-                print("[FAIL] ERROR: Missing before or after datetime")
+                logger.error("[FAIL] ERROR: Missing before or after datetime")
                 return None
 
             result = {
@@ -5104,16 +5122,16 @@ Return ONLY a JSON object with "before", "after", and "explanation". If ambiguou
         logger.info(f"[SEARCH] DEBUG: Parsed BEFORE: {result['before']}")
         logger.info(f"[SEARCH] DEBUG: Parsed AFTER: {result['after']}")
         logger.info(f"[SEARCH] DEBUG: Explanation: {result['explanation']}")
-        print(f"[SEARCH] DEBUG: BEFORE: {result['before']}")
-        print(f"[SEARCH] DEBUG: AFTER: {result['after']}")
-        print(f"[SEARCH] DEBUG: Explanation: {result['explanation']}")
+        logger.debug(f"[SEARCH] DEBUG: BEFORE: {result['before']}")
+        logger.debug(f"[SEARCH] DEBUG: AFTER: {result['after']}")
+        logger.debug(f"[SEARCH] DEBUG: Explanation: {result['explanation']}")
 
         if result.get("needs_clarification"):
-            print(f"[WARN] CLARIFICATION NEEDED: {result.get('suggestion')}")
+            logger.warning(f"[WARN] CLARIFICATION NEEDED: {result.get('suggestion')}")
 
         logger.info("[OK] Comparison datetime translation complete")
-        print("[OK] DEBUG: AGENT 2.5 SUCCESS (COMPARISON MODE)")
-        print("[BOT] DEBUG: =====================================")
+        logger.debug("[OK] DEBUG: AGENT 2.5 SUCCESS (COMPARISON MODE)")
+        logger.debug("[BOT] DEBUG: =====================================")
 
         return result
 
@@ -5146,9 +5164,9 @@ Return ONLY a JSON object with "before", "after", and "explanation". If ambiguou
 
         # [SEARCH] DEBUG: Log agent invocation
         logger.info("[BOT] AGENT 2.3: cloud_filtering_agent invoked")
-        print("[BOT] DEBUG: ===== CLOUD FILTERING AGENT =====")
-        print(f"[BOT] DEBUG: Query: {query}")
-        print(f"[BOT] DEBUG: Collections: {collections}")
+        logger.debug("[BOT] DEBUG: ===== CLOUD FILTERING AGENT =====")
+        logger.debug(f"[BOT] DEBUG: Query: {query}")
+        logger.debug(f"[BOT] DEBUG: Collections: {collections}")
 
         # Import PC metadata helpers for cloud filtering
         from pc_tasks_config_loader import (
@@ -5164,7 +5182,7 @@ Return ONLY a JSON object with "before", "after", and "explanation". If ambiguou
             logger.info(
                 f"[CLOUD] No collections support cloud filtering: {collections}"
             )
-            print("[CLOUD] DEBUG: No cloud-filterable collections")
+            logger.debug("[CLOUD] DEBUG: No cloud-filterable collections")
             return None
 
         # Build GPT prompt for cloud intent detection
@@ -5249,7 +5267,7 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
 
             # [SEARCH] DEBUG: Log raw response
             logger.info(f"[SEARCH] DEBUG: Raw cloud agent response: {content}")
-            print(f"[SEARCH] DEBUG: Raw response: {content}")
+            logger.debug(f"[SEARCH] DEBUG: Raw response: {content}")
 
             # Clean JSON markers
             if "```json" in content:
@@ -5267,7 +5285,9 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
             logger.info(
                 f"[SEARCH] DEBUG: Cloud intent: {cloud_intent}, threshold: {threshold}"
             )
-            print(f"[SEARCH] DEBUG: Intent: {cloud_intent}, Threshold: {threshold}")
+            logger.debug(
+                f"[SEARCH] DEBUG: Intent: {cloud_intent}, Threshold: {threshold}"
+            )
 
             if cloud_intent == "none" or not threshold:
                 # [TOOL] FALLBACK: Use keyword detection if GPT returns "none" but keywords exist
@@ -5284,12 +5304,12 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
                     logger.info(
                         f"[TOOL] FALLBACK: Keyword detection found cloud intent: {cloud_intent} ({threshold}%)"
                     )
-                    print(
+                    logger.debug(
                         f"[TOOL] DEBUG: Keyword fallback triggered - threshold: {threshold}%"
                     )
                 else:
                     logger.info("[CLOUD] No explicit cloud mention -> No filter")
-                    print("[CLOUD] DEBUG: No cloud filtering needed")
+                    logger.debug("[CLOUD] DEBUG: No cloud filtering needed")
                     return None
 
             # Build cloud filter
@@ -5311,19 +5331,19 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
             }
 
             logger.info(f"[OK] Cloud filter: {prop_name} < {threshold}% ({reasoning})")
-            print("[OK] DEBUG: AGENT 2.3 SUCCESS - Cloud filter created")
-            print(f"  - Property: {prop_name}")
-            print(f"  - Threshold: < {threshold}%")
-            print(f"  - Applies to: {filterable}")
+            logger.debug("[OK] DEBUG: AGENT 2.3 SUCCESS - Cloud filter created")
+            logger.debug(f"  - Property: {prop_name}")
+            logger.debug(f"  - Threshold: < {threshold}%")
+            logger.debug(f"  - Applies to: {filterable}")
             if non_filterable:
-                print(f"  - Cannot apply to: {non_filterable}")
-            print("[BOT] DEBUG: ===================================")
+                logger.debug(f"  - Cannot apply to: {non_filterable}")
+            logger.debug("[BOT] DEBUG: ===================================")
 
             return cloud_filter
 
         except json.JSONDecodeError as e:
             logger.error(f"[FAIL] Cloud agent JSON parse error: {e}")
-            print(f"[FAIL] ERROR: JSON parse failed - {e}")
+            logger.error(f"[FAIL] ERROR: JSON parse failed - {e}")
             # [TOOL] FALLBACK: Try keyword detection on JSON parse failure
             keyword_result = await self._detect_cloud_cover_intent(query)
             if keyword_result and filterable:
@@ -5344,7 +5364,7 @@ Return ONLY a JSON object with "cloud_intent", "threshold", and "reasoning". No 
 
         except Exception as e:
             logger.error(f"[FAIL] Cloud filtering agent failed: {e}")
-            print(f"[FAIL] ERROR: Cloud agent failed - {e}")
+            logger.error(f"[FAIL] ERROR: Cloud agent failed - {e}")
             # [TOOL] FALLBACK: Try keyword detection on any GPT failure
             keyword_result = await self._detect_cloud_cover_intent(query)
             if keyword_result and filterable:
