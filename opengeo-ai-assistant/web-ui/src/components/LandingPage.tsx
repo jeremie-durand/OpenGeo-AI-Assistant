@@ -71,7 +71,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
   };
 
   const handleVedaClick = () => {
-    window.open('http://localhost:3000', '_blank');
+    window.open(window.location.origin, '_blank');
   };
 
   const handleLogoClick = () => {
