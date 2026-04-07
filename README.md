@@ -27,6 +27,15 @@ This project extends and adapts the original Earth Copilot codebase with the fol
 
 See [QUICK_DEPLOY.md](QUICK_DEPLOY.md)
 
+## Security
+
+See [SECURITY.md](SECURITY.md) for the vulnerability reporting policy.
+
+**Production deployments must:**
+
+1. Set `ENABLE_AUTH=true` and generate a strong API key (`openssl rand -hex 32`) — the default `ENABLE_AUTH=false` is for local development only
+2. Set `CORS_ORIGINS` to your specific frontend domain — the default wildcard (`*`) must not be used in production
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md)
