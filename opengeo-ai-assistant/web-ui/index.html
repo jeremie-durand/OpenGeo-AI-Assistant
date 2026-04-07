@@ -8,6 +8,8 @@
     <!-- Leaflet SDK -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Runtime environment config (injected by docker-entrypoint.sh; empty in dev) -->
+    <script src="/env-config.js" onerror="window.ENV={}"></script>
   </head>
   <body>
     <div id="root"></div>
