@@ -7,16 +7,14 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ command, mode }) => {
   // Load env variables from .env files
   const env = loadEnv(mode, process.cwd(), '');
-  
+
   // For local development proxy
   // Set LOCAL_BACKEND_URL in .env.local to point to your deployed backend
   const LOCAL_BACKEND = env.LOCAL_BACKEND_URL || 'http://localhost:8000';
-  
-  console.log(` Vite config: Backend URL = ${LOCAL_BACKEND}`);
-  
+
   const isDev = command === 'serve';
   const isProd = mode === 'production';
-  
+
   return {
     plugins: [react()],
     base: isProd ? './' : '/',
@@ -29,13 +27,9 @@ export default defineConfig(({ command, mode }) => {
         '/health': {
           target: LOCAL_BACKEND,
           changeOrigin: true,
-          configure: (proxy, options) => {
-            proxy.on('error', (err, req, res) => {
-              console.log(' Proxy error to backend:', err);
-            });
-            proxy.on('proxyReq', (proxyReq, req, res) => {
-              console.log(' Proxying request to backend:', req.url);
-            });
+          configure: (proxy, _options) => {
+            proxy.on('error', (_err, _req, _res) => {});
+            proxy.on('proxyReq', (_proxyReq, _req, _res) => {});
           }
         },
         '/debug': LOCAL_BACKEND,
@@ -50,43 +44,31 @@ export default defineConfig(({ command, mode }) => {
         '/api/health': {
           target: LOCAL_BACKEND,
           changeOrigin: true,
-          configure: (proxy, options) => {
-            proxy.on('error', (err, req, res) => {
-              console.log(' Proxy error to Router Function (health):', err);
-            });
+          configure: (proxy, _options) => {
+            proxy.on('error', (_err, _req, _res) => {});
           }
         },
         '/api/query': {
           target: LOCAL_BACKEND,
           changeOrigin: true,
-          configure: (proxy, options) => {
-            proxy.on('error', (err, req, res) => {
-              console.log(' Proxy error to backend (query):', err);
-            });
-            proxy.on('proxyReq', (proxyReq, req, res) => {
-              console.log(' Proxying QUERY request to backend:', req.url);
-            });
+          configure: (proxy, _options) => {
+            proxy.on('error', (_err, _req, _res) => {});
+            proxy.on('proxyReq', (_proxyReq, _req, _res) => {});
           }
         },
         '/stac-search': {
           target: LOCAL_BACKEND,
           changeOrigin: true,
-          configure: (proxy, options) => {
-            proxy.on('error', (err, req, res) => {
-              console.log(' Proxy error to backend:', err);
-            });
+          configure: (proxy, _options) => {
+            proxy.on('error', (_err, _req, _res) => {});
           }
         },
         '/api/stac-search': {
           target: LOCAL_BACKEND,
           changeOrigin: true,
-          configure: (proxy, options) => {
-            proxy.on('error', (err, req, res) => {
-              console.log(' Proxy error to backend (stac-search):', err);
-            });
-            proxy.on('proxyReq', (proxyReq, req, res) => {
-              console.log(' Proxying STAC request to Unified Function:', req.url);
-            });
+          configure: (proxy, _options) => {
+            proxy.on('error', (_err, _req, _res) => {});
+            proxy.on('proxyReq', (_proxyReq, _req, _res) => {});
           }
         },
         // '/mcp-query': LOCAL_BACKEND, // DISABLED - MCP server functionality
@@ -97,10 +79,8 @@ export default defineConfig(({ command, mode }) => {
         '/api/config': {
           target: LOCAL_BACKEND,
           changeOrigin: true,
-          configure: (proxy, options) => {
-            proxy.on('proxyReq', (proxyReq, req, res) => {
-              console.log(' Proxying config request to backend:', req.url);
-            });
+          configure: (proxy, _options) => {
+            proxy.on('proxyReq', (_proxyReq, _req, _res) => {});
           }
         }
       }
