@@ -7,7 +7,7 @@ httpx==0.28.1
 requests==2.33.1
 python-dotenv==1.2.2
 numpy==2.4.4
-openai==1.107.2
+openai==2.30.0
 anthropic==0.87.0
 semantic-kernel==1.41.1  # CRITICAL: Latest stable version with updated API
 planetary-computer==1.0.0
