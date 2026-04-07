@@ -87,7 +87,10 @@ class ApiService {
 
   constructor() {
     try {
-      const apiKey = (window as Window & { ENV?: { VITE_API_KEY?: string } }).ENV?.VITE_API_KEY ?? import.meta.env.VITE_API_KEY ?? '';
+      const apiKey =
+        (window as Window & { ENV?: { VITE_API_KEY?: string } }).ENV?.VITE_API_KEY ??
+        import.meta.env.VITE_API_KEY ??
+        '';
       this.api = axios.create({
         baseURL: API_BASE || undefined,
         timeout: 300000, // 5 minutes — extreme weather queries via chat can be slow (NetCDF sampling)
