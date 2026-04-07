@@ -14,7 +14,7 @@ pandas>=1.5.0
 # --- AI/LLM (Core functionality) ---
 openai==1.107.2
 anthropic>=0.25.6
-semantic-kernel==1.36.2  # CRITICAL: Latest stable version with updated API
+semantic-kernel==1.39.4  # CRITICAL: Latest stable version with updated API
 
 stackstac>=0.4.0
 planetary-computer>=1.0.0
