@@ -24,7 +24,6 @@ export default function ChatPanel({ selected, onGeojson }: { selected: Collectio
         query: content
       });
       const data = res.data;
-      console.log('Docker response:', data);
 
       // Extract response from Docker function app format
       const assistant = data.results?.response || data.response || '(no response)';
