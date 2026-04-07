@@ -26,6 +26,7 @@ Usage:
 import json
 import logging
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Dict, Optional, Set
@@ -86,7 +87,7 @@ _values_pool = ThreadPoolExecutor(max_workers=4)
 # A shared instance lets concurrent readers reuse connections and
 # benefit from block-level caching of previously-read byte ranges.
 _https_fs = None
-_https_fs_lock = __import__("threading").Lock()
+_https_fs_lock = threading.Lock()
 
 
 def _get_https_fs():
