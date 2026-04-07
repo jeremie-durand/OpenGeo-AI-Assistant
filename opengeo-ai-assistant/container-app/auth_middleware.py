@@ -4,6 +4,7 @@ import os
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ _OPEN_PATHS = {"/api/health", "/api/config", "/"}
 class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
     """Validates X-Api-Key header against API_KEY env var on all protected routes."""
 
-    def __init__(self, app) -> None:
+    def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
         self._api_key = os.environ.get("API_KEY", "").strip()
         if not self._api_key:
