@@ -9,6 +9,7 @@ from starlette.types import ASGIApp
 logger = logging.getLogger(__name__)
 
 _OPEN_PATHS = {"/api/health", "/api/config", "/"}
+_PLACEHOLDER_KEY = "change-me-before-deploying"
 
 
 class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
@@ -17,9 +18,10 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
         self._api_key = os.environ.get("API_KEY", "").strip()
-        if not self._api_key:
-            logger.warning(
-                "[AUTH] API_KEY is not set — auth middleware will reject all requests"
+        if not self._api_key or self._api_key == _PLACEHOLDER_KEY:
+            raise RuntimeError(
+                "[AUTH] ENABLE_AUTH=true but API_KEY is not set or is the default placeholder. "
+                "Generate a strong key with: openssl rand -hex 32"
             )
 
     async def dispatch(self, request: Request, call_next):
