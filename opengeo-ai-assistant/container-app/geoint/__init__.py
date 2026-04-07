@@ -40,9 +40,6 @@ from .agents import (
     terrain_analysis_agent,
 )
 
-# Comparison agent for temporal before/after analysis
-from .comparison_agent import ComparisonAgent, get_comparison_agent
-
 # Router Agent for intelligent query classification
 from .router_agent import RouterAgent, get_router_agent
 

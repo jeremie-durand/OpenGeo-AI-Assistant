@@ -887,7 +887,7 @@ def _analyze_single_direction_sync(
     d_bbox = _calculate_directional_bbox(lat, lon, cardinal)
 
     # ── Pre-fetch all COG pixels in PARALLEL (biggest I/O savings) ──
-    fire_px = water_px = elev_px = red_px = nir_px = None
+    red_px = nir_px = None  # noqa: F841
     fetch_tasks = {}
 
     if terrain_data.get("active_fires") and terrain_data["active_fires"].get("items"):

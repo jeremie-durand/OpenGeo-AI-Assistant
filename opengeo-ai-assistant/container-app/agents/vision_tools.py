@@ -120,7 +120,6 @@ def _sample_cog_sync(
     try:
         import planetary_computer as pc
         import rasterio
-        from rasterio.session import AWSSession
 
         # Sign the URL if from Planetary Computer
         if "blob.core.windows.net" in cog_url:
@@ -2442,12 +2441,6 @@ def sample_raster_value(data_type: str = "auto") -> str:
             )
 
             if nodata_tiles:
-                # Determine most likely cause from cloud cover data
-                high_cloud_count = sum(
-                    1
-                    for t in nodata_tiles
-                    if t.get("cloud_cover") is not None and t["cloud_cover"] > 30
-                )
                 avg_cloud = (
                     sum(
                         t["cloud_cover"]

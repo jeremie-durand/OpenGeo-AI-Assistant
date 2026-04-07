@@ -30,12 +30,16 @@ Usage:
     url = HybridRenderingSystem.build_titiler_tilejson_url(item_id, collection_id)
 """
 
+import hashlib
 import logging
+import time
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+import requests
+
 # Import PC config loader (single source of truth)
-from pc_tasks_config_loader import DataType, RenderingConfig, get_pc_rendering_config
+from pc_tasks_config_loader import get_pc_rendering_config
 
 logger = logging.getLogger(__name__)
 
@@ -1008,10 +1012,6 @@ class HybridRenderingSystem:
 # Cache for mosaic search_ids to avoid redundant API calls
 # Key: hash of (collections, bbox, datetime_range, query_filters)
 # Value: {"search_id": str, "timestamp": float}
-import hashlib
-import time
-from typing import Tuple
-
 _mosaic_cache: Dict[str, Dict[str, Any]] = {}
 _MOSAIC_CACHE_TTL = 3600  # 1 hour TTL - mosaic search_ids are stable
 

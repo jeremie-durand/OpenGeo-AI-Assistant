@@ -14,6 +14,7 @@ import concurrent.futures
 import json
 import logging
 import math
+import os as _os
 import re
 from calendar import monthrange
 from datetime import datetime
@@ -22,8 +23,6 @@ from typing import Callable, Dict, List, Optional, Set
 import requests
 
 logger = logging.getLogger(__name__)
-
-import os as _os
 
 _stac_api_url = _os.getenv("STAC_API_URL", "").strip()
 STAC_URL = (
@@ -643,7 +642,7 @@ def analyze_comparison_imagery(
             )
 
         response = client.chat.completions.create(
-            model=deployment,
+            model=client.model,
             messages=[{"role": "user", "content": content}],
             max_completion_tokens=1000,
             temperature=1.0,

@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Union
 import aiohttp
 
 # Import the consolidated location resolver
-from location_resolver import EnhancedLocationResolver
+from location_resolver import EnhancedLocationResolver, LocationCache
 
 # Initialize logger first
 logger = logging.getLogger(__name__)
@@ -56,11 +56,60 @@ def log_pipeline_step(
 
 # Import the TileSelector for intelligent limit calculation
 try:
-    from tile_selector import TileSelector
+    from tile_selector import TileSelector  # noqa: F401
 
     TILE_SELECTOR_AVAILABLE = True
 except ImportError:
     TILE_SELECTOR_AVAILABLE = False
+
+try:
+    from collection_profiles import is_static_collection
+    from hybrid_rendering_system import FEATURED_COLLECTIONS
+    from pc_tasks_config_loader import (
+        get_all_collection_ids,
+        get_collection_metadata,
+        load_pc_metadata,
+    )
+    from veda_collection_profiles import get_veda_collections_for_query
+
+    PC_METADATA_AVAILABLE = True
+except ImportError:
+    PC_METADATA_AVAILABLE = False
+    FEATURED_COLLECTIONS = []
+
+    def get_veda_collections_for_query(query: str) -> list:  # type: ignore[misc]
+        return []
+
+    def get_all_collection_ids() -> list:  # type: ignore[misc]
+        return []
+
+    def get_collection_metadata(collection_id: str):  # type: ignore[misc]
+        return None
+
+    def load_pc_metadata() -> dict:  # type: ignore[misc]
+        return {}
+
+    def is_static_collection(collection_id: str) -> bool:  # type: ignore[misc]
+        return False
+
+
+try:
+    from semantic_kernel import Kernel
+    from semantic_kernel.connectors.ai import ChatCompletionClientBase
+    from semantic_kernel.connectors.ai.function_choice_behavior import (
+        FunctionChoiceBehavior,
+    )
+    from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_chat_prompt_execution_settings import (
+        OpenAIChatPromptExecutionSettings,
+    )
+    from semantic_kernel.contents import ChatHistory
+    from semantic_kernel.functions.kernel_arguments import KernelArguments
+    from semantic_kernel.functions.kernel_function import KernelFunction
+    from semantic_kernel.prompt_template import InputVariable, PromptTemplateConfig
+
+    SEMANTIC_KERNEL_AVAILABLE = True
+except ImportError:
+    SEMANTIC_KERNEL_AVAILABLE = False
 
 
 class GeocodingPlugin:
@@ -381,14 +430,11 @@ class SemanticQueryTranslator:
         "naip": ["naip"],
         # MODIS: Use specific product keywords instead of generic "modis"
         # Generic "modis" is handled by select_collections() with full context
-        "modis fire": ["modis-14A1-061", "modis-14A2-061"],
         "modis thermal": ["modis-14A1-061", "modis-14A2-061"],
         "modis wildfire": ["modis-14A1-061", "modis-14A2-061"],
         "modis npp": ["modis-17A3HGF-061"],
         "modis net primary production": ["modis-17A3HGF-061"],
-        "modis vegetation": ["modis-13Q1-061"],
         "modis ndvi": ["modis-13Q1-061"],
-        "modis snow": ["modis-10A1-061"],
         "modis brdf": ["modis-43A4-061"],
         "modis nadir": ["modis-43A4-061"],
         "copernicus": ["cop-dem-glo-30"],
@@ -822,9 +868,6 @@ class SemanticQueryTranslator:
 
     def _extract_location_from_query(self, query: str) -> Optional[str]:
         """Extract location from query text (basic implementation)"""
-        # Simple location extraction - could be enhanced with NER
-        query_lower = query.lower()
-
         # Look for common location patterns
         location_patterns = [
             r"\bin\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:area|region|city|county|state|country))?(?:\s|$|\?|\.)",
@@ -5736,8 +5779,6 @@ Location to analyze: {location_name}"""
 
         collections = []
         query_text = entities.get("original_query", "").lower()
-        analysis_intent = entities.get("analysis_intent", {}).get("type", "")
-        analysis_intent = entities.get("analysis_intent", {}).get("type", "")
 
         # [FIRE] EXPLICIT DATASET NAME DETECTION (HIGHEST PRIORITY - before platform detection)
         # These are specific named datasets that should take precedence over general platform detection
@@ -6323,111 +6364,6 @@ Location to analyze: {location_name}"""
         else:
             logger.debug(f"No collections found for category: {category}")
             return None
-            collections = ["landsat-c2-l2"]  # Only Landsat for thermal infrared
-            logger.info(f"[FIRE] Selected thermal collections: {collections}")
-            return collections[:3]  # Early return for thermal infrared
-
-        # [MTN] ELEVATION/DEM: Check for elevation keywords first (highest priority after thermal)
-        elevation_keywords = [
-            "elevation",
-            "dem",
-            "topography",
-            "terrain",
-            "altitude",
-            "height",
-            "slope",
-            "contour",
-        ]
-        lidar_keywords = ["lidar", "point cloud", "bare earth", "height above ground"]
-
-        if any(elev_word in query_text for elev_word in elevation_keywords):
-            logger.info(f"[MTN] ELEVATION/DEM DETECTED in query: {query_text}")
-
-            # Check if LiDAR-specific request
-            if any(lidar_word in query_text for lidar_word in lidar_keywords):
-                logger.info("[SIGNAL] LiDAR-specific request detected")
-                collections = [
-                    "3dep-lidar-dtm",
-                    "3dep-lidar-dsm",
-                    "3dep-lidar-classification",
-                    "3dep-lidar-hag",
-                    "cop-dem-glo-30",
-                ]
-            else:
-                # All 11 elevation collections available
-                collections = [
-                    "cop-dem-glo-30",
-                    "cop-dem-glo-90",
-                    "3dep-seamless",
-                    "3dep-lidar-dtm",
-                    "nasadem",
-                ]
-
-            logger.info(f"[MTN] Selected elevation collections: {collections}")
-            return collections[:5]  # Return up to 5 elevation options
-
-        # Match to comprehensive collection categories and subcategories
-        for category, config in self.collection_mappings.items():
-            # Check subcategory names as keywords (e.g., "thermal_infrared", "wildfire", etc.)
-            for subcategory, subcollections in config.items():
-                # Convert subcategory name to searchable keywords
-                subcategory_keywords = subcategory.replace("_", " ").split()
-                if any(keyword in query_text for keyword in subcategory_keywords):
-                    logger.debug(
-                        f"Found {category}->{subcategory} match for keywords: {subcategory_keywords}"
-                    )
-                    if isinstance(subcollections, list):
-                        collections.extend(subcollections)
-                    elif isinstance(subcollections, dict):
-                        # Handle nested structure like disaster categories
-                        collections.extend(subcollections.get("primary", []))
-                        if analysis_intent in ["impact_assessment", "damage_analysis"]:
-                            collections.extend(subcollections.get("secondary", []))
-                    break
-            if collections:  # If we found a match, stop searching
-                break
-
-        # Handle specific damage indicators and refinements
-        damage_indicators = entities.get("damage_indicators", {})
-
-        if damage_indicators.get("blue_tarp"):
-            # Very high resolution needed - prioritize
-            collections = ["naip", "sentinel-2-l2a"] + collections
-
-        if damage_indicators.get("flooding"):
-            # SAR is critical for flood detection
-            if "sentinel-1-grd" not in collections:
-                collections.insert(0, "sentinel-1-grd")
-
-        if damage_indicators.get("fire_damage"):
-            # Thermal detection is key
-            thermal_collections = ["modis-14A1-061", "modis-14A2-061", "modis-64A1-061"]
-            collections = thermal_collections + collections
-
-        # Analysis intent refinements for high-resolution needs
-        if analysis_intent in [
-            "impact_assessment",
-            "damage_analysis",
-            "detailed_monitoring",
-        ]:
-            # Ensure high-resolution optical data is available
-            if not any(col in collections for col in ["sentinel-2-l2a", "naip"]):
-                collections.insert(0, "sentinel-2-l2a")
-
-        # Remove duplicates while preserving priority order
-        seen = set()
-        unique_collections = []
-        for collection in collections:
-            if collection not in seen:
-                seen.add(collection)
-                unique_collections.append(collection)
-
-        # Default collections if none selected
-        if not unique_collections:
-            unique_collections = ["sentinel-2-l2a", "landsat-c2-l2"]
-
-        # Limit to reasonable number for performance
-        return unique_collections[:3]
 
     def _calculate_spatial_overlap(
         self, bbox1: List[float], bbox2: List[float]
@@ -6586,11 +6522,9 @@ Location to analyze: {location_name}"""
 
             # Try property names in priority order
             cloud_cover = None
-            found_property = None
             for prop_name in property_names_to_try:
                 if prop_name in props:
                     cloud_cover = props[prop_name]
-                    found_property = prop_name
                     break
 
             # If no cloud cover metadata, assume it passes (SAR, DEM, etc. don't have cloud cover)
@@ -7032,8 +6966,6 @@ Location to analyze: {location_name}"""
             # ========================================================================
             # Extract datetime_range for downstream compatibility
             # ========================================================================
-
-            datetime_range = stac_query.get("datetime")
 
             # ========================================================================
             # Determine data source (VEDA vs Planetary Computer)
@@ -8099,8 +8031,6 @@ Location to analyze: {location_name}"""
 
         raw_count = diagnostics.get("raw_count", 0)
         spatial_count = diagnostics.get("spatial_filtered_count", 0)
-        failure_stage = diagnostics.get("failure_stage", "unknown")
-
         # Use simple rule-based responses as fallback
         if raw_count == 0:
             return (
@@ -8606,8 +8536,6 @@ Keep your response focused, informative, and directly relevant to the user's que
 
         # Simple heuristic: count tiles that intersect with bbox
         west, south, east, north = bbox
-        bbox_area = self._calculate_area(bbox)
-
         intersecting_tiles = 0
         for feature in features:
             feature_bbox = feature.get("bbox")

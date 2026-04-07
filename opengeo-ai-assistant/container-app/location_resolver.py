@@ -285,7 +285,6 @@ class EnhancedLocationResolver:
         "brunei": [114.08, 4.00, 115.36, 5.05],
         "timor-leste": [124.05, -9.50, 127.34, -8.13],
         "east timor": [124.05, -9.50, 127.34, -8.13],  # Alias
-        "north korea": [124.32, 37.67, 130.68, 43.01],
         # Additional South American countries
         "guyana": [-61.39, 1.18, -56.48, 8.56],
         "suriname": [-58.09, 1.84, -53.98, 6.00],
@@ -322,7 +321,7 @@ class EnhancedLocationResolver:
         "pennsylvania": [-80.52, 39.72, -74.69, 42.27],
         "illinois": [-91.51, 36.97, -87.02, 42.51],
         "ohio": [-84.82, 38.40, -80.52, 41.98],
-        "georgia": [-85.61, 30.36, -80.84, 35.00],
+        "georgia state": [-85.61, 30.36, -80.84, 35.00],
         "north carolina": [-84.32, 33.84, -75.46, 36.59],
         "michigan": [-90.42, 41.70, -82.42, 48.31],
         "new jersey": [-75.56, 38.93, -73.89, 41.36],
@@ -435,11 +434,7 @@ class EnhancedLocationResolver:
         "tokyo": [139.56, 35.53, 139.92, 35.82],
         "beijing": [116.12, 39.72, 116.72, 40.18],
         "shanghai": [121.21, 30.92, 121.83, 31.45],
-        "hong kong": [113.84, 22.15, 114.41, 22.56],
-        "singapore": [103.61, 1.16, 104.04, 1.47],
         "dubai": [54.89, 24.77, 55.61, 25.36],
-        "sydney": [150.52, -34.12, 151.34, -33.58],
-        "melbourne": [144.59, -38.43, 145.51, -37.51],
         "toronto": [-79.64, 43.58, -79.12, 43.86],
         "vancouver": [-123.27, 49.20, -123.02, 49.32],
         "montreal": [-73.98, 45.41, -73.48, 45.70],
@@ -577,9 +572,7 @@ class EnhancedLocationResolver:
         "oceania": [110.00, -47.30, 180.00, 0.00],
         "polynesia": [-180.00, -23.00, -134.00, -8.00],
         "melanesia": [140.00, -23.00, 180.00, 0.00],
-        "amazon basin": [-73.00, -14.00, -50.00, 2.00],  # Amazon region
         "the amazon basin": [-73.00, -14.00, -50.00, 2.00],  # Alias
-        "amazon": [-73.00, -14.00, -50.00, 2.00],  # Alias
         "caribbean islands": [-85.00, 10.00, -59.00, 27.50],  # Alias for Caribbean
         "swiss alps": [5.96, 45.82, 10.49, 47.81],
         "himalaya": [73.00, 27.00, 97.00, 36.00],
@@ -590,11 +583,7 @@ class EnhancedLocationResolver:
         "alps": [4.00, 43.00, 17.00, 48.00],
         "fjords": [4.50, 58.00, 30.00, 71.00],
         "patagonia": [-75.00, -55.00, -66.00, -40.00],
-        "iceland": [-24.54, 63.39, -13.50, 66.54],
-        "new zealand": [166.51, -47.29, 178.52, -34.39],
         "bali": [114.43, -8.85, 115.71, -8.06],
-        "maldives": [72.68, -0.69, 73.76, 7.11],
-        "santorini": [25.35, 36.35, 25.48, 36.48],
         "amalfi coast": [14.47, 40.50, 14.71, 40.71],
         "cinque terre": [9.68, 44.10, 9.74, 44.18],
         "lake como": [9.07, 45.77, 9.51, 46.22],
@@ -641,11 +630,8 @@ class EnhancedLocationResolver:
         "guadeloupe": [-61.81, 15.83, -61.00, 16.51],
         # Pacific Islands
         "phuket": [98.26, 7.75, 98.44, 8.15],
-        "bali": [114.59, -8.85, 115.71, -8.09],
         "bora bora": [-151.78, -16.53, -151.70, -16.46],
         "tahiti": [-149.65, -17.87, -149.10, -17.48],
-        "fiji": [177.00, -19.00, -178.00, -16.00],
-        "galapagos": [-92.00, -1.40, -89.43, 0.70],
         "tomas de berlanga": [-90.78, -0.44, -90.65, -0.36],  # Rábida Island, Galápagos
         "rabida island": [-90.78, -0.44, -90.65, -0.36],  # Alias
         "easter island": [-109.48, -27.19, -109.21, -27.04],
@@ -659,8 +645,6 @@ class EnhancedLocationResolver:
         "menorca": [3.82, 39.80, 4.32, 40.10],
         "capri": [14.19, 40.53, 14.27, 40.56],
         "elba": [10.17, 42.72, 10.46, 42.85],
-        "malta": [14.18, 35.81, 14.58, 36.08],
-        "cyprus": [32.27, 34.63, 34.60, 35.71],
         # Atlantic Islands
         "azores": [-31.27, 36.89, -24.77, 39.76],
         "madeira": [-17.29, 32.39, -16.65, 32.89],
@@ -668,18 +652,12 @@ class EnhancedLocationResolver:
         "tenerife": [-16.93, 28.01, -16.39, 28.60],
         "fuerteventura": [-14.53, 28.05, -13.86, 28.75],
         "cape verde": [-25.36, 14.81, -22.67, 17.20],
-        "iceland": [-24.54, 63.39, -13.50, 66.54],
         "faroe islands": [-7.69, 61.39, -6.26, 62.40],
         # Major Water Bodies / Oceans
         "gulf of america": [-97.90, 18.09, -80.03, 30.72],  # Gulf of Mexico
         "gulf of mexico": [-97.90, 18.09, -80.03, 30.72],  # Alias
-        # Indian Ocean Islands
-        "maldives": [72.69, -0.69, 73.76, 7.09],
-        "seychelles": [55.23, -4.79, 56.29, -4.21],
-        "mauritius": [57.31, -20.53, 57.79, -19.99],
         "cancun": [-86.85, 21.04, -86.74, 21.23],
         "cabo san lucas": [-109.95, 22.86, -109.86, 22.93],
-        "hawaii": [-160.25, 18.91, -154.81, 22.24],
         "maui": [-156.69, 20.57, -155.98, 21.03],
         "oahu": [-158.29, 21.25, -157.65, 21.71],
         "kauai": [-159.79, 21.87, -159.30, 22.23],
@@ -720,8 +698,12 @@ class EnhancedLocationResolver:
         "alice springs": [133.83, -23.80, 133.91, -23.65],
         "uluru": [131.00, -25.40, 131.10, -25.30],  # Ayers Rock
         "ayers rock": [131.00, -25.40, 131.10, -25.30],  # Alias for Uluru
-        "great barrier reef": [142.50, -24.50, 154.00, -10.50],
-        "barrier reef": [142.50, -24.50, 154.00, -10.50],  # Alias
+        "barrier reef": [
+            142.50,
+            -24.50,
+            154.00,
+            -10.50,
+        ],  # Alias for Great Barrier Reef
         "kakadu": [131.88, -13.95, 133.00, -12.11],  # Kakadu National Park
         "blue mountains": [150.10, -33.85, 150.75, -33.35],
         # === TEST LOCATIONS FOR COMPARISON QUERIES ===
@@ -1171,7 +1153,7 @@ class EnhancedLocationResolver:
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params) as response:
+                async with session.get(url, params=params, headers=headers) as response:
                     if response.status == 200:
                         data = await response.json()
 
@@ -1730,7 +1712,7 @@ class EnhancedLocationResolver:
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params) as response:
+                async with session.get(url, params=params, headers=headers) as response:
                     if response.status == 200:
                         data = await response.json()
 
@@ -1753,14 +1735,12 @@ class EnhancedLocationResolver:
         if not results:
             return results
 
-        query_lower = query.lower()
         is_likely_international = self._likely_international_location(query)
 
         def calculate_score(result):
             score = 0
             display_name = result.get("display_name", "").lower()
             place_type = result.get("type", "").lower()
-            osm_class = result.get("class", "").lower()
             importance = float(result.get("importance", 0.0))
 
             # Base score from OSM importance

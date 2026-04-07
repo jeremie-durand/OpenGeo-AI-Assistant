@@ -478,24 +478,6 @@ def get_collection_title(collection_id: str) -> Optional[str]:
 
 
 def get_collection_metadata(collection_id: str) -> Optional[Dict[str, Any]]:
-    """Get complete metadata for a collection"""
-    loader = _get_loader()
-    return loader.get_metadata(collection_id)
-
-    if template_files:
-        try:
-            import json
-
-            with open(template_files[0], "r", encoding="utf-8") as f:
-                template = json.load(f)
-                return template.get("keywords", [])
-        except Exception as e:
-            logger.warning(f"  Could not read keywords for {collection_id}: {e}")
-
-    return []
-
-
-def get_collection_metadata(collection_id: str) -> Optional[Dict[str, Any]]:
     """
     Get comprehensive metadata for a collection (description, keywords, title).
 

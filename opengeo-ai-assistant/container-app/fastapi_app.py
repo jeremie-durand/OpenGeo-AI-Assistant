@@ -1,6 +1,7 @@
 # FastAPI - Complete Implementation
 # Containerized version with full OpenGeo AI Assistant functionality
 
+import asyncio
 import json
 import logging
 import os
@@ -740,7 +741,7 @@ async def startup_event():
     SEMANTIC_KERNEL_AVAILABLE = False
 
     try:
-        from llm_client import LLMConfigurationError, get_llm_client
+        from llm_client import get_llm_client
 
         client = get_llm_client()
         logger.info(
@@ -873,7 +874,6 @@ def generate_contextual_empty_response(
     spatial_count = diagnostics.get("spatial_filtered_count", 0)
     final_count = diagnostics.get("final_count", 0)
     stac_query = diagnostics.get("stac_query", {})
-    failure_stage = diagnostics.get("failure_stage", "unknown")
 
     response_parts = []
 
@@ -1024,7 +1024,6 @@ async def try_alternative_queries(
     """
     logger.info("[SYNC] Attempting to find alternative results with relaxed filters...")
 
-    alternatives_tried = []
     original_filters = {
         "datetime": original_stac_query.get("datetime"),
         "cloud_cover": None,
@@ -2024,7 +2023,7 @@ async def unified_query_processor(body: QueryRequest):
             qs_stac_query = build_stac_query(qs_stac_params)
 
             # Execute STAC search — route to local STAC if configured, else Planetary Computer
-            qs_stac_endpoint = translator.determine_stac_source(
+            qs_stac_endpoint = global_translator.determine_stac_source(
                 natural_query, qs_stac_params
             )
             qs_stac_response = await execute_direct_stac_search(
@@ -5348,8 +5347,6 @@ async def geoint_terrain_analysis(body: TerrainRequest):
         # Otherwise use one-shot terrain_analysis_agent for initial analysis
         # ========================================================================
 
-        import asyncio
-
         radius_km = radius_miles * 1.609
 
         if not session_id:
@@ -6050,10 +6047,6 @@ async def geoint_vision_chat(body: VisionChatRequest):
 async def clear_vision_chat_session(session_id: str):
     """Clear a vision agent session (reset memory)."""
     try:
-        from agents import get_vision_agent
-
-        vision_agent = get_vision_agent()
-
         # Clear session (vision agent should implement this)
         cleared = True  # Placeholder - implement session clearing in vision agent
 
@@ -6110,6 +6103,8 @@ async def geoint_building_damage_analysis(body: BuildingDamageRequest):
         import time
 
         agent_start = time.time()
+
+        from geoint.extreme_weather_agent import _reverse_geocode_cache
 
         # Create vision client for GPT-5 screenshot analysis (local-first, multi-provider)
         from semantic_translator import get_llm_client
@@ -7607,32 +7602,6 @@ async def geoint_orchestrator_endpoint(body: OrchestrateRequest):
     except Exception as e:
         logger.error(f"Orchestrator failed: {e}")
         raise HTTPException(status_code=500, detail="Orchestration failed")
-
-
-@app.get("/api/debug/location/{location}")
-async def debug_location_resolver(location: str):
-    """Debug endpoint to test location resolver"""
-    try:
-        from location_resolver import EnhancedLocationResolver
-
-        resolver = EnhancedLocationResolver()
-
-        # Test preprocessing
-        preprocessed = resolver._preprocess_location_query(location)
-
-        # Test resolution
-        bbox = await resolver.resolve_location_to_bbox(location, "region")
-
-        return {
-            "original_query": location,
-            "preprocessed_query": preprocessed,
-            "resolved_bbox": bbox,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-    except Exception as e:
-        logger.error(f"Location resolver debug failed: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/api/debug/location/{location}")
