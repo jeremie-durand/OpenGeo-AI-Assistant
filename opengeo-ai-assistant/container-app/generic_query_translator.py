@@ -18,12 +18,17 @@ Exposes the same public interface used by fastapi_app.py:
   - set_model(model_name)
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +94,10 @@ def _parse_json(text: str) -> Any:
 
 
 async def _llm_text(
-    client, messages: List[Dict], max_tokens: int = 512, temperature: float = 0.2
+    client: LLMClient,
+    messages: List[Dict],
+    max_tokens: int = 512,
+    temperature: float = 0.2,
 ) -> str:
     """Call *client* (LLMClient) and return the assistant text."""
     try:
