@@ -69,6 +69,7 @@ export interface MapContext {
   has_satellite_data?: boolean; // Flag indicating if STAC imagery is loaded
   vision_mode?: boolean; // NEW: explicit vision analysis mode
   vision_pin?: { lat: number; lng: number } | null; // NEW: pin coordinates for vision analysis
+  stac_items?: any[]; // STAC items currently rendered on the map
 }
 
 // Debug logging utility

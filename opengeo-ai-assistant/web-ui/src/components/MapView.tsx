@@ -3129,10 +3129,12 @@ const MapView: React.FC<MapViewProps> = ({
                 '??? MapView: Failed to resolve mosaic TileJSON, falling back to raw URL:',
                 result.error
               );
-              addTileLayer(satelliteData.tile_url);
+              if (satelliteData.tile_url) {
+                addTileLayer(satelliteData.tile_url);
+              }
             }
           });
-        } else {
+        } else if (satelliteData.tile_url) {
           addTileLayer(satelliteData.tile_url);
         }
       }
