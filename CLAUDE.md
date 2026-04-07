@@ -24,7 +24,11 @@ curl http://localhost:8000/api/health
 
 ### Testing
 
-None for now
+Run all checks manually:
+
+```bash
+pre-commit run --all-files
+```
 
 ## Architecture
 
