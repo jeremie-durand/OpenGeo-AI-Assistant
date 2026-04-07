@@ -376,17 +376,6 @@ def check_collection_coverage(collection_id: str, bbox: list) -> dict:
 GEOINT_AVAILABLE = True  # Always available - imports happen at endpoint level
 logging.info("[OK] GEOINT endpoints available (lazy import mode)")
 
-# Environment loading
-try:
-    from dotenv import load_dotenv
-
-    env_path = os.path.join(os.path.dirname(__file__), ".env")
-    if os.path.exists(env_path):
-        load_dotenv(env_path)
-        print(f"Loaded local environment from: {env_path}")
-except ImportError:
-    print("Using system environment variables")
-
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -603,9 +592,7 @@ async def execute_direct_stac_search(
                                     break
 
                     # Basic feature enhancement (simplified for now)
-                    enhanced_features = (
-                        features  # TODO: Add visualization metadata enhancement
-                    )
+                    enhanced_features = features
 
                     # [TARGET] TILE SELECTION: Select best tiles with temporal consistency
                     # IMPORTANT: TileSelector runs FIRST on all features so it can group by
