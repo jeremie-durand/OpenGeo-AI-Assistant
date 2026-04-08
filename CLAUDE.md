@@ -170,7 +170,14 @@ None for now
 
 ### Testing guidelines
 
-None for now
+Run pytest inside the backend container (from repo root):
+
+```bash
+docker compose run --rm -u root \
+  -v "$(pwd)/opengeo-ai-assistant/container-app/tests:/app/tests:ro" \
+  backend \
+  sh -c "pip install --no-cache-dir pytest pytest-asyncio && pytest tests/ -v --tb=short"
+```
 
 ### Branching strategy
 
