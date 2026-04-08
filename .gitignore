@@ -447,3 +447,6 @@ FodyWeavers.xsd
 openspec/
 .github/prompts
 .github/skills
+
+# Security audit files
+AUDIT.md
