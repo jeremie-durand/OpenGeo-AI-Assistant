@@ -1,10 +1,10 @@
 /**
  * Rendering Logger
- * 
+ *
  * Centralized logging utilities for tile rendering operations.
  * Provides structured, categorized logging with easy enable/disable controls.
  * Helps with debugging tile rendering, performance tracking, and troubleshooting.
- * 
+ *
  * @module renderingLogger
  */
 
@@ -13,7 +13,7 @@ export enum LogLevel {
   INFO = 1,
   WARN = 2,
   ERROR = 3,
-  NONE = 4
+  NONE = 4,
 }
 
 export enum LogCategory {
@@ -26,7 +26,7 @@ export enum LogCategory {
   ERROR = 'ERROR',
   PERFORMANCE = 'PERFORMANCE',
   MPC = 'MPC-APPROACH',
-  TEST = 'TEST'
+  TEST = 'TEST',
 }
 
 interface LoggerConfig {
@@ -43,7 +43,7 @@ const config: LoggerConfig = {
   minLevel: LogLevel.DEBUG,
   enabledCategories: new Set(Object.values(LogCategory)),
   timestampEnabled: false,
-  performanceTracking: true
+  performanceTracking: true,
 };
 
 // Performance tracking storage
@@ -51,7 +51,7 @@ const performanceMarks: Map<string, number> = new Map();
 
 /**
  * Configure the rendering logger
- * 
+ *
  * @param options - Configuration options
  */
 export function configureLogger(options: Partial<LoggerConfig>): void {
@@ -60,27 +60,22 @@ export function configureLogger(options: Partial<LoggerConfig>): void {
 
 /**
  * Enable/disable specific log categories
- * 
+ *
  * @param categories - Categories to enable
  * @param enable - true to enable, false to disable
  */
 export function setCategories(categories: LogCategory[], enable: boolean = true): void {
   if (enable) {
-    categories.forEach(cat => config.enabledCategories.add(cat));
+    categories.forEach((cat) => config.enabledCategories.add(cat));
   } else {
-    categories.forEach(cat => config.enabledCategories.delete(cat));
+    categories.forEach((cat) => config.enabledCategories.delete(cat));
   }
 }
 
 /**
  * Logs a debug message
  */
-function log(
-  level: LogLevel,
-  category: LogCategory,
-  message: string,
-  data?: any
-): void {
+function log(level: LogLevel, category: LogCategory, message: string, data?: any): void {
   if (!config.enabled || level < config.minLevel) {
     return;
   }
@@ -91,7 +86,7 @@ function log(
 
   const prefix = ` [${category}]`;
   const timestamp = config.timestampEnabled ? `[${new Date().toISOString()}]` : '';
-  
+
   const fullMessage = `${prefix}${timestamp} ${message}`;
 
   switch (level) {
@@ -130,7 +125,7 @@ export function logRenderingStart(
 ): void {
   const category = isMultiTile ? LogCategory.MULTI_TILE : LogCategory.SINGLE_TILE;
   const tileInfo = isMultiTile && tileCount ? ` (${tileCount} tiles)` : '';
-  
+
   log(
     LogLevel.INFO,
     category,
@@ -149,7 +144,7 @@ export function logRenderingComplete(
 ): void {
   const category = isMultiTile ? LogCategory.MULTI_TILE : LogCategory.SINGLE_TILE;
   const emoji = errorCount === 0 ? '' : '';
-  
+
   log(
     errorCount > 0 ? LogLevel.WARN : LogLevel.INFO,
     category,
@@ -167,19 +162,14 @@ export function logTileJsonFetch(
   error?: string
 ): void {
   if (success && tileTemplate) {
-    log(
-      LogLevel.INFO,
-      LogCategory.TILE_FETCH,
-      ` TileJSON fetched successfully`,
-      { url: url.substring(0, 100), template: tileTemplate.substring(0, 100) }
-    );
+    log(LogLevel.INFO, LogCategory.TILE_FETCH, ` TileJSON fetched successfully`, {
+      url: url.substring(0, 100),
+      template: tileTemplate.substring(0, 100),
+    });
   } else {
-    log(
-      LogLevel.ERROR,
-      LogCategory.TILE_FETCH,
-      ` TileJSON fetch failed: ${error}`,
-      { url: url.substring(0, 100) }
-    );
+    log(LogLevel.ERROR, LogCategory.TILE_FETCH, ` TileJSON fetch failed: ${error}`, {
+      url: url.substring(0, 100),
+    });
   }
 }
 
@@ -196,17 +186,12 @@ export function logTileLayerCreated(
     bounds?: number[];
   }
 ): void {
-  log(
-    LogLevel.INFO,
-    LogCategory.TILE_LAYER,
-    ` Tile layer created for ${itemId}`,
-    {
-      collection,
-      zoomRange: `${config.minZoom}-${config.maxZoom}`,
-      opacity: config.opacity,
-      hasBounds: !!config.bounds
-    }
-  );
+  log(LogLevel.INFO, LogCategory.TILE_LAYER, ` Tile layer created for ${itemId}`, {
+    collection,
+    zoomRange: `${config.minZoom}-${config.maxZoom}`,
+    opacity: config.opacity,
+    hasBounds: !!config.bounds,
+  });
 }
 
 /**
@@ -221,12 +206,7 @@ export function logRenderingConfig(
     tileSize: number;
   }
 ): void {
-  log(
-    LogLevel.DEBUG,
-    LogCategory.CONFIG,
-    `Using rendering config for ${collection}`,
-    config
-  );
+  log(LogLevel.DEBUG, LogCategory.CONFIG, `Using rendering config for ${collection}`, config);
 }
 
 /**
@@ -238,37 +218,18 @@ export function logBoundsProcessing(
   valid: boolean = true
 ): void {
   if (!valid) {
-    log(
-      LogLevel.WARN,
-      LogCategory.BOUNDS,
-      ` Invalid bounds detected`,
-      { original }
-    );
+    log(LogLevel.WARN, LogCategory.BOUNDS, ` Invalid bounds detected`, { original });
   } else if (clamped && JSON.stringify(original) !== JSON.stringify(clamped)) {
-    log(
-      LogLevel.INFO,
-      LogCategory.BOUNDS,
-      `Bounds clamped for safety`,
-      { original, clamped }
-    );
+    log(LogLevel.INFO, LogCategory.BOUNDS, `Bounds clamped for safety`, { original, clamped });
   } else {
-    log(
-      LogLevel.DEBUG,
-      LogCategory.BOUNDS,
-      `Bounds validated`,
-      { bounds: original }
-    );
+    log(LogLevel.DEBUG, LogCategory.BOUNDS, `Bounds validated`, { bounds: original });
   }
 }
 
 /**
  * Log error with context
  */
-export function logError(
-  operation: string,
-  error: any,
-  context?: Record<string, any>
-): void {
+export function logError(operation: string, error: any, context?: Record<string, any>): void {
   log(
     LogLevel.ERROR,
     LogCategory.ERROR,
@@ -280,16 +241,8 @@ export function logError(
 /**
  * Log warning with context
  */
-export function logWarning(
-  message: string,
-  context?: Record<string, any>
-): void {
-  log(
-    LogLevel.WARN,
-    LogCategory.ERROR,
-    ` ${message}`,
-    context
-  );
+export function logWarning(message: string, context?: Record<string, any>): void {
+  log(LogLevel.WARN, LogCategory.ERROR, ` ${message}`, context);
 }
 
 /**
@@ -299,13 +252,9 @@ export function startPerformanceTracking(operationId: string): void {
   if (!config.performanceTracking) {
     return;
   }
-  
+
   performanceMarks.set(operationId, performance.now());
-  log(
-    LogLevel.DEBUG,
-    LogCategory.PERFORMANCE,
-    `Started tracking: ${operationId}`
-  );
+  log(LogLevel.DEBUG, LogCategory.PERFORMANCE, `Started tracking: ${operationId}`);
 }
 
 /**
@@ -317,13 +266,9 @@ export function endPerformanceTracking(operationId: string): number {
   }
 
   const startTime = performanceMarks.get(operationId);
-  
+
   if (!startTime) {
-    log(
-      LogLevel.WARN,
-      LogCategory.PERFORMANCE,
-      ` No start time found for: ${operationId}`
-    );
+    log(LogLevel.WARN, LogCategory.PERFORMANCE, ` No start time found for: ${operationId}`);
     return 0;
   }
 
@@ -356,12 +301,7 @@ export function logMultiTile(message: string, data?: any): void {
 /**
  * Log tile test information
  */
-export function logTileTest(
-  zoomXY: string,
-  status: number,
-  success: boolean,
-  error?: any
-): void {
+export function logTileTest(zoomXY: string, status: number, success: boolean, error?: any): void {
   const emoji = success ? '' : '';
   log(
     success ? LogLevel.INFO : LogLevel.ERROR,
@@ -379,7 +319,7 @@ export function logDEMDetection(tileCount: number, urls?: string[]): void {
     LogLevel.INFO,
     LogCategory.MULTI_TILE,
     ` DEM (Digital Elevation Model) detected with ${tileCount} tiles for seamless coverage`,
-    urls ? { sampleUrls: urls.slice(0, 3).map(u => u.substring(0, 80)) } : undefined
+    urls ? { sampleUrls: urls.slice(0, 3).map((u) => u.substring(0, 80)) } : undefined
   );
 }
 
@@ -387,11 +327,7 @@ export function logDEMDetection(tileCount: number, urls?: string[]): void {
  * Log asset fix application
  */
 export function logAssetFix(collection: string, fixType: string): void {
-  log(
-    LogLevel.INFO,
-    LogCategory.CONFIG,
-    ` Applied asset fix for ${collection}: ${fixType}`
-  );
+  log(LogLevel.INFO, LogCategory.CONFIG, ` Applied asset fix for ${collection}: ${fixType}`);
 }
 
 /**
@@ -423,7 +359,7 @@ export function createCategoryLogger(category: LogCategory) {
 export function logTileBatch(
   operations: Array<{ itemId: string; success: boolean; error?: string }>
 ): void {
-  const successCount = operations.filter(op => op.success).length;
+  const successCount = operations.filter((op) => op.success).length;
   const errorCount = operations.length - successCount;
 
   log(
@@ -434,13 +370,9 @@ export function logTileBatch(
 
   // Log individual errors
   operations
-    .filter(op => !op.success)
-    .forEach(op => {
-      log(
-        LogLevel.ERROR,
-        LogCategory.ERROR,
-        `Failed to process ${op.itemId}: ${op.error}`
-      );
+    .filter((op) => !op.success)
+    .forEach((op) => {
+      log(LogLevel.ERROR, LogCategory.ERROR, `Failed to process ${op.itemId}: ${op.error}`);
     });
 }
 
@@ -450,29 +382,29 @@ export const LogPresets = {
   MINIMAL: (): void => {
     config.minLevel = LogLevel.ERROR;
   },
-  
+
   /** Standard logging - info and above */
   STANDARD: (): void => {
     config.minLevel = LogLevel.INFO;
   },
-  
+
   /** Verbose logging - everything including debug */
   VERBOSE: (): void => {
     config.minLevel = LogLevel.DEBUG;
   },
-  
+
   /** Disable all logging */
   SILENT: (): void => {
     config.enabled = false;
   },
-  
+
   /** Enable performance tracking only */
   PERFORMANCE_ONLY: (): void => {
     config.minLevel = LogLevel.INFO;
     setCategories([LogCategory.PERFORMANCE], true);
     setCategories(
-      Object.values(LogCategory).filter(c => c !== LogCategory.PERFORMANCE),
+      Object.values(LogCategory).filter((c) => c !== LogCategory.PERFORMANCE),
       false
     );
-  }
+  },
 };

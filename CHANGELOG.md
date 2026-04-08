@@ -10,7 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ---
 
-## [0.1.0] — 2026-04-07
+## [0.1.0] — 2026-04-08
 
 Initial open-source release — a fork of [Microsoft Earth Copilot](https://github.com/microsoft/Earth-Copilot) adapted to be Azure-independent with flexible LLM provider support.
 
@@ -24,10 +24,15 @@ Initial open-source release — a fork of [Microsoft Earth Copilot](https://gith
 - Optional API key authentication (`ENABLE_AUTH`, `API_KEY`)
 - Per-IP rate limiting (`RATE_LIMIT_LLM`, `RATE_LIMIT_SEARCH`)
 - CORS configuration via `CORS_ORIGINS` env var
-- Pre-commit hooks: ruff, black, isort (Python); Husky (TypeScript)
+- Pre-commit hooks: ruff, black, isort (Python); Husky, prettier (TypeScript)
 - `CONTRIBUTING.md`, `SECURITY.md`
 - `QUICK_DEPLOY.md` for production deployment guidance
 - MIT License with attribution to Microsoft
+- GitHub Actions CI workflow (`test-dependencies.yml`) running backend and frontend smoke tests on every PR
+- Backend pytest suite: per-package import checks (20 packages), Pydantic model validation, LLMClient configuration, FastAPI `/api/health` smoke test
+- `requirements-test.txt` pinning `pytest` and `pytest-asyncio` separately from production deps
+- Frontend Vitest smoke tests (`TerrainWorkflow.test.tsx`) covering event flow and message formatting
+- Runtime environment variable injection for frontend — config changes no longer require a container rebuild
 
 ### Security
 

@@ -17,29 +17,44 @@ interface HeaderProps {
   selectedModel?: string;
 }
 
-const Header: React.FC<HeaderProps> = ({ onReturnToLanding, onRestartSession, onModelChange, selectedModel }) => {
+const Header: React.FC<HeaderProps> = ({
+  onReturnToLanding,
+  onRestartSession,
+  onModelChange,
+  selectedModel,
+}) => {
   return (
     <div className="top-header">
       <div style={{ padding: '0', paddingLeft: '4px' }}>
-        <div className="brand" onClick={onReturnToLanding} style={{cursor:'pointer', transition:'opacity 0.2s ease'}}
-             onMouseEnter={(e) => (e.target as HTMLElement).style.opacity = '0.8'}
-             onMouseLeave={(e) => (e.target as HTMLElement).style.opacity = '1'}>
+        <div
+          className="brand"
+          onClick={onReturnToLanding}
+          style={{ cursor: 'pointer', transition: 'opacity 0.2s ease' }}
+          onMouseEnter={(e) => ((e.target as HTMLElement).style.opacity = '0.8')}
+          onMouseLeave={(e) => ((e.target as HTMLElement).style.opacity = '1')}
+        >
           <div className="brand-name">OpenGeo AI Assistant</div>
         </div>
       </div>
-      <div style={{ 
-        padding: '0', 
-        display: 'flex', 
-        justifyContent: 'flex-end', 
-        alignItems: 'center', 
-        gap: '12px',
-        position: 'absolute',
-        top: '16px',
-        right: '24px',
-        zIndex: 1100
-      }}>
+      <div
+        style={{
+          padding: '0',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+          gap: '12px',
+          position: 'absolute',
+          top: '16px',
+          right: '24px',
+          zIndex: 1100,
+        }}
+      >
         <GetStartedButton />
-        <ModelSelector onModelChange={onModelChange} selectedModel={selectedModel} apiBaseUrl={API_BASE_URL} />
+        <ModelSelector
+          onModelChange={onModelChange}
+          selectedModel={selectedModel}
+          apiBaseUrl={API_BASE_URL}
+        />
         <STACInfoButton />
         <HealthCheckInfo apiBaseUrl={API_BASE_URL} />
         {onRestartSession && <RestartButton onRestart={onRestartSession} />}

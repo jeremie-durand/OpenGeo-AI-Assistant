@@ -1,9 +1,9 @@
 /**
  * Collection Configuration Module
- * 
+ *
  * Centralized configuration for all Microsoft Planetary Computer collections.
  * Single source of truth for rendering parameters, zoom levels, and display settings.
- * 
+ *
  * Based on FEATURED_COLLECTIONS from backend hybrid_rendering_system.py (23 priority collections)
  */
 
@@ -27,11 +27,11 @@ export interface CollectionConfig {
   tileSize: number;
   opacity: number;
   renderingHints?: {
-    suppressMapLabels?: boolean;  // For DEM/elevation
-    fadeEnabled?: boolean;         // Disable fade for MODIS
-    tileLoadRadius?: number;       // Load radius (0 for MODIS, 2 for others)
-    interpolate?: boolean;         // Enable interpolation (false for thermal)
-    buffer?: number;               // Buffer size (32 reduced to prevent geometry errors)
+    suppressMapLabels?: boolean; // For DEM/elevation
+    fadeEnabled?: boolean; // Disable fade for MODIS
+    tileLoadRadius?: number; // Load radius (0 for MODIS, 2 for others)
+    interpolate?: boolean; // Enable interpolation (false for thermal)
+    buffer?: number; // Buffer size (32 reduced to prevent geometry errors)
   };
   notes?: string;
 }
@@ -81,7 +81,7 @@ const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
   'hls2-l30': {
     name: 'HLS Landsat',
     dataType: DataType.OPTICAL_REFLECTANCE,
-    minZoom: 8,  // CRITICAL: HLS mosaic tiles only exist at zoom 8+ (30m resolution)
+    minZoom: 8, // CRITICAL: HLS mosaic tiles only exist at zoom 8+ (30m resolution)
     maxZoom: 22,
     tileSize: 512,
     opacity: 0.85,
@@ -98,7 +98,7 @@ const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
   'hls2-s30': {
     name: 'HLS Sentinel-2',
     dataType: DataType.OPTICAL_REFLECTANCE,
-    minZoom: 8,  // CRITICAL: HLS mosaic tiles only exist at zoom 8+ (30m resolution)
+    minZoom: 8, // CRITICAL: HLS mosaic tiles only exist at zoom 8+ (30m resolution)
     maxZoom: 22,
     tileSize: 512,
     opacity: 0.85,
@@ -112,7 +112,7 @@ const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     notes: 'Harmonized Landsat Sentinel-2 (HLS) - Sentinel-2 component',
   },
 
-  'naip': {
+  naip: {
     name: 'NAIP',
     dataType: DataType.OPTICAL,
     minZoom: 6,
@@ -138,9 +138,9 @@ const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     minZoom: 6,
     maxZoom: 22,
     tileSize: 512,
-    opacity: 0.5,  // Lower opacity for DEM to see through to basemap
+    opacity: 0.5, // Lower opacity for DEM to see through to basemap
     renderingHints: {
-      suppressMapLabels: true,  // DEM should suppress map labels
+      suppressMapLabels: true, // DEM should suppress map labels
       fadeEnabled: true,
       tileLoadRadius: 2,
       interpolate: true,
@@ -166,7 +166,7 @@ const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
     notes: 'Copernicus Global Digital Elevation Model 90m resolution',
   },
 
-  'nasadem': {
+  nasadem: {
     name: 'NASADEM',
     dataType: DataType.ELEVATION,
     minZoom: 6,
@@ -226,14 +226,14 @@ const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
   'modis-13Q1-061': {
     name: 'MODIS NDVI 250m',
     dataType: DataType.VEGETATION,
-    minZoom: 8,   // MODIS item tiles 404 below zoom 8 (sinusoidal → WebMercator reprojection)
+    minZoom: 8, // MODIS item tiles 404 below zoom 8 (sinusoidal → WebMercator reprojection)
     maxZoom: 18,
     tileSize: 512,
     opacity: 0.85,
     renderingHints: {
       suppressMapLabels: false,
-      fadeEnabled: false,  // Disable fade for MODIS
-      tileLoadRadius: 0,   // MODIS sparse data
+      fadeEnabled: false, // Disable fade for MODIS
+      tileLoadRadius: 0, // MODIS sparse data
       interpolate: true,
       buffer: 32,
     },
@@ -317,7 +317,7 @@ const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
   'modis-14A1-061': {
     name: 'MODIS Fire Daily',
     dataType: DataType.FIRE,
-    minZoom: 4,  // FIXED: Allow tiles at zoom 4+ for state/country level views (matches backend config)
+    minZoom: 4, // FIXED: Allow tiles at zoom 4+ for state/country level views (matches backend config)
     maxZoom: 18,
     tileSize: 512,
     opacity: 0.85,
@@ -334,7 +334,7 @@ const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
   'modis-14A2-061': {
     name: 'MODIS Fire 8-Day',
     dataType: DataType.FIRE,
-    minZoom: 4,  // FIXED: Allow tiles at zoom 4+ for state/country level views (matches backend config)
+    minZoom: 4, // FIXED: Allow tiles at zoom 4+ for state/country level views (matches backend config)
     maxZoom: 18,
     tileSize: 512,
     opacity: 0.85,
@@ -382,7 +382,7 @@ const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
       suppressMapLabels: false,
       fadeEnabled: false,
       tileLoadRadius: 0,
-      interpolate: false,  // Disable interpolation for thermal data
+      interpolate: false, // Disable interpolation for thermal data
       buffer: 32,
     },
     notes: 'MODIS Daily Land Surface Temperature 1km',
@@ -428,7 +428,7 @@ const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
 
 /**
  * Get collection configuration with intelligent fallback
- * 
+ *
  * Returns specific config if available, otherwise provides sensible defaults
  * based on collection naming patterns.
  */
@@ -446,7 +446,7 @@ export function getCollectionConfig(collectionId: string): CollectionConfig {
     return {
       name: collectionId,
       dataType: DataType.VEGETATION,
-      minZoom: 10,  // All MODIS need zoom 10+ for 1km resolution tile availability
+      minZoom: 10, // All MODIS need zoom 10+ for 1km resolution tile availability
       maxZoom: 18,
       tileSize: 512,
       opacity: 0.85,
@@ -469,7 +469,7 @@ export function getCollectionConfig(collectionId: string): CollectionConfig {
       minZoom: 6,
       maxZoom: 22,
       tileSize: 512,
-      opacity: 0.5,  // Lower opacity for elevation
+      opacity: 0.5, // Lower opacity for elevation
       renderingHints: {
         suppressMapLabels: true,
         fadeEnabled: true,

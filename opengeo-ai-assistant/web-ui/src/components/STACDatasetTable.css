@@ -266,16 +266,16 @@
     width: 98%;
     max-height: 95vh;
   }
-  
+
   .description-cell {
     max-width: 350px;
     min-width: 200px;
   }
-  
+
   .stac-collections-table {
     font-size: 12px;
   }
-  
+
   .stac-collections-table th,
   .stac-collections-table td {
     padding: 8px;
@@ -287,16 +287,16 @@
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .stac-search-box {
     min-width: 100%;
   }
-  
+
   .stac-category-filter {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .stac-category-select {
     width: 100%;
   }

@@ -1,12 +1,12 @@
 /**
  * GEOINT Overlay Component for OpenGeo AI Assistant
- * 
+ *
  * This component provides visualization for geospatial intelligence analysis including:
  * - Terrain analysis (slope, aspect, hillshade)
  * - Mobility classification overlays
  * - Line-of-sight analysis visualization
  * - Elevation profile displays
- * 
+ *
  * Integrates with the main map component to render dynamic overlays based on analysis results returned from the backend.
  */
 
@@ -101,7 +101,7 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
   map,
   geointData,
   isVisible,
-  onVisibilityToggle
+  onVisibilityToggle,
 }) => {
   const [overlayLayers, setOverlayLayers] = useState<any[]>([]);
   const [activeAnalysis, setActiveAnalysis] = useState<string | null>(null);
@@ -118,7 +118,7 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
 
     console.log('Initializing GEOINT overlay:', geointData.analysis_type);
     setActiveAnalysis(geointData.analysis_type);
-    
+
     // Render appropriate visualization based on analysis type
     switch (geointData.analysis_type) {
       case 'terrain_analysis':
@@ -150,7 +150,7 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
 
   const clearOverlays = () => {
     if (map && overlayLayers.length > 0) {
-      overlayLayers.forEach(layer => {
+      overlayLayers.forEach((layer) => {
         try {
           map.layers.remove(layer);
         } catch (e) {
@@ -165,11 +165,11 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
     if (!terrainData || !map) return;
 
     console.log('Rendering terrain analysis overlay');
-    
+
     // Create terrain visualization based on selected type
     const visualizationType = selectedVisualization;
     const analysisData = terrainData[visualizationType as keyof TerrainAnalysisData];
-    
+
     if (!analysisData) {
       console.warn(`No data available for ${visualizationType}`);
       return;
@@ -185,7 +185,7 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
 
       if (terrainLayer) {
         map.layers.add(terrainLayer);
-        setOverlayLayers(prev => [...prev, terrainLayer]);
+        setOverlayLayers((prev) => [...prev, terrainLayer]);
       }
     } catch (error) {
       console.error('Error rendering terrain analysis:', error);
@@ -206,7 +206,7 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
 
       if (mobilityLayer) {
         map.layers.add(mobilityLayer);
-        setOverlayLayers(prev => [...prev, mobilityLayer]);
+        setOverlayLayers((prev) => [...prev, mobilityLayer]);
       }
     } catch (error) {
       console.error('Error rendering mobility analysis:', error);
@@ -228,7 +228,7 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
 
       if (losLine) {
         map.layers.add(losLine);
-        setOverlayLayers(prev => [...prev, losLine]);
+        setOverlayLayers((prev) => [...prev, losLine]);
       }
 
       // Add observer and target markers
@@ -237,12 +237,12 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
 
       if (observerMarker) {
         map.layers.add(observerMarker);
-        setOverlayLayers(prev => [...prev, observerMarker]);
+        setOverlayLayers((prev) => [...prev, observerMarker]);
       }
 
       if (targetMarker) {
         map.layers.add(targetMarker);
-        setOverlayLayers(prev => [...prev, targetMarker]);
+        setOverlayLayers((prev) => [...prev, targetMarker]);
       }
     } catch (error) {
       console.error('Error rendering line-of-sight:', error);
@@ -271,9 +271,9 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
           [bbox[0], bbox[3]], // NW
           [bbox[2], bbox[3]], // NE
           [bbox[2], bbox[1]], // SE
-          [bbox[0], bbox[1]]  // SW
+          [bbox[0], bbox[1]], // SW
         ],
-        opacity: 0.7
+        opacity: 0.7,
       });
 
       return imageLayer;
@@ -293,9 +293,9 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
           [bbox[0], bbox[3]], // NW
           [bbox[2], bbox[3]], // NE
           [bbox[2], bbox[1]], // SE
-          [bbox[0], bbox[1]]  // SW
+          [bbox[0], bbox[1]], // SW
         ],
-        opacity: 0.6
+        opacity: 0.6,
       });
 
       return imageLayer;
@@ -305,14 +305,15 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
     }
   };
 
-  const createLineOfSightLine = (observerPoint: number[], targetPoint: number[], isVisible: boolean) => {
+  const createLineOfSightLine = (
+    observerPoint: number[],
+    targetPoint: number[],
+    isVisible: boolean
+  ) => {
     if (!window.atlas) return null;
 
     try {
-      const lineData = new window.atlas.data.LineString([
-        observerPoint,
-        targetPoint
-      ]);
+      const lineData = new window.atlas.data.LineString([observerPoint, targetPoint]);
 
       const dataSource = new window.atlas.source.DataSource();
       dataSource.add(lineData);
@@ -320,7 +321,7 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
       const lineLayer = new window.atlas.layer.LineLayer(dataSource, undefined, {
         strokeColor: isVisible ? '#00FF00' : '#FF0000',
         strokeWidth: 3,
-        strokeDashArray: isVisible ? [] : [5, 5]
+        strokeDashArray: isVisible ? [] : [5, 5],
       });
 
       return lineLayer;
@@ -341,13 +342,13 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
       const symbolLayer = new window.atlas.layer.SymbolLayer(dataSource, undefined, {
         iconOptions: {
           image: 'pin-blue',
-          size: 1.5
+          size: 1.5,
         },
         textOptions: {
           textField: 'Observer',
           offset: [0, -2],
-          color: '#000000'
-        }
+          color: '#000000',
+        },
       });
 
       return symbolLayer;
@@ -368,13 +369,13 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
       const symbolLayer = new window.atlas.layer.SymbolLayer(dataSource, undefined, {
         iconOptions: {
           image: isVisible ? 'pin-green' : 'pin-red',
-          size: 1.5
+          size: 1.5,
         },
         textOptions: {
           textField: isVisible ? 'Target (Visible)' : 'Target (Hidden)',
           offset: [0, -2],
-          color: '#000000'
-        }
+          color: '#000000',
+        },
       });
 
       return symbolLayer;
@@ -388,23 +389,23 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
   const getTerrainColorScale = (visualizationType: string) => {
     const colorScales = {
       slope: {
-        0: '#00FF00',    // Flat - Green
-        15: '#FFFF00',   // Moderate - Yellow
-        30: '#FF8000',   // Steep - Orange
-        45: '#FF0000'    // Very steep - Red
+        0: '#00FF00', // Flat - Green
+        15: '#FFFF00', // Moderate - Yellow
+        30: '#FF8000', // Steep - Orange
+        45: '#FF0000', // Very steep - Red
       },
       aspect: {
-        0: '#FF0000',    // North - Red
-        90: '#00FF00',   // East - Green
-        180: '#0000FF',  // South - Blue
-        270: '#FFFF00'   // West - Yellow
+        0: '#FF0000', // North - Red
+        90: '#00FF00', // East - Green
+        180: '#0000FF', // South - Blue
+        270: '#FFFF00', // West - Yellow
       },
       elevation: {
-        0: '#0000FF',    // Sea level - Blue
-        500: '#00FF00',  // Low - Green
+        0: '#0000FF', // Sea level - Blue
+        500: '#00FF00', // Low - Green
         1000: '#FFFF00', // Medium - Yellow
-        2000: '#FF0000'  // High - Red
-      }
+        2000: '#FF0000', // High - Red
+      },
     };
 
     return colorScales[visualizationType as keyof typeof colorScales] || colorScales.slope;
@@ -418,7 +419,7 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
       <div className="geoint-controls" ref={overlayRef}>
         <div className="geoint-header">
           <h3>GEOINT Analysis</h3>
-          <button 
+          <button
             className="close-button"
             onClick={() => onVisibilityToggle(false)}
             title="Close GEOINT overlay"
@@ -426,16 +427,19 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
             ×
           </button>
         </div>
-        
+
         <div className="geoint-content">
           <div className="analysis-info">
-            <p><strong>Analysis Type:</strong> {geointData.analysis_type.replace('_', ' ').toUpperCase()}</p>
-            
+            <p>
+              <strong>Analysis Type:</strong>{' '}
+              {geointData.analysis_type.replace('_', ' ').toUpperCase()}
+            </p>
+
             {geointData.analysis_type === 'terrain_analysis' && (
               <div className="terrain-controls">
                 <label>Visualization:</label>
-                <select 
-                  value={selectedVisualization} 
+                <select
+                  value={selectedVisualization}
                   onChange={(e) => setSelectedVisualization(e.target.value)}
                 >
                   <option value="slope">Slope Analysis</option>
@@ -445,42 +449,56 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
                 </select>
               </div>
             )}
-            
+
             {geointData.analysis_type === 'mobility_analysis' && geointData.mobility_analysis && (
               <div className="mobility-stats">
                 <div className="stat-item">
                   <span className="go-indicator">*</span>
-                  <span>Passable: {geointData.mobility_analysis.statistics.go_percentage.toFixed(1)}%</span>
+                  <span>
+                    Passable: {geointData.mobility_analysis.statistics.go_percentage.toFixed(1)}%
+                  </span>
                 </div>
                 <div className="stat-item">
                   <span className="slow-go-indicator">*</span>
-                  <span>Slow: {geointData.mobility_analysis.statistics.slow_go_percentage.toFixed(1)}%</span>
+                  <span>
+                    Slow: {geointData.mobility_analysis.statistics.slow_go_percentage.toFixed(1)}%
+                  </span>
                 </div>
                 <div className="stat-item">
                   <span className="no-go-indicator">*</span>
-                  <span>Impassable: {geointData.mobility_analysis.statistics.no_go_percentage.toFixed(1)}%</span>
+                  <span>
+                    Impassable:{' '}
+                    {geointData.mobility_analysis.statistics.no_go_percentage.toFixed(1)}%
+                  </span>
                 </div>
               </div>
             )}
-            
+
             {geointData.analysis_type === 'line_of_sight' && geointData.line_of_sight && (
               <div className="los-info">
-                <p className={`visibility-status ${geointData.line_of_sight.is_visible ? 'visible' : 'blocked'}`}>
-                  <strong>Status:</strong> {geointData.line_of_sight.is_visible ? 'VISIBLE' : 'BLOCKED'}
+                <p
+                  className={`visibility-status ${geointData.line_of_sight.is_visible ? 'visible' : 'blocked'}`}
+                >
+                  <strong>Status:</strong>{' '}
+                  {geointData.line_of_sight.is_visible ? 'VISIBLE' : 'BLOCKED'}
                 </p>
                 {geointData.line_of_sight.visibility_angle && (
-                  <p><strong>Angle:</strong> {geointData.line_of_sight.visibility_angle.toFixed(2)}°</p>
+                  <p>
+                    <strong>Angle:</strong> {geointData.line_of_sight.visibility_angle.toFixed(2)}°
+                  </p>
                 )}
                 {geointData.line_of_sight.obstruction && (
-                  <p><strong>Obstruction:</strong> {geointData.line_of_sight.obstruction.distance_from_observer.toFixed(0)}m from observer</p>
+                  <p>
+                    <strong>Obstruction:</strong>{' '}
+                    {geointData.line_of_sight.obstruction.distance_from_observer.toFixed(0)}m from
+                    observer
+                  </p>
                 )}
               </div>
             )}
           </div>
-          
-          <div className="geoint-legend">
-            {renderGeointLegend()}
-          </div>
+
+          <div className="geoint-legend">{renderGeointLegend()}</div>
         </div>
       </div>
     );
@@ -497,38 +515,52 @@ const GeointOverlay: React.FC<GeointOverlayProps> = ({
             <div className="legend-items">
               {selectedVisualization === 'slope' && (
                 <>
-                  <div className="legend-item"><span className="color-box" style={{backgroundColor: '#00FF00'}}></span>Flat (0-15°)</div>
-                  <div className="legend-item"><span className="color-box" style={{backgroundColor: '#FFFF00'}}></span>Moderate (15-30°)</div>
-                  <div className="legend-item"><span className="color-box" style={{backgroundColor: '#FF8000'}}></span>Steep (30-45°)</div>
-                  <div className="legend-item"><span className="color-box" style={{backgroundColor: '#FF0000'}}></span>Very Steep (45°+)</div>
+                  <div className="legend-item">
+                    <span className="color-box" style={{ backgroundColor: '#00FF00' }}></span>Flat
+                    (0-15°)
+                  </div>
+                  <div className="legend-item">
+                    <span className="color-box" style={{ backgroundColor: '#FFFF00' }}></span>
+                    Moderate (15-30°)
+                  </div>
+                  <div className="legend-item">
+                    <span className="color-box" style={{ backgroundColor: '#FF8000' }}></span>Steep
+                    (30-45°)
+                  </div>
+                  <div className="legend-item">
+                    <span className="color-box" style={{ backgroundColor: '#FF0000' }}></span>Very
+                    Steep (45°+)
+                  </div>
                 </>
               )}
             </div>
           </div>
         );
-        
+
       case 'mobility_analysis':
         return (
           <div className="mobility-legend">
             <h4>MOBILITY Legend</h4>
             <div className="legend-items">
-              <div className="legend-item"><span className="color-box go-color"></span>Passable</div>
-              <div className="legend-item"><span className="color-box slow-go-color"></span>Reduced Speed</div>
-              <div className="legend-item"><span className="color-box no-go-color"></span>Impassable</div>
+              <div className="legend-item">
+                <span className="color-box go-color"></span>Passable
+              </div>
+              <div className="legend-item">
+                <span className="color-box slow-go-color"></span>Reduced Speed
+              </div>
+              <div className="legend-item">
+                <span className="color-box no-go-color"></span>Impassable
+              </div>
             </div>
           </div>
         );
-        
+
       default:
         return null;
     }
   };
 
-  return (
-    <>
-      {isVisible && renderGeointControls()}
-    </>
-  );
+  return <>{isVisible && renderGeointControls()}</>;
 };
 
 export default GeointOverlay;

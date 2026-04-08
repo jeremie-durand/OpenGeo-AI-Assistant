@@ -3,9 +3,9 @@ services:
     build:
       context: ./opengeo-ai-assistant/web-ui
       dockerfile: Dockerfile
-      args:
-        - API_KEY=${API_KEY:-}
     container_name: opengeo-ai-assistant-frontend
+    environment:
+      - API_KEY=${API_KEY:-}
     ports:
       - "3000:3000"
     depends_on:

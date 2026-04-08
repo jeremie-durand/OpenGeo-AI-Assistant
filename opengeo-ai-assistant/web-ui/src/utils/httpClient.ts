@@ -7,13 +7,13 @@ import { getApiUrl, getEnvironmentInfo, isDev } from '../config/api';
 // Create axios instance with default configuration
 const createHttpClient = (): AxiosInstance => {
   const envInfo = getEnvironmentInfo();
-  
+
   const client = axios.create({
     timeout: 30000, // 30 seconds timeout
     headers: {
       'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    }
+      Accept: 'application/json',
+    },
   });
 
   // Request interceptor
@@ -23,12 +23,12 @@ const createHttpClient = (): AxiosInstance => {
       if (config.url && config.url.startsWith('/')) {
         config.url = getApiUrl(config.url);
       }
-      
+
       // Add debug logging in development
       if (isDev()) {
         console.log(` API Request: ${config.method?.toUpperCase()} ${config.url}`);
       }
-      
+
       return config;
     },
     (error) => {
@@ -51,14 +51,14 @@ const createHttpClient = (): AxiosInstance => {
       if (isDev()) {
         console.error(' Response Error:', error.response?.status, error.response?.data);
       }
-      
+
       // Handle common errors
       if (error.response?.status === 404) {
         console.warn(' API endpoint not found:', error.config?.url);
       } else if (error.response?.status >= 500) {
         console.error(' Server error:', error.response?.data);
       }
-      
+
       return Promise.reject(error);
     }
   );
@@ -71,18 +71,21 @@ export const httpClient = createHttpClient();
 
 // Convenience methods
 export const api = {
-  get: <T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> => 
+  get: <T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> =>
     httpClient.get<T>(url, config),
-  
-  post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> => 
-    httpClient.post<T>(url, data, config),
-  
-  put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> => 
+
+  post: <T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig
+  ): Promise<AxiosResponse<T>> => httpClient.post<T>(url, data, config),
+
+  put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> =>
     httpClient.put<T>(url, data, config),
-  
-  delete: <T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> => 
+
+  delete: <T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> =>
     httpClient.delete<T>(url, config),
-  
+
   // Health check method
   healthCheck: async (): Promise<boolean> => {
     try {
@@ -92,7 +95,7 @@ export const api = {
       console.warn(' Health check failed:', error);
       return false;
     }
-  }
+  },
 };
 
 export default httpClient;

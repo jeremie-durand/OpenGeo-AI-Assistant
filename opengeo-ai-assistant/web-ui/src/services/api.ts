@@ -2,7 +2,6 @@
 // Licensed under the MIT license.
 
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
-import { getAuthToken, refreshAuthToken } from './authHelper';
 
 //  BEST PRACTICE: Runtime Configuration for Cloud Apps
 // The frontend is configured to proxy /api/* requests to the backend in production
@@ -13,11 +12,11 @@ const isDevelopment = import.meta.env.DEV;
 
 // Determine API base URL with intelligent fallback chain:
 // 1. Development: Use localhost backend
-// 2. Production with build-time env var: Use configured backend URL  
+// 2. Production with build-time env var: Use configured backend URL
 // 3. Fallback: Use current origin (works if frontend and backend are on same domain)
 const API_BASE = isDevelopment
-  ? (import.meta.env.BACKEND_URL || 'http://localhost:8000')
-  : (import.meta.env.VITE_API_BASE_URL || window.location.origin);
+  ? import.meta.env.BACKEND_URL || 'http://localhost:8000'
+  : import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
 // Only log API configuration in development mode
 if (isDevelopment) {
@@ -45,7 +44,7 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   source?: string;
-  isThinking?: boolean;  // Flag to indicate "thinking" animation
+  isThinking?: boolean; // Flag to indicate "thinking" animation
 }
 
 export interface MapContext {
@@ -60,7 +59,8 @@ export interface MapContext {
   imagery_base64?: string; // Base64 screenshot from MapView canvas
   imagery_url?: string;
   current_collection?: string;
-  tile_urls?: Array<{  // TiTiler URLs from prior STAC response for Vision Agent
+  tile_urls?: Array<{
+    // TiTiler URLs from prior STAC response for Vision Agent
     tilejson_url: string;
     item_id?: string;
     collection?: string;
@@ -68,6 +68,7 @@ export interface MapContext {
   has_satellite_data?: boolean; // Flag indicating if STAC imagery is loaded
   vision_mode?: boolean; // NEW: explicit vision analysis mode
   vision_pin?: { lat: number; lng: number } | null; // NEW: pin coordinates for vision analysis
+  stac_items?: any[]; // STAC items currently rendered on the map
 }
 
 // Debug logging utility
@@ -86,7 +87,10 @@ class ApiService {
 
   constructor() {
     try {
-      const apiKey = import.meta.env.VITE_API_KEY ?? '';
+      const apiKey =
+        (window as Window & { ENV?: { VITE_API_KEY?: string } }).ENV?.VITE_API_KEY ??
+        import.meta.env.VITE_API_KEY ??
+        '';
       this.api = axios.create({
         baseURL: API_BASE || undefined,
         timeout: 300000, // 5 minutes — extreme weather queries via chat can be slow (NetCDF sampling)
@@ -103,7 +107,7 @@ class ApiService {
             baseURL: config.baseURL,
             fullURL: `${config.baseURL}${config.url}`,
             data: config.data,
-            headers: config.headers
+            headers: config.headers,
           });
           return config;
         },
@@ -119,7 +123,7 @@ class ApiService {
             status: response.status,
             statusText: response.statusText,
             data: response.data,
-            headers: response.headers
+            headers: response.headers,
           });
           return response;
         },
@@ -128,7 +132,7 @@ class ApiService {
             status: error.response?.status,
             statusText: error.response?.statusText,
             data: error.response?.data,
-            message: error.message
+            message: error.message,
           });
           return Promise.reject(error);
         }
@@ -155,18 +159,18 @@ class ApiService {
         {
           id: 'fires-poc-data',
           title: 'Fire Events POC Data',
-          description: 'Private fire event dataset indexed for analysis and detection'
+          description: 'Private fire event dataset indexed for analysis and detection',
         },
         {
           id: 'private-satellite-imagery',
           title: 'Private Satellite Imagery',
-          description: 'Custom satellite imagery collection for internal analysis'
+          description: 'Custom satellite imagery collection for internal analysis',
         },
         {
           id: 'enterprise-geospatial-data',
           title: 'Enterprise Geospatial Data',
-          description: 'Organization-specific geospatial datasets and analytics'
-        }
+          description: 'Organization-specific geospatial datasets and analytics',
+        },
       ];
     } catch (error) {
       console.error('Failed to fetch private datasets:', error);
@@ -175,8 +179,8 @@ class ApiService {
         {
           id: 'fires-poc-data',
           title: 'Fire Events POC Data',
-          description: 'Private fire event dataset indexed for analysis and detection'
-        }
+          description: 'Private fire event dataset indexed for analysis and detection',
+        },
       ];
     }
   }
@@ -189,56 +193,56 @@ class ApiService {
         id: 'bangladesh-landcover-2001-2020',
         title: 'Bangladesh Land Cover (2001-2020)',
         description: 'MODIS-based land cover classification maps for Bangladesh',
-        type: 'veda'
+        type: 'veda',
       },
       {
         id: 'hls-l30-002-ej-fire-africa',
         title: 'HLS Fire Analysis - Africa',
         description: 'Fire analysis using HLS data for African regions',
-        type: 'veda'
+        type: 'veda',
       },
       {
         id: 'hls-l30-002-ej-fire-se-asia',
         title: 'HLS Fire Analysis - Southeast Asia',
         description: 'Fire analysis using HLS data for Southeast Asian regions',
-        type: 'veda'
+        type: 'veda',
       },
       {
         id: 'esacci-lc',
         title: 'ESA CCI Land Cover',
         description: 'ESA Climate Change Initiative Land Cover data',
-        type: 'veda'
+        type: 'veda',
       },
       {
         id: 'worldpop-population-density',
         title: 'WorldPop Population Density',
         description: 'High-resolution population density maps',
-        type: 'veda'
+        type: 'veda',
       },
       {
         id: 'world-settlement-footprint-2015',
         title: 'World Settlement Footprint 2015',
         description: 'Global human settlement layer for 2015',
-        type: 'veda'
+        type: 'veda',
       },
       {
         id: 'world-settlement-footprint-evolution-2019',
         title: 'World Settlement Footprint Evolution 2019',
         description: 'Global human settlement evolution layer for 2019',
-        type: 'veda'
+        type: 'veda',
       },
       {
         id: 'ecmwf-era5-single-levels-reanalysis',
         title: 'ERA5 Reanalysis Data',
         description: 'ECMWF ERA5 atmospheric reanalysis data',
-        type: 'veda'
+        type: 'veda',
       },
       {
         id: 'fires-esri-91',
         title: 'Esri Fire Analysis',
         description: 'Fire detection and analysis using Esri data',
-        type: 'veda'
-      }
+        type: 'veda',
+      },
     ];
   }
 
@@ -249,8 +253,8 @@ class ApiService {
         {
           id: 'PUBLIC/NIFC/FIRE_EVENTS',
           title: 'NIFC Fire Events',
-          description: 'National Interagency Fire Center active fire incidents (live API).'
-        }
+          description: 'National Interagency Fire Center active fire incidents (live API).',
+        },
       ];
     } catch (error) {
       console.error('Failed to fetch public datasets:', error);
@@ -265,18 +269,18 @@ class ApiService {
         {
           id: 'MPC/SENTINEL-2-L2A',
           title: 'Sentinel-2 Level-2A',
-          description: 'Sentinel-2 Level-2A surface reflectance and classification products'
+          description: 'Sentinel-2 Level-2A surface reflectance and classification products',
         },
         {
           id: 'MPC/LANDSAT-C2-L2',
           title: 'Landsat Collection 2 Level-2',
-          description: 'Landsat Collection 2 Level-2 surface temperature and reflectance'
+          description: 'Landsat Collection 2 Level-2 surface temperature and reflectance',
         },
         {
           id: 'MPC/DAYMET-DAILY-NA',
           title: 'Daymet Daily North America',
-          description: 'Daily weather parameters for North America'
-        }
+          description: 'Daily weather parameters for North America',
+        },
       ];
     } catch (error) {
       console.error('Failed to fetch MPC datasets:', error);
@@ -290,12 +294,14 @@ class ApiService {
       if (!response.ok) return [];
       const data = await response.json();
       if (!data.configured) return [];
-      return (data.collections || []).map((c: { id: string; title: string; description: string }) => ({
-        id: c.id,
-        title: c.title || c.id,
-        description: c.description || '',
-        type: 'private_stac',
-      }));
+      return (data.collections || []).map(
+        (c: { id: string; title: string; description: string }) => ({
+          id: c.id,
+          title: c.title || c.id,
+          description: c.description || '',
+          type: 'private_stac',
+        })
+      );
     } catch (error) {
       console.error('Failed to fetch private STAC collections:', error);
       return [];
@@ -303,16 +309,25 @@ class ApiService {
   }
 
   async sendChatMessage(
-    message: string, 
-    datasetId?: string, 
-    conversationId?: string, 
-    messageHistory?: ChatMessage[], 
-    pin?: { lat: number; lng: number } | null, 
+    message: string,
+    datasetId?: string,
+    conversationId?: string,
+    messageHistory?: ChatMessage[],
+    pin?: { lat: number; lng: number } | null,
     geointMode?: boolean,
     mapContext?: MapContext,
     selectedModel?: string
   ): Promise<any> {
-    debugLog('sendChatMessage called', { message, datasetId, conversationId, historyLength: messageHistory?.length, pin, geointMode, hasMapContext: !!mapContext, selectedModel });
+    debugLog('sendChatMessage called', {
+      message,
+      datasetId,
+      conversationId,
+      historyLength: messageHistory?.length,
+      pin,
+      geointMode,
+      hasMapContext: !!mapContext,
+      selectedModel,
+    });
 
     if (!this.api) {
       console.error('API instance is not initialized');
@@ -326,14 +341,14 @@ class ApiService {
       // Use the QueryRequest format for /query endpoint
       const requestData: any = {
         query: message,
-        model: selectedModel || 'gpt-5',  // Default to GPT-5
+        model: selectedModel || 'gpt-5', // Default to GPT-5
         preferences: {
           interface_type: 'earth_copilot',
           data_source: 'planetary_computer',
-          ...(datasetId && { dataset_id: datasetId })
+          ...(datasetId && { dataset_id: datasetId }),
         },
         include_visualization: true,
-        session_id: conversationId || 'web-session-' + Date.now()
+        session_id: conversationId || 'web-session-' + Date.now(),
       };
 
       // Include pin if present
@@ -395,14 +410,14 @@ class ApiService {
         has_screenshot: !!requestData.imagery_base64,
         collection: requestData.current_collection,
         tile_urls_count: requestData.tile_urls?.length || 0,
-        has_conversation_history: !!requestData.conversation_history
+        has_conversation_history: !!requestData.conversation_history,
       });
 
       // Include conversation history for context (needed for Chat Vision follow-ups)
       if (messageHistory && messageHistory.length > 0) {
-        requestData.conversation_history = messageHistory.map(msg => ({
+        requestData.conversation_history = messageHistory.map((msg) => ({
           role: msg.role,
-          content: msg.content
+          content: msg.content,
         }));
         debugLog('Including conversation history', `${messageHistory.length} messages`);
       }
@@ -410,7 +425,10 @@ class ApiService {
       debugLog('Making query request', { endpoint, requestData });
 
       const response = await this.api.post(endpoint, requestData);
-      debugLog('Query response received', { status: response.status, dataKeys: Object.keys(response.data || {}) });
+      debugLog('Query response received', {
+        status: response.status,
+        dataKeys: Object.keys(response.data || {}),
+      });
 
       // Return the workflow result from QueryResponse format
       // Check if response has unified structure with top-level response field
@@ -419,14 +437,13 @@ class ApiService {
           response: response.data.response,
           user_response: response.data.response,
           data: response.data.data || null,
-          ...response.data
+          ...response.data,
         };
       }
 
       // Fallback to legacy results structure
       const results = (response.data && (response.data.results ?? null)) || null;
       return results ?? response.data;
-
     } catch (error: any) {
       console.error('API service error:', error);
       if (error.response) {
@@ -440,15 +457,23 @@ class ApiService {
   }
 
   async sendEnhancedChatMessage(
-    message: string, 
-    datasetId?: string, 
-    conversationId?: string, 
-    messageHistory?: ChatMessage[], 
-    pin?: { lat: number; lng: number } | null, 
+    message: string,
+    datasetId?: string,
+    conversationId?: string,
+    messageHistory?: ChatMessage[],
+    pin?: { lat: number; lng: number } | null,
     geointMode?: boolean,
     mapContext?: MapContext
   ): Promise<any> {
-    return this.sendChatMessage(message, datasetId, conversationId, messageHistory, pin, geointMode, mapContext);
+    return this.sendChatMessage(
+      message,
+      datasetId,
+      conversationId,
+      messageHistory,
+      pin,
+      geointMode,
+      mapContext
+    );
   }
 
   async searchPrivateData(query: string, collection_id?: string): Promise<any> {
@@ -461,10 +486,10 @@ class ApiService {
 
     try {
       const endpoint = '/api/private-search';
-      
+
       const requestData = {
         query: query,
-        ...(collection_id && { collection_id: collection_id })
+        ...(collection_id && { collection_id: collection_id }),
       };
 
       debugLog('Making private search request', { endpoint, requestData });
@@ -475,7 +500,6 @@ class ApiService {
       console.log('Private search response data:', response.data);
 
       return response.data;
-
     } catch (error: any) {
       console.error('Private search API error:', error);
       if (error.response) {
@@ -490,7 +514,7 @@ class ApiService {
 
   /**
    * Terrain Agent Chat - Multi-turn conversation with memory
-   * 
+   *
    * Sends a follow-up question to the terrain analysis agent.
    * The agent maintains conversation memory per session.
    */
@@ -502,7 +526,10 @@ class ApiService {
     screenshot?: string,
     radiusKm: number = 5.0
   ): Promise<any> {
-    console.log(' API: Sending terrain chat message', { sessionId, message: message.substring(0, 50) + '...' });
+    console.log(' API: Sending terrain chat message', {
+      sessionId,
+      message: message.substring(0, 50) + '...',
+    });
 
     if (!this.api) {
       throw new Error('API service not initialized');
@@ -513,7 +540,7 @@ class ApiService {
         message,
         latitude,
         longitude,
-        radius_km: radiusKm
+        radius_km: radiusKm,
       };
 
       // Include session_id if we have one (for follow-up questions)
@@ -531,7 +558,6 @@ class ApiService {
       console.log(' Terrain chat response:', response.data);
 
       return response.data;
-
     } catch (error: any) {
       console.error(' Terrain chat API error:', error);
       throw new Error(`Terrain chat failed: ${error.response?.data?.detail || error.message}`);
@@ -569,14 +595,14 @@ class ApiService {
     latitude: number,
     longitude: number,
     screenshot?: string,
-    mapContext?: any  // Full map context with tile_urls, collection, bounds, etc.
+    mapContext?: any // Full map context with tile_urls, collection, bounds, etc.
   ): Promise<any> {
-    console.log(' API: Sending vision chat message', { 
-      sessionId, 
+    console.log(' API: Sending vision chat message', {
+      sessionId,
       message: message.substring(0, 50) + '...',
       hasMapContext: !!mapContext,
-      hasTileUrls: !!(mapContext?.tile_urls?.length),
-      collection: mapContext?.current_collection
+      hasTileUrls: !!mapContext?.tile_urls?.length,
+      collection: mapContext?.current_collection,
     });
 
     if (!this.api) {
@@ -587,11 +613,11 @@ class ApiService {
       // For the FIRST message (no session), use /api/geoint/vision which creates a session
       if (!sessionId) {
         console.log(' API: First vision message - using /api/geoint/vision to create session');
-        
+
         const requestData: any = {
           latitude,
           longitude,
-          user_query: message
+          user_query: message,
         };
 
         // Include screenshot if provided
@@ -599,7 +625,7 @@ class ApiService {
           requestData.screenshot = screenshot;
           console.log(' Including screenshot in initial vision request');
         }
-        
+
         // Include tile URLs and collection for raster analysis
         if (mapContext?.tile_urls?.length > 0) {
           requestData.tile_urls = mapContext.tile_urls;
@@ -615,9 +641,13 @@ class ApiService {
         //  NEW: Include STAC items with assets for NDVI/raster analysis
         if (mapContext?.stac_items?.length > 0) {
           requestData.stac_items = mapContext.stac_items;
-          console.log(' Including', mapContext.stac_items.length, 'STAC items with assets for raster analysis');
+          console.log(
+            ' Including',
+            mapContext.stac_items.length,
+            'STAC items with assets for raster analysis'
+          );
         }
-        
+
         //  Include analysis type hint (raster vs screenshot) to guide tool selection
         if (mapContext?.analysis_type) {
           requestData.analysis_type = mapContext.analysis_type;
@@ -626,23 +656,26 @@ class ApiService {
 
         const response = await this.api.post('/api/geoint/vision', requestData);
         console.log(' Initial vision response:', response.data);
-        
+
         // Return in a format compatible with follow-up responses
         return {
-          response: response.data?.result?.analysis || response.data?.result?.response || response.data?.analysis,
+          response:
+            response.data?.result?.analysis ||
+            response.data?.result?.response ||
+            response.data?.analysis,
           session_id: response.data?.session_id,
-          tool_calls: response.data?.result?.tools_used || []
+          tool_calls: response.data?.result?.tools_used || [],
         };
       }
 
       // For follow-up messages (with session), use /api/geoint/vision/chat
       console.log(' API: Follow-up vision message - using /api/geoint/vision/chat');
-      
+
       const requestData: any = {
         message,
         latitude,
         longitude,
-        session_id: sessionId
+        session_id: sessionId,
       };
 
       // Include screenshot if provided
@@ -650,7 +683,7 @@ class ApiService {
         requestData.screenshot = screenshot;
         console.log(' Including screenshot in vision chat request');
       }
-      
+
       // Include tile URLs and collection for raster analysis (follow-ups may need fresh context)
       if (mapContext?.tile_urls?.length > 0) {
         requestData.tile_urls = mapContext.tile_urls;
@@ -661,11 +694,18 @@ class ApiService {
       //  NEW: Include STAC items with assets for NDVI/raster analysis
       if (mapContext?.stac_items?.length > 0) {
         requestData.stac_items = mapContext.stac_items;
-        console.log(' [FOLLOW-UP] Including', mapContext.stac_items.length, 'STAC items with assets for raster analysis');
+        console.log(
+          ' [FOLLOW-UP] Including',
+          mapContext.stac_items.length,
+          'STAC items with assets for raster analysis'
+        );
       } else {
-        console.log(' [FOLLOW-UP] No STAC items in mapContext! stac_items:', mapContext?.stac_items);
+        console.log(
+          ' [FOLLOW-UP] No STAC items in mapContext! stac_items:',
+          mapContext?.stac_items
+        );
       }
-      
+
       //  Include analysis type hint (raster vs screenshot) to guide tool selection
       if (mapContext?.analysis_type) {
         requestData.analysis_type = mapContext.analysis_type;
@@ -678,9 +718,8 @@ class ApiService {
       return {
         response: response.data?.result?.response,
         session_id: response.data?.session_id,
-        tool_calls: response.data?.result?.tools_used || []
+        tool_calls: response.data?.result?.tools_used || [],
       };
-
     } catch (error: any) {
       console.error(' Vision chat API error:', error);
       throw new Error(`Vision chat failed: ${error.response?.data?.detail || error.message}`);
@@ -709,21 +748,24 @@ class ApiService {
 
   /**
    * Trigger GEOINT analysis with explicit module selection
-   * 
+   *
    * Called when user drops a pin with a selected module.
    * Routes directly to the appropriate agent (mobility, terrain, building damage).
    */
   async triggerGeointAnalysis(
-    latitude: number, 
-    longitude: number, 
+    latitude: number,
+    longitude: number,
     module: string,
-    userQuery?: string, 
+    userQuery?: string,
     userContext?: string,
     screenshot?: string,
     signal?: AbortSignal,
     extraParams?: Record<string, any>
   ): Promise<any> {
-    console.log(' API: Triggering GEOINT analysis with module:', module, 'at', { latitude, longitude });
+    console.log(' API: Triggering GEOINT analysis with module:', module, 'at', {
+      latitude,
+      longitude,
+    });
 
     if (!this.api) {
       console.error('API instance is not initialized');
@@ -733,32 +775,40 @@ class ApiService {
     try {
       // Map frontend module names to backend endpoint URLs
       const moduleEndpointMap: Record<string, string> = {
-        'vision': '/api/geoint/vision',
-        'terrain': '/api/geoint/terrain',
-        'mobility': '/api/geoint/mobility',
-        'building_damage': '/api/geoint/building-damage',
-        'extreme_weather': '/api/geoint/extreme-weather',
-        'comparison': '/api/geoint/comparison',
-        'animation': '/api/geoint/animation'
+        vision: '/api/geoint/vision',
+        terrain: '/api/geoint/terrain',
+        mobility: '/api/geoint/mobility',
+        building_damage: '/api/geoint/building-damage',
+        extreme_weather: '/api/geoint/extreme-weather',
+        comparison: '/api/geoint/comparison',
+        animation: '/api/geoint/animation',
       };
 
       const endpoint = moduleEndpointMap[module];
-      
+
       if (!endpoint) {
-        throw new Error(`Unknown GEOINT module: ${module}. Valid modules: ${Object.keys(moduleEndpointMap).join(', ')}`);
+        throw new Error(
+          `Unknown GEOINT module: ${module}. Valid modules: ${Object.keys(moduleEndpointMap).join(', ')}`
+        );
       }
-      
+
       const requestData: any = {
         latitude,
         longitude,
-        user_query: userQuery || "",
-        user_context: userContext || ""
+        user_query: userQuery || '',
+        user_context: userContext || '',
       };
 
       // Add screenshot for GEOINT modules that use vision analysis.
       // Extreme weather skips vision pre-analysis (NetCDF point sampling doesn't
       // need the map screenshot), so don't send the 500KB+ payload unnecessarily.
-      const modulesUsingScreenshot = ['vision', 'terrain', 'mobility', 'building_damage', 'comparison'];
+      const modulesUsingScreenshot = [
+        'vision',
+        'terrain',
+        'mobility',
+        'building_damage',
+        'comparison',
+      ];
       if (screenshot && modulesUsingScreenshot.includes(module)) {
         requestData.screenshot = screenshot;
         console.log(` Including screenshot in ${module} analysis request`);
@@ -773,7 +823,9 @@ class ApiService {
 
       console.log(' Making GEOINT analysis request to', endpoint, ':', {
         ...requestData,
-        screenshot: requestData.screenshot ? `<base64 data ${requestData.screenshot.length} chars>` : undefined
+        screenshot: requestData.screenshot
+          ? `<base64 data ${requestData.screenshot.length} chars>`
+          : undefined,
       });
 
       const response = await this.api.post(endpoint, requestData, {
@@ -783,7 +835,6 @@ class ApiService {
       console.log(' GEOINT analysis response received:', response.data);
 
       return response.data;
-
     } catch (error: any) {
       console.error(' GEOINT analysis API error:', error);
       if (error.response) {
@@ -797,11 +848,15 @@ class ApiService {
 
   /**
    * Trigger GEOINT Mobility Analysis (Agent 5)
-   * 
+   *
    * Called when user drops a pin with GEOINT mode enabled.
    * Performs terrain-based mobility analysis in N/S/E/W directions.
    */
-  async triggerGeointMobility(latitude: number, longitude: number, userContext?: string): Promise<any> {
+  async triggerGeointMobility(
+    latitude: number,
+    longitude: number,
+    userContext?: string
+  ): Promise<any> {
     console.log(' API: Triggering GEOINT mobility analysis at', { latitude, longitude });
 
     if (!this.api) {
@@ -811,11 +866,11 @@ class ApiService {
 
     try {
       const endpoint = '/api/geoint/mobility';
-      
+
       const requestData = {
         latitude,
         longitude,
-        user_context: userContext
+        user_context: userContext,
       };
 
       console.log(' Making GEOINT mobility request to', endpoint, ':', requestData);
@@ -824,7 +879,6 @@ class ApiService {
       console.log(' GEOINT mobility response received:', response.data);
 
       return response.data;
-
     } catch (error: any) {
       console.error(' GEOINT mobility API error:', error);
       if (error.response) {
@@ -832,29 +886,43 @@ class ApiService {
         console.error('Error response data:', error.response.data);
       }
 
-      throw new Error(`GEOINT mobility analysis failed: ${error.response?.data?.detail || error.message}`);
+      throw new Error(
+        `GEOINT mobility analysis failed: ${error.response?.data?.detail || error.message}`
+      );
     }
   }
-
 }
 
 export const apiService = new ApiService();
 
 // Export standalone functions for convenience
 export async function triggerGeointAnalysis(
-  latitude: number, 
-  longitude: number, 
+  latitude: number,
+  longitude: number,
   module: string,
-  userQuery?: string, 
+  userQuery?: string,
   userContext?: string,
   screenshot?: string,
   signal?: AbortSignal,
   extraParams?: Record<string, any>
 ): Promise<any> {
-  return apiService.triggerGeointAnalysis(latitude, longitude, module, userQuery, userContext, screenshot, signal, extraParams);
+  return apiService.triggerGeointAnalysis(
+    latitude,
+    longitude,
+    module,
+    userQuery,
+    userContext,
+    screenshot,
+    signal,
+    extraParams
+  );
 }
 
-export async function triggerGeointMobility(latitude: number, longitude: number, userContext?: string): Promise<any> {
+export async function triggerGeointMobility(
+  latitude: number,
+  longitude: number,
+  userContext?: string
+): Promise<any> {
   return apiService.triggerGeointMobility(latitude, longitude, userContext);
 }
 
@@ -866,7 +934,14 @@ export async function sendTerrainChatMessage(
   screenshot?: string,
   radiusKm: number = 5.0
 ): Promise<any> {
-  return apiService.sendTerrainChatMessage(sessionId, message, latitude, longitude, screenshot, radiusKm);
+  return apiService.sendTerrainChatMessage(
+    sessionId,
+    message,
+    latitude,
+    longitude,
+    screenshot,
+    radiusKm
+  );
 }
 
 export async function clearTerrainSession(sessionId: string): Promise<boolean> {
@@ -879,9 +954,16 @@ export async function sendVisionChatMessage(
   latitude: number,
   longitude: number,
   screenshot?: string,
-  mapContext?: any  // Full map context with tile_urls, collection, bounds
+  mapContext?: any // Full map context with tile_urls, collection, bounds
 ): Promise<any> {
-  return apiService.sendVisionChatMessage(sessionId, message, latitude, longitude, screenshot, mapContext);
+  return apiService.sendVisionChatMessage(
+    sessionId,
+    message,
+    latitude,
+    longitude,
+    screenshot,
+    mapContext
+  );
 }
 
 export async function clearVisionSession(sessionId: string): Promise<boolean> {

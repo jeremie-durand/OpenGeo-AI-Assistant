@@ -23,8 +23,8 @@ const DEFAULT_MODELS: ModelOption[] = [
     id: 'unknown',
     name: 'Loading...',
     isDefault: true,
-    isAvailable: false
-  }
+    isAvailable: false,
+  },
 ];
 
 const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, apiBaseUrl = '' }) => {
@@ -41,7 +41,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, apiBaseUrl
         const data = await response.json();
         const llmInfo = data.checks?.llm_client || data.connectivity_tests?.llm_client;
         const llmStatus = llmInfo?.status;
-        const isLlmOk = ['connected', 'configured', 'healthy', 'ok'].includes(llmStatus?.toLowerCase() || '');
+        const isLlmOk = ['connected', 'configured', 'healthy', 'ok'].includes(
+          llmStatus?.toLowerCase() || ''
+        );
 
         if (isLlmOk && llmInfo?.model) {
           const modelId = llmInfo.model as string;
@@ -51,7 +53,12 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, apiBaseUrl
             ? `${provider.charAt(0).toUpperCase() + provider.slice(1)} / ${modelId}`
             : modelId;
 
-          const realModel: ModelOption = { id: modelId, name: displayName, isDefault: true, isAvailable: true };
+          const realModel: ModelOption = {
+            id: modelId,
+            name: displayName,
+            isDefault: true,
+            isAvailable: true,
+          };
           setModels([realModel]);
           setCurrentModel(modelId);
           onModelChange?.(modelId);
@@ -81,9 +88,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, apiBaseUrl
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-
   const handleModelSelect = (modelId: string) => {
-    const model = models.find(m => m.id === modelId);
+    const model = models.find((m) => m.id === modelId);
     // Only allow selecting available models
     if (model?.isAvailable) {
       setCurrentModel(modelId);
@@ -92,11 +98,11 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, apiBaseUrl
     }
   };
 
-  const currentModelInfo = models.find(m => m.id === currentModel);
+  const currentModelInfo = models.find((m) => m.id === currentModel);
 
   return (
     <div className="model-selector" ref={dropdownRef}>
-      <div 
+      <div
         className="model-selector-button"
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
@@ -105,7 +111,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, apiBaseUrl
       >
         <span className="model-selector-label">Models</span>
       </div>
-      
+
       {isOpen && (
         <div className="model-dropdown">
           <ul className="model-list" role="listbox">
@@ -120,15 +126,15 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, apiBaseUrl
                 style={{ opacity: model.isAvailable ? 1 : 0.5 }}
               >
                 <span className="model-option-name">{model.name}</span>
-                <span 
+                <span
                   className="model-availability-dot"
-                  style={{ 
+                  style={{
                     backgroundColor: model.isAvailable ? '#4CAF50' : '#F44336',
                     width: '6px',
                     height: '6px',
                     borderRadius: '50%',
                     marginLeft: '8px',
-                    display: 'inline-block'
+                    display: 'inline-block',
                   }}
                   title={model.isAvailable ? 'Available' : 'Not Deployed'}
                 />

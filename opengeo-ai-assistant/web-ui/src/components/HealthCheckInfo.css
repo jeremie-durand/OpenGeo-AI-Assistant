@@ -170,7 +170,7 @@
 }
 
 .health-status-item.error {
-  color: #F44336;
+  color: #f44336;
   font-weight: 500;
 }
 
@@ -190,15 +190,15 @@
 }
 
 .health-value.success {
-  color: #4CAF50;
+  color: #4caf50;
 }
 
 .health-value.error {
-  color: #F44336;
+  color: #f44336;
 }
 
 .health-value.warning {
-  color: #FF9800;
+  color: #ff9800;
 }
 
 /* Responsive design */

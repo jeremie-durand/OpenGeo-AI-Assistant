@@ -9,7 +9,13 @@ import ChatPanel from './ChatPanel';
 import MapPanel from './MapPanel';
 
 export type CollectionLite = { id: string; title: string };
-export type CollectionInfo = { id: string; title: string; description?: string; license?: string; extent_bbox?: number[] };
+export type CollectionInfo = {
+  id: string;
+  title: string;
+  description?: string;
+  license?: string;
+  extent_bbox?: number[];
+};
 
 function useCollections() {
   return useQuery({
@@ -40,10 +46,7 @@ export default function App() {
       <MapPanel geojson={geojson} selected={selected} />
       <div className="panel right">
         <h2 className="h2">OpenGeo AI Assistant</h2>
-        <ChatPanel
-          selected={selected}
-          onGeojson={(g) => setGeojson(g)}
-        />
+        <ChatPanel selected={selected} onGeojson={(g) => setGeojson(g)} />
       </div>
     </div>
   );

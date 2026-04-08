@@ -22,7 +22,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const queryParam = urlParams.get('query');
-    
+
     if (queryParam) {
       console.log('[LINK] URL query parameter detected:', queryParam);
       // Auto-enter the app with the query from URL
@@ -52,7 +52,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
     const handleGlobalClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       // If user clicked the Get Started button or the modal opened, hide the tooltip
-      if (target.closest('.get-started-button') || document.querySelector('.get-started-modal-overlay')) {
+      if (
+        target.closest('.get-started-button') ||
+        document.querySelector('.get-started-modal-overlay')
+      ) {
         setIsPopupVisible(false);
         setShowWelcomePopup(false);
       }
@@ -91,11 +94,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
       <div className="landing-bg" />
       <div className="landing-content">
         <div className="landing-top-left">
-          <div className="landing-title" 
-               style={{cursor:'pointer', transition:'opacity 0.2s ease'}} 
-               onClick={handleLogoClick}
-               onMouseEnter={(e) => (e.target as HTMLElement).style.opacity = '0.8'}
-               onMouseLeave={(e) => (e.target as HTMLElement).style.opacity = '1'}>
+          <div
+            className="landing-title"
+            style={{ cursor: 'pointer', transition: 'opacity 0.2s ease' }}
+            onClick={handleLogoClick}
+            onMouseEnter={(e) => ((e.target as HTMLElement).style.opacity = '0.8')}
+            onMouseLeave={(e) => ((e.target as HTMLElement).style.opacity = '1')}
+          >
             <span>OpenGeo AI Assistant</span>
           </div>
         </div>
@@ -108,12 +113,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
         </div>
         <div className="landing-center">
           <div className="landing-prompt-box">
-            <div className="landing-prompt">
-              What would you like to search?
-            </div>
+            <div className="landing-prompt">What would you like to search?</div>
           </div>
           <form onSubmit={handleSubmit} className="search-form">
-            <div className="search-input-container" style={{ display: 'flex', gap: '6px', width: '100%', maxWidth: '900px', margin: '0 auto' }}>
+            <div
+              className="search-input-container"
+              style={{
+                display: 'flex',
+                gap: '6px',
+                width: '100%',
+                maxWidth: '900px',
+                margin: '0 auto',
+              }}
+            >
               <input
                 type="text"
                 value={query}
@@ -127,11 +139,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                   fontSize: '16px',
                   border: '1px solid #d1d5db',
                   borderRadius: '4px',
-                  outline: 'none'
+                  outline: 'none',
                 }}
               />
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="search-button"
                 style={{
                   padding: '12px 32px',
@@ -145,15 +157,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                   transition: 'all 0.2s ease',
                   boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
                   whiteSpace: 'nowrap',
-                  flexShrink: 0
+                  flexShrink: 0,
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)';
+                  e.currentTarget.style.background =
+                    'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)';
                   e.currentTarget.style.transform = 'translateY(-2px)';
                   e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%)';
+                  e.currentTarget.style.background =
+                    'linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%)';
                   e.currentTarget.style.transform = 'translateY(0)';
                   e.currentTarget.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.3)';
                 }}
@@ -163,12 +177,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
             </div>
           </form>
         </div>
-        <div style={{height: 40}}></div>
+        <div style={{ height: 40 }}></div>
       </div>
 
       {/* Welcome Popup with Assistant Icon */}
       {showWelcomePopup && (
-        <div 
+        <div
           className="welcome-popup-container"
           style={{
             position: 'fixed',
@@ -178,11 +192,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-end',
-            gap: '12px'
+            gap: '12px',
           }}
         >
           {/* Tooltip pointing to Get Started */}
-          <div 
+          <div
             className={`welcome-tooltip ${isPopupVisible ? 'visible' : ''}`}
             style={{
               background: 'rgba(30, 58, 95, 0.15)',
@@ -194,13 +208,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
               maxWidth: '300px',
               position: 'relative',
               opacity: isPopupVisible ? 1 : 0,
-              transform: isPopupVisible ? 'translateY(0) scale(1)' : 'translateY(-10px) scale(0.95)',
+              transform: isPopupVisible
+                ? 'translateY(0) scale(1)'
+                : 'translateY(-10px) scale(0.95)',
               transition: 'all 0.3s ease',
               pointerEvents: isPopupVisible ? 'auto' : 'none',
-              border: '1px solid rgba(96, 165, 250, 0.2)'
+              border: '1px solid rgba(96, 165, 250, 0.2)',
             }}
           >
-            <button 
+            <button
               onClick={handleDismissPopup}
               style={{
                 position: 'absolute',
@@ -212,26 +228,30 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                 fontSize: '16px',
                 cursor: 'pointer',
                 padding: '4px',
-                lineHeight: 1
+                lineHeight: 1,
               }}
               title="Dismiss"
             >
               ×
             </button>
-            <div style={{ marginBottom: '10px', fontSize: '14px', fontWeight: 600, color: '#1e3a5f' }}>
+            <div
+              style={{ marginBottom: '10px', fontSize: '14px', fontWeight: 600, color: '#1e3a5f' }}
+            >
               Welcome to OpenGeo AI Assistant!
             </div>
             <div style={{ fontSize: '12px', lineHeight: 1.5, color: 'rgba(30, 58, 95, 0.8)' }}>
               To get started, try the example queries in the{' '}
-              <span 
-                style={{ 
-                  color: '#1e40af', 
+              <span
+                style={{
+                  color: '#1e40af',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  textDecoration: 'underline'
+                  textDecoration: 'underline',
                 }}
                 onClick={() => {
-                  const getStartedBtn = document.querySelector('.get-started-button') as HTMLElement;
+                  const getStartedBtn = document.querySelector(
+                    '.get-started-button'
+                  ) as HTMLElement;
                   if (getStartedBtn) {
                     getStartedBtn.click();
                     handleDismissPopup();
@@ -243,7 +263,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
               button above.
             </div>
             {/* Arrow pointing up toward Get Started button */}
-            <div 
+            <div
               style={{
                 position: 'absolute',
                 top: '-8px',
@@ -252,7 +272,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                 height: 0,
                 borderLeft: '8px solid transparent',
                 borderRight: '8px solid transparent',
-                borderBottom: '8px solid rgba(30, 58, 95, 0.15)'
+                borderBottom: '8px solid rgba(30, 58, 95, 0.15)',
               }}
             />
           </div>
@@ -277,7 +297,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           cursor: 'pointer',
           boxShadow: '0 4px 20px rgba(59, 130, 246, 0.5)',
           transition: 'all 0.3s ease',
-          border: '3px solid rgba(255, 255, 255, 0.2)'
+          border: '3px solid rgba(255, 255, 255, 0.2)',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = 'scale(1.1)';
@@ -289,14 +309,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
         }}
         title="Open Map"
       >
-        <svg 
-          width="28" 
-          height="28" 
-          viewBox="0 0 24 24" 
-          fill="none" 
-          stroke="white" 
-          strokeWidth="2" 
-          strokeLinecap="round" 
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="white"
+          strokeWidth="2"
+          strokeLinecap="round"
           strokeLinejoin="round"
         >
           <circle cx="12" cy="12" r="10" />

@@ -20,20 +20,35 @@ interface MainAppProps {
   selectedModel?: string;
 }
 
-const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnToLanding, onRestartSession, geointMode, onGeointToggle, selectedModel }) => {
+const MainApp: React.FC<MainAppProps> = ({
+  appState,
+  onDatasetSelect,
+  onReturnToLanding,
+  onRestartSession,
+  geointMode,
+  onGeointToggle,
+  selectedModel,
+}) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [lastChatResponse, setLastChatResponse] = useState<any>(null);
   const [chatPanelWidth, setChatPanelWidth] = useState(420);
   const [privateSearchTrigger, setPrivateSearchTrigger] = useState<any>(null);
   const [currentPin, setCurrentPin] = useState<{ lat: number; lng: number } | null>(null);
   const [mobilityAnalysisResult, setMobilityAnalysisResult] = useState<any>(null); // New state for mobility results
-  const [mobilityPinCoords, setMobilityPinCoords] = useState<{ pinA: { lat: number; lng: number }; pinB: { lat: number; lng: number } } | null>(null); // Pin A/B coordinates for mobility
+  const [mobilityPinCoords, setMobilityPinCoords] = useState<{
+    pinA: { lat: number; lng: number };
+    pinB: { lat: number; lng: number };
+  } | null>(null); // Pin A/B coordinates for mobility
   const [selectedModule, setSelectedModule] = useState<string | null>(null); // Selected GEOINT module
   const [mapContext, setMapContext] = useState<any>(null); // Map context for Chat Vision
   const [systemMessage, setSystemMessage] = useState<string | null>(null); // System messages for workflow
   const [comparisonUserQuery, setComparisonUserQuery] = useState<string | null>(null); // User's comparison query
   const [awaitingComparisonQuery, setAwaitingComparisonQuery] = useState(false); // Flag to intercept next message
-  const [terrainSession, setTerrainSession] = useState<{ sessionId: string | null; lat: number; lng: number } | null>(null); // Terrain session for multi-turn chat
+  const [terrainSession, setTerrainSession] = useState<{
+    sessionId: string | null;
+    lat: number;
+    lng: number;
+  } | null>(null); // Terrain session for multi-turn chat
   const [comparisonResult, setComparisonResult] = useState<any>(null); // Comparison analysis result (before/after data)
 
   // Handle comparison result from Chat component
@@ -52,7 +67,7 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
   const handleModuleSelected = (module: string | null) => {
     console.log('MainApp: Module changed:', module);
     setSelectedModule(module);
-    
+
     // DESELECTION: If module is null, reset to regular chat mode
     if (module === null) {
       console.log('[SYNC] MainApp: Module deselected - resetting to regular chat mode');
@@ -66,27 +81,30 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
       clearTerrainSession();
       return;
     }
-    
+
     // SELECTION: Enable GEOINT MODE when ANY module is selected
     console.log('[MEDAL] MainApp: GEOINT MODE automatically enabled for module:', module);
     onGeointToggle(true);
-    
+
     // Set appropriate message based on module
     let message = '';
     if (module === 'terrain') {
-      message = 'Please click on the map to drop a pin on the location you want to perform terrain analysis.';
+      message =
+        'Please click on the map to drop a pin on the location you want to perform terrain analysis.';
     } else if (module === 'mobility') {
       message = 'Please click on the map to drop a pin for mobility analysis.';
     } else if (module === 'building_damage') {
-      message = 'Please ensure you are zoomed in and you drop a pin over the building to trigger the analysis.';
+      message =
+        'Please ensure you are zoomed in and you drop a pin over the building to trigger the analysis.';
     } else if (module === 'comparison') {
-      message = 'Type your comparison query in the chat — include a location, two time periods, and optionally a collection (e.g., Sentinel-2, MODIS fire).';
+      message =
+        'Type your comparison query in the chat — include a location, two time periods, and optionally a collection (e.g., Sentinel-2, MODIS fire).';
     } else if (module === 'timeseries') {
       message = 'Please click on the map to drop a pin for time series animation.';
     } else if (module === 'vision') {
       message = 'Please click on the map to drop a pin for vision analysis.';
     }
-    
+
     setSystemMessage(message);
   };
 
@@ -95,25 +113,28 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
     console.log('MainApp: Pin changed:', pin);
     setCurrentPin(pin);
   };
-  
+
   // Handle map context changes from MapView (for Chat Vision)
   // Wrapped in useCallback to prevent infinite loop in MapView's useEffect
   const handleMapContextChange = useCallback((context: any) => {
     setMapContext(context); // Remove noisy log
   }, []);
-  
+
   // Handle terrain session changes from MapView (for multi-turn terrain chat)
-  const handleTerrainSessionChange = useCallback((session: { sessionId: string | null; lat: number; lng: number } | null) => {
-    console.log('MainApp: Terrain session changed:', session);
-    setTerrainSession(session);
-  }, []);
-  
+  const handleTerrainSessionChange = useCallback(
+    (session: { sessionId: string | null; lat: number; lng: number } | null) => {
+      console.log('MainApp: Terrain session changed:', session);
+      setTerrainSession(session);
+    },
+    []
+  );
+
   // Clear terrain session (called when exiting terrain mode)
   const clearTerrainSession = useCallback(() => {
     console.log('[DEL] MainApp: Clearing terrain session');
     setTerrainSession(null);
   }, []);
-  
+
   // Clear ALL GEOINT sessions (called when starting a new STAC search)
   const clearAllGeointSessions = useCallback(() => {
     console.log('[DEL] MainApp: Clearing ALL GEOINT sessions for new STAC search');
@@ -132,10 +153,12 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
     setAwaitingComparisonQuery(false);
     setComparisonResult(null);
   }, [onGeointToggle]);
-  
+
   // Listen for STAC query events from GetStartedButton (clears all sessions)
   useEffect(() => {
-    const handleStacQueryEvent = (event: CustomEvent<{ query: string; clearSessions: boolean }>) => {
+    const handleStacQueryEvent = (
+      event: CustomEvent<{ query: string; clearSessions: boolean }>
+    ) => {
       if (event.detail.clearSessions) {
         console.log('[SYNC] MainApp: Received STAC query event - clearing all GEOINT sessions');
         clearAllGeointSessions();
@@ -153,34 +176,44 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
     };
 
     window.addEventListener('earthcopilot-stac-query' as any, handleStacQueryEvent as any);
-    window.addEventListener('earthcopilot-comparison-query' as any, handleComparisonQueryEvent as any);
+    window.addEventListener(
+      'earthcopilot-comparison-query' as any,
+      handleComparisonQueryEvent as any
+    );
     return () => {
       window.removeEventListener('earthcopilot-stac-query' as any, handleStacQueryEvent as any);
-      window.removeEventListener('earthcopilot-comparison-query' as any, handleComparisonQueryEvent as any);
+      window.removeEventListener(
+        'earthcopilot-comparison-query' as any,
+        handleComparisonQueryEvent as any
+      );
     };
   }, [clearAllGeointSessions]);
-  
+
   // Handle mobility analysis result (when pin is dropped and analysis completes)
   const handleMobilityAnalysisResult = (result: any) => {
     console.log('MainApp: Geoint analysis event received', result);
-    
+
     // Extract selected module if provided
     if (result.selectedModule) {
       setSelectedModule(result.selectedModule);
     }
-    
+
     // Check if comparison module is asking for user query
-    if (result.type === 'assistant' && result.message && result.message.includes('Comparison Analysis')) {
+    if (
+      result.type === 'assistant' &&
+      result.message &&
+      result.message.includes('Comparison Analysis')
+    ) {
       console.log('MainApp: Comparison module activated - awaiting user query');
       setAwaitingComparisonQuery(true);
     }
-    
+
     if (result.type === 'pin_dropped') {
       // Pin was dropped - show the notification message
-      setMobilityAnalysisResult({ 
-        type: 'pin_dropped', 
+      setMobilityAnalysisResult({
+        type: 'pin_dropped',
         message: result.message,
-        coordinates: result.coordinates 
+        coordinates: result.coordinates,
       });
     } else if (result.type === 'complete') {
       // Analysis completed
@@ -213,7 +246,7 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
       // Mobility: both pins placed, waiting for user question
       setMobilityPinCoords({
         pinA: result.coordinates,
-        pinB: result.coordinatesB
+        pinB: result.coordinatesB,
       });
       setMobilityAnalysisResult({ type: 'info', message: result.message });
       console.log('[CAR] MainApp: Mobility pins placed - awaiting user question in chat');
@@ -234,7 +267,7 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
   // Handle user message submission (for comparison query interception)
   const handleUserMessage = (message: string) => {
     console.log('[MSG] MainApp: User message:', message);
-    
+
     // If comparison module is selected OR awaiting comparison query,
     // always route through MapView's comparisonUserQuery flow.
     // This ensures the same pipeline (MapView -> /api/geoint/comparison -> comparisonState)
@@ -245,7 +278,7 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
       setAwaitingComparisonQuery(false);
       return true; // Indicate message was intercepted
     }
-    
+
     return false; // Message not intercepted, proceed normally
   };
 
@@ -292,7 +325,11 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
     staleTime: 60000,
   });
 
-  const { data: stacApiCollections = [], isLoading: loadingStacApi, refetch: refetchStacCollections } = useQuery({
+  const {
+    data: stacApiCollections = [],
+    isLoading: loadingStacApi,
+    refetch: refetchStacCollections,
+  } = useQuery({
     queryKey: ['stacApiCollections'],
     queryFn: () => apiService.getStacApiCollections(),
     initialData: [],
@@ -325,26 +362,32 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
 
   const handlePrivateSearch = (query: string, collection?: Dataset) => {
     console.log('MainApp: Private search initiated:', { query, collection });
-    
+
     // Format the query for private data search
     let searchQuery = query;
     if (collection) {
       searchQuery = `Search ${collection.title}: ${query}`;
     }
-    
+
     // Trigger private search in chat component
     setPrivateSearchTrigger({
       isPrivateQuery: true,
       query: searchQuery,
       collection: collection,
       source: 'veda_ai_search',
-      timestamp: Date.now() // Ensure it's unique to trigger useEffect
+      timestamp: Date.now(), // Ensure it's unique to trigger useEffect
     });
   };
 
-  const handlePCSearch = async (params: { collection: string; location: string; datetime?: string; datetime_start?: string; datetime_end?: string }) => {
+  const handlePCSearch = async (params: {
+    collection: string;
+    location: string;
+    datetime?: string;
+    datetime_start?: string;
+    datetime_end?: string;
+  }) => {
     console.log('MainApp: PC Structured Search initiated:', params);
-    
+
     // Trigger structured search via Chat component
     // The Chat component will receive this and call the /api/structured-search endpoint
     setPrivateSearchTrigger({
@@ -353,7 +396,7 @@ const MainApp: React.FC<MainAppProps> = ({ appState, onDatasetSelect, onReturnTo
       pcSearchParams: params,
       query: `Planetary Computer: ${params.collection} for ${params.location}`,
       source: 'pc_structured_search',
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   };
 

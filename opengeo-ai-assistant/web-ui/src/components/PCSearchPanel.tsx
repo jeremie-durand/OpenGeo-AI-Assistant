@@ -55,7 +55,7 @@ const PCSearchPanel: React.FC<PCSearchPanelProps> = ({ onSearch }) => {
   // Load datasets from unified rendering config
   useEffect(() => {
     authenticatedFetch(`${API_BASE_URL}/pc_rendering_config.json`)
-      .then(response => response.json())
+      .then((response) => response.json())
       .then((config: RenderingConfig) => {
         // Convert collections object to array
         const collectionsArray = Object.values(config.collections);
@@ -65,7 +65,7 @@ const PCSearchPanel: React.FC<PCSearchPanelProps> = ({ onSearch }) => {
           setSelectedCollection(collectionsArray[0].collection_id);
         }
       })
-      .catch(error => {
+      .catch((error) => {
         console.error('Failed to load PC rendering config:', error);
       });
   }, []);
@@ -103,14 +103,17 @@ const PCSearchPanel: React.FC<PCSearchPanelProps> = ({ onSearch }) => {
   };
 
   // Group datasets by category
-  const groupedDatasets = datasets.reduce((acc, dataset) => {
-    const category = dataset.category || 'Other';
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(dataset);
-    return acc;
-  }, {} as Record<string, CollectionData[]>);
+  const groupedDatasets = datasets.reduce(
+    (acc, dataset) => {
+      const category = dataset.category || 'Other';
+      if (!acc[category]) {
+        acc[category] = [];
+      }
+      acc[category].push(dataset);
+      return acc;
+    },
+    {} as Record<string, CollectionData[]>
+  );
 
   return (
     <div className="pc-search-panel">
@@ -134,10 +137,11 @@ const PCSearchPanel: React.FC<PCSearchPanelProps> = ({ onSearch }) => {
               <optgroup key={category} label={category}>
                 {categoryDatasets.map((dataset) => {
                   const desc = dataset.metadata?.description || 'No description';
-                  const shortDesc = typeof desc === 'string' && desc.length > 60 
-                    ? desc.substring(0, 60) + '...' 
-                    : desc;
-                  
+                  const shortDesc =
+                    typeof desc === 'string' && desc.length > 60
+                      ? desc.substring(0, 60) + '...'
+                      : desc;
+
                   return (
                     <option key={dataset.collection_id} value={dataset.collection_id}>
                       {dataset.collection_id} - {shortDesc}

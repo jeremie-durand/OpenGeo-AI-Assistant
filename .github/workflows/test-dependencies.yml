@@ -1,0 +1,63 @@
+name: Smoke Tests
+
+on:
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  smoke-test:
+    name: Backend smoke tests
+    runs-on: ubuntu-latest
+    env:
+      LLM_PROVIDER: openai
+      LLM_API_KEY: test-key-not-real
+      LLM_MODEL: gpt-4
+      BACKEND_URL: http://localhost:8000
+      ENABLE_AUTH: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GDAL system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends gdal-bin libgdal-dev
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            opengeo-ai-assistant/requirements.txt
+            opengeo-ai-assistant/requirements-test.txt
+
+      - name: Install dependencies
+        working-directory: opengeo-ai-assistant
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run smoke tests
+        working-directory: opengeo-ai-assistant/container-app
+        run: pytest tests/ -v --tb=short -q
+
+  ui-test:
+    name: Frontend smoke tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: opengeo-ai-assistant/web-ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: opengeo-ai-assistant/web-ui
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: opengeo-ai-assistant/web-ui
+        run: npm run test:run

@@ -26,7 +26,7 @@ function App() {
     selectedDataset: null,
     chatMode: false,
     initialQuery: undefined,
-    sessionKey: 1
+    sessionKey: 1,
   });
 
   const [geointMode, setGeointMode] = useState<boolean>(false);
@@ -42,35 +42,41 @@ function App() {
   };
 
   const handleEnterApp = (target: string, query?: string) => {
-    setAppState(prev => ({ 
-      ...prev, 
-      entered: true, 
+    setAppState((prev) => ({
+      ...prev,
+      entered: true,
       entryTarget: target,
       initialQuery: query,
-      chatMode: !!query // Enable chat mode if there's a query
+      chatMode: !!query, // Enable chat mode if there's a query
     }));
   };
 
   const handleReturnToLanding = () => {
-    setAppState({ entered: false, entryTarget: null, selectedDataset: null, chatMode: false, initialQuery: undefined });
+    setAppState({
+      entered: false,
+      entryTarget: null,
+      selectedDataset: null,
+      chatMode: false,
+      initialQuery: undefined,
+    });
   };
 
   const handleRestartSession = () => {
     // Clear chat and dataset selection but stay in the app
     // Force chat component to re-render by updating session key
-    setAppState(prev => ({ 
-      ...prev, 
-      selectedDataset: null, 
-      chatMode: false, 
+    setAppState((prev) => ({
+      ...prev,
+      selectedDataset: null,
+      chatMode: false,
       initialQuery: undefined,
-      sessionKey: Date.now() // Add session key to force re-render
+      sessionKey: Date.now(), // Add session key to force re-render
     }));
     //  Also reset GEOINT mode to simulate fresh page load
     setGeointMode(false);
   };
 
   const handleDatasetSelect = (dataset: any) => {
-    setAppState(prev => ({ ...prev, selectedDataset: dataset, chatMode: true }));
+    setAppState((prev) => ({ ...prev, selectedDataset: dataset, chatMode: true }));
   };
 
   return (
@@ -81,13 +87,13 @@ function App() {
           <LandingPage onEnter={handleEnterApp} />
         ) : (
           <>
-            <Header 
+            <Header
               onReturnToLanding={handleReturnToLanding}
               onRestartSession={handleRestartSession}
               onModelChange={handleModelChange}
               selectedModel={selectedModel}
             />
-            <MainApp 
+            <MainApp
               appState={appState}
               onDatasetSelect={handleDatasetSelect}
               onReturnToLanding={handleReturnToLanding}
