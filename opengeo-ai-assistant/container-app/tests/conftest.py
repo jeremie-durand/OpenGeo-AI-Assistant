@@ -1,4 +1,5 @@
 """Shared fixtures: env patching and LLM singleton reset."""
+
 import sys
 from pathlib import Path
 
