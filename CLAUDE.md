@@ -179,6 +179,12 @@ docker compose run --rm -u root \
   sh -c "pip install --no-cache-dir pytest pytest-asyncio && pytest tests/ -v --tb=short"
 ```
 
+Run frontend tests (from repo root):
+
+```bash
+cd opengeo-ai-assistant/web-ui && npm run test:run
+```
+
 ### Branching strategy
 
 - `develop` — integration branch (PRs target here)
