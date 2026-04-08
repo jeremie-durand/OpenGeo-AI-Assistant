@@ -22,7 +22,7 @@ docker compose up --build
 curl http://localhost:8000/api/health
 ```
 
-### Testing
+### pre-commit checks
 
 ```bash
 # Run all Python checks manually
@@ -42,6 +42,23 @@ npx prettier --write .
 
 cd opengeo-ai-assistant/web-ui
 npm run build
+```
+
+### Testing
+
+```bash
+# Run pytest inside the backend container (from repo root)
+
+docker compose run --rm -u root \
+  -v "$(pwd)/opengeo-ai-assistant/container-app/tests:/app/tests:ro" \
+  backend \
+  sh -c "pip install --no-cache-dir pytest pytest-asyncio && pytest tests/ -v --tb=short"
+```
+
+```bash
+#Run frontend tests (from repo root)
+
+cd opengeo-ai-assistant/web-ui && npm run test:run
 ```
 
 ## Architecture
@@ -167,23 +184,6 @@ RATE_LIMIT_SEARCH=30/minute
 ### Typescript: Key Patterns to Follow
 
 None for now
-
-### Testing guidelines
-
-Run pytest inside the backend container (from repo root):
-
-```bash
-docker compose run --rm -u root \
-  -v "$(pwd)/opengeo-ai-assistant/container-app/tests:/app/tests:ro" \
-  backend \
-  sh -c "pip install --no-cache-dir pytest pytest-asyncio && pytest tests/ -v --tb=short"
-```
-
-Run frontend tests (from repo root):
-
-```bash
-cd opengeo-ai-assistant/web-ui && npm run test:run
-```
 
 ### Branching strategy
 
