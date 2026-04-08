@@ -41,7 +41,7 @@ const mockLeaflet = {
   icon: vi.fn().mockReturnValue({}),
 };
 
-// Mock API service
+// Mock API service — defined at module level so vi.mock factory can reference it
 const mockApiService = {
   triggerGeointAnalysis: vi.fn().mockResolvedValue({
     result: {
@@ -54,6 +54,14 @@ const mockApiService = {
     },
   }),
 };
+
+// Single module-level mock — vi.mock is hoisted, so factories must not reference
+// variables declared inside test bodies.
+vi.mock('../../services/api', () => ({
+  triggerGeointAnalysis: (...args: any[]) => mockApiService.triggerGeointAnalysis(...args),
+  Dataset: {},
+  API_BASE_URL: 'http://localhost:8000',
+}));
 
 describe('GEOINT Modules End-to-End Flow', () => {
   beforeEach(() => {

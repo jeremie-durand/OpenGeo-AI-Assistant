@@ -40,3 +40,24 @@ jobs:
       - name: Run smoke tests
         working-directory: opengeo-ai-assistant/container-app
         run: pytest tests/ -v --tb=short -q
+
+  ui-test:
+    name: Frontend smoke tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: opengeo-ai-assistant/web-ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: opengeo-ai-assistant/web-ui
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: opengeo-ai-assistant/web-ui
+        run: npm run test:run
