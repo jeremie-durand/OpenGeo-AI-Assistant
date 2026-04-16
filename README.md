@@ -1,4 +1,4 @@
-# OpenGeo AI Assistant
+# OpenGeo AI Assistant (OpenGAA)
 
 An open-source, AI-powered geospatial assistant for exploring, analyzing, and visualizing Earth data using natural language queries. This project is based on the original Earth Copilot by Microsoft, but is Azure-free.
 
