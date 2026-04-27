@@ -20,7 +20,7 @@ pydantic>=2.0.0
 pydantic-settings>=2.0.0
 
 # Geospatial libraries (optional, for local processing)
-shapely>=2.0.0
+shapely>=2.1.2
 pyproj>=3.4.0
 
 # Logging and monitoring
