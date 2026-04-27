@@ -32,7 +32,7 @@ python-dotenv>=1.0.0
 # Azure SDK (for deployment and integration)
 azure-functions>=1.18.0
 azure-identity>=1.15.0
-azure-mgmt-apimanagement>=4.0.0
+azure-mgmt-apimanagement>=5.0.0
 
 # Development and testing
 pytest>=7.0.0
