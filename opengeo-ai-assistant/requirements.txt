@@ -1,5 +1,5 @@
 cachetools==7.0.5
-fastapi==0.136.0
+fastapi==0.136.1
 uvicorn[standard]==0.44.0
 pydantic==2.11.9
 aiohttp==3.13.5
