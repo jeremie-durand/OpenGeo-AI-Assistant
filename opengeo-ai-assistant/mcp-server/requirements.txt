@@ -24,7 +24,7 @@ shapely>=2.0.0
 pyproj>=3.4.0
 
 # Logging and monitoring
-structlog>=23.0.0
+structlog>=25.5.0
 
 # Environment and configuration
 python-dotenv>=1.0.0
