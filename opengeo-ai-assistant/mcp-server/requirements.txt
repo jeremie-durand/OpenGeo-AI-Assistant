@@ -17,7 +17,7 @@ requests>=2.31.0
 
 # Data processing and validation
 pydantic>=2.0.0
-pydantic-settings>=2.0.0
+pydantic-settings>=2.14.0
 
 # Geospatial libraries (optional, for local processing)
 shapely>=2.0.0
