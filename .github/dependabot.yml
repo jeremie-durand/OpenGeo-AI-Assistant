@@ -7,6 +7,10 @@ updates:
       day: "monday"
     allow:
       - dependency-type: "all"
+    ignore:
+      - dependency-name: "*"
+        paths:
+          - "mcp-server/**"
     commit-message:
       prefix: "feat"
 
