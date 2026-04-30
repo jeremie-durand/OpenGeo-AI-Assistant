@@ -381,6 +381,7 @@ logging.info("[OK] GEOINT endpoints available (lazy import mode)")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and tear down application components."""
@@ -2672,7 +2673,9 @@ async def unified_query_processor(body: QueryRequest):
                     "router_action": router_action,
                 }
             elif action_type == "gis_feature_query":
-                _vector_base = os.getenv("VECTOR_API_URL", "http://vector-api:8080").rstrip("/")
+                _vector_base = os.getenv(
+                    "VECTOR_API_URL", "http://vector-api:8080"
+                ).rstrip("/")
                 collection = router_action.get("collection", "")
                 feature_id = router_action.get("feature_id", "")
                 try:

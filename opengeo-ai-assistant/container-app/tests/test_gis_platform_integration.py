@@ -133,8 +133,7 @@ class TestStructuredFeatureDataRouting:
         """Pre-check must set routing_reason='structured_feature_data_context'."""
         agent = _agent_with_buggy_llm()
         query = (
-            "Parcel ID: 4842\nRecorded attributes:\n  suphec: 8.2\n"
-            "Please analyse."
+            "Parcel ID: 4842\nRecorded attributes:\n  suphec: 8.2\n" "Please analyse."
         )
         result = await agent.route_query(query, _SESSION_ID)
         assert result.get("routing_reason") == "structured_feature_data_context", (
@@ -162,11 +161,10 @@ class TestStructuredFeatureDataRouting:
         # No "Parcel ID: <value>" pattern — just the word "parcel" in a question.
         query = "What is a parcel in land registry?"
         result = await agent.route_query(query, _SESSION_ID)
-        assert result["action_type"] != "contextual" or result.get(
-            "routing_reason"
-        ) != "structured_feature_data_context", (
-            "A bare educational question must not hit the structured-feature pre-check."
-        )
+        assert (
+            result["action_type"] != "contextual"
+            or result.get("routing_reason") != "structured_feature_data_context"
+        ), "A bare educational question must not hit the structured-feature pre-check."
 
 
 # ===========================================================================
@@ -182,9 +180,9 @@ class TestQueryGisFeatureTool:
         from geoint.router_agent import RouterAgentTools
 
         tools = RouterAgentTools()
-        assert hasattr(tools, "query_gis_feature"), (
-            "RouterAgentTools is missing the query_gis_feature method (Fix 3a)"
-        )
+        assert hasattr(
+            tools, "query_gis_feature"
+        ), "RouterAgentTools is missing the query_gis_feature method (Fix 3a)"
 
     def test_query_gis_feature_sets_pending_action(self):
         """Calling query_gis_feature must set _pending_action to gis_feature_query."""
@@ -230,14 +228,12 @@ class TestRouterAgentInstructions:
         """ROUTER_AGENT_INSTRUCTIONS must mention GIS_FEATURE_QUERY."""
         from geoint.router_agent import ROUTER_AGENT_INSTRUCTIONS
 
-        assert "GIS_FEATURE_QUERY" in ROUTER_AGENT_INSTRUCTIONS, (
-            "ROUTER_AGENT_INSTRUCTIONS is missing the GIS_FEATURE_QUERY routing rule (Fix 3b)"
-        )
+        assert (
+            "GIS_FEATURE_QUERY" in ROUTER_AGENT_INSTRUCTIONS
+        ), "ROUTER_AGENT_INSTRUCTIONS is missing the GIS_FEATURE_QUERY routing rule (Fix 3b)"
 
     def test_instructions_mention_query_gis_feature_tool(self):
         """ROUTER_AGENT_INSTRUCTIONS must reference the query_gis_feature tool."""
         from geoint.router_agent import ROUTER_AGENT_INSTRUCTIONS
 
         assert "query_gis_feature" in ROUTER_AGENT_INSTRUCTIONS
-
-

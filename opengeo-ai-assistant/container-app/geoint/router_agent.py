@@ -556,12 +556,14 @@ set use_current_location=true to use the last known map viewport/bbox.""",
             "needs_stac_search": False,
             "needs_vision_analysis": False,
         }
-        return json.dumps({
-            "status": "routed",
-            "action": "gis_feature_query",
-            "collection": collection,
-            "feature_id": feature_id,
-        })
+        return json.dumps(
+            {
+                "status": "routed",
+                "action": "gis_feature_query",
+                "collection": collection,
+                "feature_id": feature_id,
+            }
+        )
 
 
 # ============================================================================
@@ -1132,7 +1134,9 @@ class RouterAgent:
         # platform-provided context; route directly to contextual so the LLM
         # answers from that data rather than navigating or searching STAC.
         if any(p.search(query) for p in _STRUCTURED_FEATURE_PATTERNS):
-            logger.info("STRUCTURED-FEATURE PRE-CHECK: feature data context -> contextual")
+            logger.info(
+                "STRUCTURED-FEATURE PRE-CHECK: feature data context -> contextual"
+            )
             return {
                 "action_type": "contextual",
                 "original_query": query,
