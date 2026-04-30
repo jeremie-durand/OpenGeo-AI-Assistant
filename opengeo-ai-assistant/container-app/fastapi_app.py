@@ -2671,6 +2671,47 @@ async def unified_query_processor(body: QueryRequest):
                     "reasoning": "RouterAgent routed to hybrid (STAC + vision)",
                     "router_action": router_action,
                 }
+            elif action_type == "gis_feature_query":
+                _vector_base = os.getenv("VECTOR_API_URL", "http://vector-api:8080").rstrip("/")
+                collection = router_action.get("collection", "")
+                feature_id = router_action.get("feature_id", "")
+                try:
+                    async with aiohttp.ClientSession() as _sess:
+                        async with _sess.get(
+                            f"{_vector_base}/parquet/collections/{collection}/items/{feature_id}",
+                            headers={"Accept": "application/geo+json"},
+                        ) as _fr:
+                            feature = await _fr.json()
+                        async with _sess.get(
+                            f"{_stac_base}/collections",
+                            headers={"Accept": "application/json"},
+                        ) as _sr:
+                            stac = await _sr.json()
+                    props = feature.get("properties", {})
+                    cols = [c["id"] for c in stac.get("collections", [])]
+                    synthesised_query = (
+                        f"Feature {feature_id} from collection {collection}. "
+                        f"Attributes: {props}. "
+                        f"Platform STAC collections: {', '.join(cols)}. "
+                        f"Please analyse this feature."
+                    )
+                    router_action = {
+                        "action_type": "contextual",
+                        "original_query": synthesised_query,
+                        "needs_stac_search": False,
+                        "needs_vision_analysis": False,
+                    }
+                except Exception as _e:
+                    logger.warning(f"GIS feature query failed: {_e}")
+                classification = {
+                    "intent_type": "contextual",
+                    "confidence": 0.95,
+                    "needs_satellite_data": False,
+                    "needs_vision_analysis": False,
+                    "needs_contextual_info": True,
+                    "reasoning": "RouterAgent routed to GIS platform feature query",
+                    "router_action": router_action,
+                }
             # Note: navigate_to and extreme_weather return early before this point
             # Safety net: if navigate_to somehow didn't return early, treat as contextual
             if action_type == "navigate_to":
