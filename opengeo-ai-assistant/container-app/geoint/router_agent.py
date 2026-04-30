@@ -54,6 +54,17 @@ except Exception as e:
 
 logger = logging.getLogger(__name__)
 
+# Detects structured GIS feature data embedded in a query.
+# A feature-ID field ("Parcel ID: …", "Feature ID: …", "Object ID: …", "FID: …")
+# or an attribute block ("Recorded attributes:\n  …", "Attributes:\n  …")
+# indicates that the query carries platform context and must route to contextual
+# regardless of which GIS platform sent it.
+_STRUCTURED_FEATURE_PATTERNS = [
+    re.compile(r"\b(?:parcel|feature|object)\s+id\s*:\s*\S+", re.IGNORECASE),
+    re.compile(r"\bfid\s*:\s*\S+", re.IGNORECASE),
+    re.compile(r"(?:recorded\s+)?attributes\s*:\s*\n\s+\S", re.IGNORECASE),
+]
+
 
 # ============================================================================
 # ROUTER AGENT SYSTEM PROMPT
@@ -140,6 +151,14 @@ Based on the query and context, determine the type:
    - Keywords: "show me X and describe", "load X and analyze", "display X and explain"
    - Examples: "Show me flood damage in Houston and describe it"
    -> Call `search_and_analyze`
+
+6. **GIS_FEATURE_QUERY** - User asks about a specific feature from a local GIS platform
+   - The query contains a feature-ID field (Parcel ID, Feature ID, Object ID, FID) or an attribute block
+   - A specific feature ID and collection/layer name are present
+   - Examples:
+     * "Parcel ID: 4842\nDataset: bdppad_v03_an_2023_s_20250120\nRecorded attributes: ..."
+     * "Feature ID: F-20391\nLayer: cadastre_urban_2024\nAttributes: ..."
+   -> Call `query_gis_feature` with the collection and feature_id extracted from the query
 
 ## CRITICAL RULES
 
@@ -505,6 +524,44 @@ set use_current_location=true to use the last known map viewport/bbox.""",
                 "search_query": search_query,
                 "analysis_question": analysis_question,
                 "message": f"Loading imagery and analyzing: {analysis_question}",
+            }
+        )
+
+    # ========================================================================
+    # TOOL 7: GIS Platform Feature Query
+    # ========================================================================
+
+    @kernel_function(
+        name="query_gis_feature",
+        description=(
+            "Query a local GIS platform for data about a specific feature. Use when "
+            "the query contains a feature-ID field (Parcel ID, Feature ID, Object ID, "
+            "FID) or an attribute block, regardless of the source platform."
+        ),
+    )
+    def query_gis_feature(
+        self,
+        collection: Annotated[str, "The vector collection or layer ID"],
+        feature_id: Annotated[str, "The feature/parcel ID to look up"],
+        session_id: Annotated[str, "The session ID"],
+    ) -> str:
+        """Route query to local GIS platform data fetch."""
+        logger.info(
+            f" [TOOL] query_gis_feature: collection={collection}, feature_id={feature_id}"
+        )
+        self._pending_action = {
+            "action_type": "gis_feature_query",
+            "collection": collection,
+            "feature_id": feature_id,
+            "needs_stac_search": False,
+            "needs_vision_analysis": False,
+        }
+        return json.dumps(
+            {
+                "status": "routed",
+                "action": "gis_feature_query",
+                "collection": collection,
+                "feature_id": feature_id,
             }
         )
 
@@ -1071,6 +1128,23 @@ class RouterAgent:
                 "needs_vision_analysis": False,
                 "routing_reason": "bare_location_heuristic",
             }
+
+        # ── Structured GIS feature data pre-check ────────────────────────
+        # Queries embedding a feature-ID field or an attribute block carry
+        # platform-provided context; route directly to contextual so the LLM
+        # answers from that data rather than navigating or searching STAC.
+        if any(p.search(query) for p in _STRUCTURED_FEATURE_PATTERNS):
+            logger.info(
+                "STRUCTURED-FEATURE PRE-CHECK: feature data context -> contextual"
+            )
+            return {
+                "action_type": "contextual",
+                "original_query": query,
+                "needs_stac_search": False,
+                "needs_vision_analysis": False,
+                "routing_reason": "structured_feature_data_context",
+            }
+        # ─────────────────────────────────────────────────────────────────
 
         # ====================================================================
         # LLM-BASED SEMANTIC CLASSIFICATION

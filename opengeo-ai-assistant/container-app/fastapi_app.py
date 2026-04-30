@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import traceback
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -380,8 +381,76 @@ logging.info("[OK] GEOINT endpoints available (lazy import mode)")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize and tear down application components."""
+    global semantic_translator, global_translator, SEMANTIC_KERNEL_AVAILABLE, router_agent
+    global terrain_analyzer, mobility_classifier, los_calculator, geoint_utils, GEOINT_AVAILABLE
+
+    logger.info("[LAUNCH] OpenGeo AI Assistant CONTAINER STARTING UP")
+
+    # ----------------------------------------------------------------
+    # Initialise provider-agnostic GenericQueryTranslator
+    # ----------------------------------------------------------------
+    semantic_translator = None
+    global_translator = None
+    SEMANTIC_KERNEL_AVAILABLE = False
+
+    try:
+        from llm_client import get_llm_client
+
+        client = get_llm_client()
+        logger.info(
+            f"[OK] LLM client configured (provider={client.provider}, model={client.model})"
+        )
+
+        from generic_query_translator import GenericQueryTranslator
+
+        _translator = GenericQueryTranslator()
+        semantic_translator = _translator
+        global_translator = _translator
+        SEMANTIC_KERNEL_AVAILABLE = True
+        logger.info(
+            "[OK] GenericQueryTranslator initialised — AI query translation ENABLED"
+        )
+    except ImportError as e:
+        logger.warning(f"[WARN] llm_client / GenericQueryTranslator not available: {e}")
+    except Exception as e:
+        logger.warning(
+            f"[WARN] LLM client not fully configured — falling back to keyword mode: {e}"
+        )
+
+    # GEOINT endpoints use lazy imports - no initialization needed here
+    logger.info("[OK] GEOINT endpoints ready (lazy import mode)")
+
+    # Initialize RouterAgent for intelligent query classification, if available.
+    try:
+        from geoint.router_agent import get_router_agent
+
+        router_agent = get_router_agent()
+        logger.info("[OK] RouterAgent initialised for intelligent query routing")
+    except Exception as e:
+        logger.warning(
+            f"[WARN] RouterAgent initialisation failed: {e} - will use fallback classification"
+        )
+        router_agent = None
+
+    # Log quick start cache status
+    qs_stats = get_quickstart_stats()
+    logger.info(
+        f"[LAUNCH] Quick Start Cache: {qs_stats['total_queries']} queries, {len(qs_stats['collections_covered'])} collections"
+    )
+
+    logger.info(
+        f"[OK] OpenGeo AI Assistant CONTAINER READY (AI={'ENABLED' if SEMANTIC_KERNEL_AVAILABLE else 'DISABLED — keyword fallback'})"
+    )
+
+    yield
+
+
 # Initialize FastAPI app
-app = FastAPI(title="OpenGeo AI Assistant API", version="1.0.0")
+app = FastAPI(title="OpenGeo AI Assistant API", version="0.1.0", lifespan=lifespan)
 
 # Rate limiting (registered first so it runs innermost — after CORS on the way in)
 app.add_middleware(RateLimitMiddleware)
@@ -719,76 +788,6 @@ async def execute_direct_stac_search(
             "error": "STAC search failed",
             "results": {"type": "FeatureCollection", "features": []},
         }
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize the application components.
-
-    Attempts to initialise the GenericQueryTranslator backed by whatever LLM
-    provider is configured via LLM_PROVIDER / LLM_API_KEY / LLM_MODEL.
-    Falls back to keyword-only mode when no valid LLM config is present.
-    """
-    global semantic_translator, global_translator, SEMANTIC_KERNEL_AVAILABLE, router_agent
-    global terrain_analyzer, mobility_classifier, los_calculator, geoint_utils, GEOINT_AVAILABLE
-
-    logger.info("[LAUNCH] OpenGeo AI Assistant CONTAINER STARTING UP")
-
-    # ----------------------------------------------------------------
-    # Initialise provider-agnostic GenericQueryTranslator
-    # ----------------------------------------------------------------
-    semantic_translator = None
-    global_translator = None
-    SEMANTIC_KERNEL_AVAILABLE = False
-
-    try:
-        from llm_client import get_llm_client
-
-        client = get_llm_client()
-        logger.info(
-            f"[OK] LLM client configured (provider={client.provider}, model={client.model})"
-        )
-
-        from generic_query_translator import GenericQueryTranslator
-
-        _translator = GenericQueryTranslator()
-        semantic_translator = _translator
-        global_translator = _translator
-        SEMANTIC_KERNEL_AVAILABLE = True
-        logger.info(
-            "[OK] GenericQueryTranslator initialised — AI query translation ENABLED"
-        )
-    except ImportError as e:
-        logger.warning(f"[WARN] llm_client / GenericQueryTranslator not available: {e}")
-    except Exception as e:
-        logger.warning(
-            f"[WARN] LLM client not fully configured — falling back to keyword mode: {e}"
-        )
-
-    # GEOINT endpoints use lazy imports - no initialization needed here
-    logger.info("[OK] GEOINT endpoints ready (lazy import mode)")
-
-    # Initialize RouterAgent for intelligent query classification, if available.
-    try:
-        from geoint.router_agent import get_router_agent
-
-        router_agent = get_router_agent()
-        logger.info("[OK] RouterAgent initialised for intelligent query routing")
-    except Exception as e:
-        logger.warning(
-            f"[WARN] RouterAgent initialisation failed: {e} - will use fallback classification"
-        )
-        router_agent = None
-
-    # Log quick start cache status
-    qs_stats = get_quickstart_stats()
-    logger.info(
-        f"[LAUNCH] Quick Start Cache: {qs_stats['total_queries']} queries, {len(qs_stats['collections_covered'])} collections"
-    )
-
-    logger.info(
-        f"[OK] OpenGeo AI Assistant CONTAINER READY (AI={'ENABLED' if SEMANTIC_KERNEL_AVAILABLE else 'DISABLED — keyword fallback'})"
-    )
 
 
 # Helper functions ported from Router Function App
@@ -2671,6 +2670,49 @@ async def unified_query_processor(body: QueryRequest):
                     "needs_vision_analysis": True,
                     "needs_contextual_info": False,
                     "reasoning": "RouterAgent routed to hybrid (STAC + vision)",
+                    "router_action": router_action,
+                }
+            elif action_type == "gis_feature_query":
+                _vector_base = os.getenv(
+                    "VECTOR_API_URL", "http://vector-api:8080"
+                ).rstrip("/")
+                collection = router_action.get("collection", "")
+                feature_id = router_action.get("feature_id", "")
+                try:
+                    async with aiohttp.ClientSession() as _sess:
+                        async with _sess.get(
+                            f"{_vector_base}/parquet/collections/{collection}/items/{feature_id}",
+                            headers={"Accept": "application/geo+json"},
+                        ) as _fr:
+                            feature = await _fr.json()
+                        async with _sess.get(
+                            f"{_stac_base}/collections",
+                            headers={"Accept": "application/json"},
+                        ) as _sr:
+                            stac = await _sr.json()
+                    props = feature.get("properties", {})
+                    cols = [c["id"] for c in stac.get("collections", [])]
+                    synthesised_query = (
+                        f"Feature {feature_id} from collection {collection}. "
+                        f"Attributes: {props}. "
+                        f"Platform STAC collections: {', '.join(cols)}. "
+                        f"Please analyse this feature."
+                    )
+                    router_action = {
+                        "action_type": "contextual",
+                        "original_query": synthesised_query,
+                        "needs_stac_search": False,
+                        "needs_vision_analysis": False,
+                    }
+                except Exception as _e:
+                    logger.warning(f"GIS feature query failed: {_e}")
+                classification = {
+                    "intent_type": "contextual",
+                    "confidence": 0.95,
+                    "needs_satellite_data": False,
+                    "needs_vision_analysis": False,
+                    "needs_contextual_info": True,
+                    "reasoning": "RouterAgent routed to GIS platform feature query",
                     "router_action": router_action,
                 }
             # Note: navigate_to and extreme_weather return early before this point

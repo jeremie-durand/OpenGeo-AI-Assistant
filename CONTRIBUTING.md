@@ -11,6 +11,7 @@ Thank you for your interest in contributing! This document covers how to set up 
 - [Project Structure](#project-structure)
 - [Making Changes](#making-changes)
 - [Code Style](#code-style)
+- [Testing](#testing)
 - [Submitting a Pull Request](#submitting-a-pull-request)
 - [Reporting Bugs](#reporting-bugs)
 - [Requesting Features](#requesting-features)
@@ -208,6 +209,27 @@ Run manually:
 ```bash
 cd opengeo-ai-assistant/web-ui
 npx prettier --write .
+```
+
+---
+
+## Testing
+
+### Backend
+
+Run pytest inside the backend container from the repo root:
+
+```bash
+docker compose run --rm -u root \
+  -v "$(pwd)/opengeo-ai-assistant/container-app/tests:/app/tests:ro" \
+  backend \
+  sh -c "pip install --no-cache-dir pytest pytest-asyncio && pytest tests/ -v --tb=short"
+```
+
+### Frontend
+
+```bash
+cd opengeo-ai-assistant/web-ui && npm run test:run
 ```
 
 ---

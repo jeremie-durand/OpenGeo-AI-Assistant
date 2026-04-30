@@ -239,7 +239,7 @@ const MapView: React.FC<MapViewProps> = ({
   });
 
   // Zoom level tracking state
-  const [currentZoomLevel, setCurrentZoomLevel] = useState<number>(4);
+  const [currentZoomLevel, setCurrentZoomLevel] = useState<number>(5);
 
   // Initialize Leaflet map
   useEffect(() => {
@@ -247,8 +247,8 @@ const MapView: React.FC<MapViewProps> = ({
     if (typeof window !== 'undefined' && window.L) {
       try {
         const leafletMap = window.L.map(mapRef.current, {
-          center: [39.8282, -98.5795],
-          zoom: 4,
+          center: [52.0, -71.5],
+          zoom: 5,
           zoomControl: true,
         });
         window.L.tileLayer(
