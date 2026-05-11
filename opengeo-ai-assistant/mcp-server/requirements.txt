@@ -30,7 +30,7 @@ structlog>=23.0.0
 python-dotenv>=1.0.0
 
 # Azure SDK (for deployment and integration)
-azure-functions>=1.18.0
+azure-functions>=2.1.0
 azure-identity>=1.15.0
 azure-mgmt-apimanagement>=4.0.0
 
