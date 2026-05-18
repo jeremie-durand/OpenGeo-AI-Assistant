@@ -21,7 +21,7 @@ pydantic-settings>=2.0.0
 
 # Geospatial libraries (optional, for local processing)
 shapely>=2.0.0
-pyproj>=3.4.0
+pyproj>=3.7.2
 
 # Logging and monitoring
 structlog>=23.0.0
