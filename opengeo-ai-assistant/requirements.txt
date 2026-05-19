@@ -4,7 +4,7 @@ uvicorn[standard]==0.46.0
 pydantic==2.11.9
 aiohttp==3.13.5
 httpx==0.28.1
-requests==2.33.1
+requests==2.34.2
 python-dotenv==1.2.2
 numpy==2.4.5
 openai==2.36.0
