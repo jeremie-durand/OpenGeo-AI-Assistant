@@ -4,7 +4,7 @@
 # mcp>=1.0.0
 
 # Web framework for HTTP bridge
-fastapi>=0.136.1
+fastapi>=0.136.3
 uvicorn[standard]>=0.47.0
 
 # Core dependencies  
