@@ -12,7 +12,7 @@ typing-extensions>=4.0.0
 
 # HTTP client for calling Earth-Copilot services
 httpx>=0.25.0
-aiohttp>=3.8.0
+aiohttp>=3.14.1
 requests>=2.31.0
 
 # Data processing and validation
