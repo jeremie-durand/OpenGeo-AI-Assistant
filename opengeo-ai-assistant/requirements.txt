@@ -7,7 +7,7 @@ httpx==0.28.1
 requests==2.33.1
 python-dotenv==1.2.2
 numpy==2.4.6
-openai==2.38.0
+openai==2.41.1
 anthropic==0.104.1
 semantic-kernel==1.43.0
 planetary-computer==1.0.0
