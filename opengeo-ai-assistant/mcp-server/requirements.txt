@@ -5,7 +5,7 @@
 
 # Web framework for HTTP bridge
 fastapi>=0.139.0
-uvicorn[standard]>=0.50.2
+uvicorn[standard]>=0.51.0
 
 # Core dependencies  
 typing-extensions>=4.0.0
