@@ -3,6 +3,8 @@
 
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
 
+import { authenticatedFetch, getApiKey } from './authHelper';
+
 //  BEST PRACTICE: Runtime Configuration for Cloud Apps
 // The frontend is configured to proxy /api/* requests to the backend in production
 // This is set via VITE_API_BASE_URL environment variable at BUILD time (unavoidable for Vite)
@@ -87,10 +89,7 @@ class ApiService {
 
   constructor() {
     try {
-      const apiKey =
-        (window as Window & { ENV?: { VITE_API_KEY?: string } }).ENV?.VITE_API_KEY ??
-        import.meta.env.VITE_API_KEY ??
-        '';
+      const apiKey = getApiKey();
       this.api = axios.create({
         baseURL: API_BASE || undefined,
         timeout: 300000, // 5 minutes — extreme weather queries via chat can be slow (NetCDF sampling)
@@ -290,7 +289,7 @@ class ApiService {
 
   async getStacApiCollections(): Promise<Dataset[]> {
     try {
-      const response = await fetch(`${API_BASE}/api/stac/collections`);
+      const response = await authenticatedFetch(`${API_BASE}/api/stac/collections`);
       if (!response.ok) return [];
       const data = await response.json();
       if (!data.configured) return [];
