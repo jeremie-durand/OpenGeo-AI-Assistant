@@ -4,6 +4,14 @@
 // Stubbed authentication helpers for cloud-agnostic, no-auth setup.
 // All functions return null or do nothing.
 
+export function getApiKey(): string {
+  return (
+    (window as Window & { ENV?: { VITE_API_KEY?: string } }).ENV?.VITE_API_KEY ??
+    import.meta.env.VITE_API_KEY ??
+    ''
+  );
+}
+
 export async function getAuthToken(): Promise<string | null> {
   // No authentication logic; always return null
   return null;
@@ -29,7 +37,7 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 
 /**
  * Drop-in replacement for window.fetch that automatically attaches
- * the EasyAuth Bearer token when available.
+ * the X-Api-Key header (when configured) and a Bearer token when available.
  *
  * Usage:  import { authenticatedFetch } from '../services/authHelper';
  *         const response = await authenticatedFetch(`${API_BASE_URL}/api/config`);
@@ -38,11 +46,13 @@ export async function authenticatedFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
-  const token = await getAuthToken();
-  if (!token) return fetch(input, init);
-
   const headers = new Headers(init?.headers);
-  headers.set('Authorization', `Bearer ${token}`);
+
+  const apiKey = getApiKey();
+  if (apiKey) headers.set('X-Api-Key', apiKey);
+
+  const token = await getAuthToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
 
   return fetch(input, { ...init, headers });
 }
