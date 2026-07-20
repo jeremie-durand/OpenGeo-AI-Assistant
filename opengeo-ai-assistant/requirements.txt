@@ -8,7 +8,7 @@ requests==2.33.1
 python-dotenv==1.2.2
 numpy==2.4.6
 openai==2.44.0
-anthropic==0.116.0
+anthropic==0.117.0
 semantic-kernel==1.44.0
 planetary-computer==1.0.0
 pystac-client==0.9.0
