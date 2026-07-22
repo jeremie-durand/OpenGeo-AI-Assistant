@@ -22,7 +22,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.100.9",
     "axios": "^1.18.1",
-    "dompurify": "^3.4.11",
+    "dompurify": "^3.4.12",
     "modern-normalize": "^2.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
