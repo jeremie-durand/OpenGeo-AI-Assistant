@@ -19,5 +19,5 @@ fsspec==2026.3.0
 h5netcdf==1.8.1
 geopy==2.5.0
 python-dateutil==2.9.0.post0
-matplotlib==3.10.9
+matplotlib==3.11.1
 limits==5.8.0
