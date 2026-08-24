@@ -27,7 +27,7 @@ pyproj>=3.4.0
 structlog>=23.0.0
 
 # Environment and configuration
-python-dotenv>=1.0.0
+python-dotenv>=1.2.3
 
 # Azure SDK (for deployment and integration)
 azure-functions>=1.18.0
