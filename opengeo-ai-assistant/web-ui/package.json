@@ -42,7 +42,7 @@
     "vite": "^8.0.16",
     "vitest": "^4.1.8",
     "husky": "^9.1.7",
-    "lint-staged": "^17.1.0",
+    "lint-staged": "^17.3.0",
     "prettier": "^3.5.3"
   }
 }
