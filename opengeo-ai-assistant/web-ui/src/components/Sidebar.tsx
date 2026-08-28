@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { Dataset } from '../services/api';
 import DatasetDropdown from './DatasetDropdown';
 import PCSearchPanel, { StructuredSearchParams } from './PCSearchPanel';
+import { useT } from '../i18n/I18nContext';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -39,6 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onPrivateSearch,
   onPCSearch,
 }) => {
+  const t = useT();
   const [dropdownSelectedDataset, setDropdownSelectedDataset] = useState<Dataset | null>(null);
   const [vedaSelectedDataset, setVedaSelectedDataset] = useState<Dataset | null>(null);
   const [stacSelectedCollection, setStacSelectedCollection] = useState<Dataset | null>(null);
@@ -254,7 +256,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
             onClick={onToggle}
           >
-            Data Catalog
+            {t('common.dataCatalog')}
             <span
               className="module-in-progress-badge"
               style={{
@@ -274,12 +276,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                 marginLeft: '8px',
               }}
             >
-              In Progress
+              {t('common.inProgress')}
             </span>
           </div>
 
           {isLoading ? (
-            <div className="loading">Loading datasets...</div>
+            <div className="loading">{t('sidebar.loadingDatasets')}</div>
           ) : (
             <>
               {/* Planetary Computer Search Panel */}
@@ -287,7 +289,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
               {/* Private Section */}
               <div className="data-section private">
-                <div className="data-section-title">Private</div>
+                <div className="data-section-title">{t('sidebar.private')}</div>
 
                 {/* My Data Section */}
                 {shouldShowMyData && (
@@ -304,7 +306,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         console.log('My Data clicked - loading private datasets');
                       }}
                     >
-                      My Data
+                      {t('sidebar.myData')}
                     </div>
                     {myDatasets.length > 0 ? (
                       <DatasetDropdown
@@ -315,11 +317,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                             : null
                         }
                         onDatasetSelect={onDatasetSelect}
-                        placeholder="Select a dataset..."
+                        placeholder={t('common.selectDataset')}
                       />
                     ) : (
                       <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic' }}>
-                        No datasets available
+                        {t('common.noDatasets')}
                       </div>
                     )}
                   </div>
@@ -337,15 +339,17 @@ const Sidebar: React.FC<SidebarProps> = ({
                         marginBottom: 4,
                       }}
                     >
-                      STAC API
+                      {t('sidebar.stacApi')}
                       <button
                         onClick={onRefreshStacCollections}
                         style={{ fontSize: '11px', padding: '2px 8px', cursor: 'pointer' }}
                       >
-                        Reload
+                        {t('common.reload')}
                       </button>
                     </div>
-                    <div style={{ fontSize: '11px', opacity: 0.6 }}>No collections loaded</div>
+                    <div style={{ fontSize: '11px', opacity: 0.6 }}>
+                      {t('sidebar.noCollections')}
+                    </div>
                   </div>
                 )}
                 {stacApiCollections.length > 0 && (
@@ -361,10 +365,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                         justifyContent: 'space-between',
                       }}
                     >
-                      STAC API
+                      {t('sidebar.stacApi')}
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span style={{ fontSize: '11px', opacity: 0.6, fontStyle: 'italic' }}>
-                          Private
+                          {t('sidebar.private')}
                         </span>
                         {onRefreshStacCollections && (
                           <button
@@ -388,7 +392,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         setStacSelectedCollection(dataset);
                         onDatasetSelect(dataset);
                       }}
-                      placeholder="Select a collection..."
+                      placeholder={t('sidebar.selectCollection')}
                     />
                     {stacSelectedCollection && onPrivateSearch && (
                       <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'center' }}>
@@ -416,7 +420,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             (e.target as HTMLElement).style.backgroundColor = '#3b82f6';
                           }}
                         >
-                          Search
+                          {t('common.search')}
                         </button>
                       </div>
                     )}
@@ -426,7 +430,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
               {/* Public Section */}
               <div className="data-section public">
-                <div className="data-section-title">Public</div>
+                <div className="data-section-title">{t('sidebar.public')}</div>
 
                 {/* Planetary Computer Section */}
                 {shouldShowPlanetaryComputer && (
@@ -443,12 +447,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                           datasets={planetaryComputerDatasets}
                           selectedDataset={dropdownSelectedDataset}
                           onDatasetSelect={handleDropdownSelect}
-                          placeholder="Choose a dataset..."
+                          placeholder={t('sidebar.chooseDataset')}
                         />
                       </>
                     ) : (
                       <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic' }}>
-                        Loading collections...
+                        {t('common.loadingCollections')}
                       </div>
                     )}
                   </div>
@@ -470,14 +474,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                     >
                       VEDA
                       <span style={{ fontSize: '12px', opacity: 0.7, fontStyle: 'italic' }}>
-                        AI Search
+                        {t('sidebar.aiSearch')}
                       </span>
                     </div>
                     <DatasetDropdown
                       datasets={vedaDatasets}
                       selectedDataset={vedaSelectedDataset}
                       onDatasetSelect={handleVedaSelect}
-                      placeholder="Choose a VEDA dataset..."
+                      placeholder={t('sidebar.chooseVedaDataset')}
                     />
 
                     {/* Search Button - Only show when a VEDA dataset is selected */}
@@ -512,7 +516,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             (e.target as HTMLElement).style.backgroundColor = '#3b82f6';
                           }}
                         >
-                          Search
+                          {t('common.search')}
                         </button>
                       </div>
                     )}

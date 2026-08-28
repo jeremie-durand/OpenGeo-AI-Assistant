@@ -7,6 +7,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiService, Dataset, ChatMessage, MapContext } from '../services/api';
 import { enhanceMessageForMapVisualization, hasVisualizableData } from './OpenGeoMapIntegration';
 import vedaSearchService from '../services/vedaSearchService';
+import { useT } from '../i18n/I18nContext';
 
 // Enhanced function to extract text from complex response objects
 function extractTextFromResponse(content: any): string {
@@ -231,6 +232,7 @@ const Chat: React.FC<ChatProps> = ({
   onComparisonResult,
   selectedModel,
 }) => {
+  const t = useT();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [feedback, setFeedback] = useState<Record<number, string>>({});
@@ -1545,7 +1547,7 @@ const Chat: React.FC<ChatProps> = ({
                   <div className="msg">
                     <div className="loading-indicator">
                       <span></span>
-                      <span>Thinking...</span>
+                      <span>{t('chat.thinking')}</span>
                     </div>
                   </div>
                 ) : (
@@ -1560,9 +1562,9 @@ const Chat: React.FC<ChatProps> = ({
                   <div className="reactions">
                     <button
                       className="icon-btn"
-                      title="Thumbs up"
+                      title={t('chat.thumbsUp')}
                       onClick={() => sendFeedback(index, 'up')}
-                      aria-label="Thumbs up"
+                      aria-label={t('chat.thumbsUp')}
                     >
                       <svg
                         width="16"
@@ -1576,9 +1578,9 @@ const Chat: React.FC<ChatProps> = ({
                     </button>
                     <button
                       className="icon-btn"
-                      title="Thumbs down"
+                      title={t('chat.thumbsDown')}
                       onClick={() => sendFeedback(index, 'down')}
-                      aria-label="Thumbs down"
+                      aria-label={t('chat.thumbsDown')}
                     >
                       <svg
                         width="16"
@@ -1608,7 +1610,7 @@ const Chat: React.FC<ChatProps> = ({
               <div>
                 <div className="msg">
                   <div className="loading-indicator">
-                    <span>Thinking...</span>
+                    <span>{t('chat.thinking')}</span>
                   </div>
                 </div>
               </div>
@@ -1644,7 +1646,7 @@ const Chat: React.FC<ChatProps> = ({
               onClick={handleSendMessage}
               disabled={!inputValue.trim() || chatMutation.isPending}
             >
-              Send
+              {t('common.send')}
             </button>
           </div>
         </div>

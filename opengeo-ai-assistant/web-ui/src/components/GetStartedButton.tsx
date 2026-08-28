@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import './GetStartedButton.css';
+import { useT } from '../i18n/I18nContext';
 
 interface ExampleQuery {
   query: string;
@@ -52,6 +53,7 @@ interface GetStartedButtonProps {
 }
 
 const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) => {
+  const t = useT();
   const [showModal, setShowModal] = useState(false);
   const [activeColumn, setActiveColumn] = useState<'stac' | 'vision'>('stac'); // For mobile toggle
   const [activeTab, setActiveTab] = useState<
@@ -579,20 +581,20 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
       <div
         onClick={() => setShowModal(true)}
         className="get-started-button"
-        title="Get Started Guide"
+        title={t('guide.getStartedGuide')}
       >
-        <span className="get-started-button-label">Get Started</span>
+        <span className="get-started-button-label">{t('guide.getStarted')}</span>
       </div>
 
       {showModal && (
         <div className="get-started-modal-overlay" onClick={() => setShowModal(false)}>
           <div className="get-started-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="get-started-modal-header">
-              <h2>Get Started with OpenGeo AI Assistant</h2>
+              <h2>{t('guide.title')}</h2>
               <button
                 onClick={() => setShowModal(false)}
                 className="get-started-modal-close"
-                title="Close"
+                title={t('common.close')}
               >
                 ×
               </button>
@@ -606,10 +608,8 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                     className={`module-selector-btn vision-selector ${activeTab === 'stac' ? 'active' : ''}`}
                     onClick={() => setActiveTab(activeTab === 'stac' ? 'none' : 'stac')}
                   >
-                    <span className="module-selector-label">Vision</span>
-                    <span className="module-selector-desc">
-                      AI image analysis of map imagery and raster analysis of geospatial data
-                    </span>
+                    <span className="module-selector-label">{t('guide.modVision')}</span>
+                    <span className="module-selector-desc">{t('module.visionDesc')}</span>
                   </button>
                   <button
                     className={`module-selector-btn weather-selector ${activeTab === 'extreme-weather' ? 'active' : ''}`}
@@ -617,28 +617,22 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                       setActiveTab(activeTab === 'extreme-weather' ? 'none' : 'extreme-weather')
                     }
                   >
-                    <span className="module-selector-label">Extreme Weather</span>
-                    <span className="module-selector-desc">
-                      Global climate projections: temperature, precipitation & wind from NASA CMIP6
-                    </span>
+                    <span className="module-selector-label">{t('guide.modWeather')}</span>
+                    <span className="module-selector-desc">{t('module.weatherDesc')}</span>
                   </button>
                   <button
                     className={`module-selector-btn terrain-selector ${activeTab === 'terrain' ? 'active' : ''}`}
                     onClick={() => setActiveTab(activeTab === 'terrain' ? 'none' : 'terrain')}
                   >
-                    <span className="module-selector-label">Terrain</span>
-                    <span className="module-selector-desc">
-                      Landscape, elevation & environmental characteristics
-                    </span>
+                    <span className="module-selector-label">{t('guide.modTerrain')}</span>
+                    <span className="module-selector-desc">{t('module.terrainDesc')}</span>
                   </button>
                   <button
                     className={`module-selector-btn mobility-selector ${activeTab === 'mobility' ? 'active' : ''}`}
                     onClick={() => setActiveTab(activeTab === 'mobility' ? 'none' : 'mobility')}
                   >
-                    <span className="module-selector-label">Mobility</span>
-                    <span className="module-selector-desc">
-                      Traversability across two points based on terrain and context
-                    </span>
+                    <span className="module-selector-label">{t('guide.modMobility')}</span>
+                    <span className="module-selector-desc">{t('module.mobilityDesc')}</span>
                   </button>
                   <button
                     className={`module-selector-btn damage-selector ${activeTab === 'building-damage' ? 'active' : ''}`}
@@ -646,21 +640,17 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                       setActiveTab(activeTab === 'building-damage' ? 'none' : 'building-damage')
                     }
                   >
-                    <span className="module-in-progress-badge">In Progress</span>
-                    <span className="module-selector-label">Building Damage</span>
-                    <span className="module-selector-desc">
-                      Aerial structural damage assessment
-                    </span>
+                    <span className="module-in-progress-badge">{t('common.inProgress')}</span>
+                    <span className="module-selector-label">{t('guide.modDamage')}</span>
+                    <span className="module-selector-desc">{t('module.damageDesc')}</span>
                   </button>
                   <button
                     className={`module-selector-btn comparison-selector ${activeTab === 'comparison' ? 'active' : ''}`}
                     onClick={() => setActiveTab(activeTab === 'comparison' ? 'none' : 'comparison')}
                   >
-                    <span className="module-in-progress-badge">In Progress</span>
-                    <span className="module-selector-label">Comparison</span>
-                    <span className="module-selector-desc">
-                      Time comparison to identify environmental and structural changes
-                    </span>
+                    <span className="module-in-progress-badge">{t('common.inProgress')}</span>
+                    <span className="module-selector-label">{t('guide.modComparison')}</span>
+                    <span className="module-selector-desc">{t('module.comparisonDesc')}</span>
                   </button>
                 </div>
               </section>
@@ -673,25 +663,25 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                   {/* Instructions for Vision */}
                   <div className="instructions-box" style={{ marginBottom: '20px' }}>
                     <p className="instruction-step">
-                      <strong>Step 1:</strong> Click{' '}
+                      <strong>{t('guide.step1')}</strong> {t('guide.click')}{' '}
                       <button
                         className="copy-query-btn"
                         style={{ cursor: 'default', pointerEvents: 'none' }}
                       >
                         Go
                       </button>{' '}
-                      to load satellite data on the map.
+                      {t('guide.toLoadSatellite')}
                     </p>
                     <p className="instruction-step">
-                      <strong>Step 2:</strong> Select the <strong>Vision</strong> module, drop a
-                      pin, then click{' '}
+                      <strong>{t('guide.step2')}</strong> {t('guide.selectModule')}{' '}
+                      <strong>{t('guide.modVision')}</strong> {t('guide.thenDropPinClick')}{' '}
                       <button
                         className="copy-query-btn"
                         style={{ cursor: 'default', pointerEvents: 'none' }}
                       >
                         Go
                       </button>{' '}
-                      on a vision query or type it directly in the chat.
+                      {t('guide.onVisionQuery')}
                     </p>
                   </div>
 
@@ -701,13 +691,13 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                       className={`toggle-btn ${activeColumn === 'stac' ? 'active' : ''}`}
                       onClick={() => setActiveColumn('stac')}
                     >
-                      Step 1: STAC Search
+                      {t('guide.step1Stac')}
                     </button>
                     <button
                       className={`toggle-btn ${activeColumn === 'vision' ? 'active' : ''}`}
                       onClick={() => setActiveColumn('vision')}
                     >
-                      Step 2: Vision Module
+                      {t('guide.step2Vision')}
                     </button>
                   </div>
 
@@ -715,21 +705,21 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                   <div className="three-column-header">
                     <div className="column-header stac-header">
                       <div className="column-header-row">
-                        <span className="column-title">Step 1: STAC Search</span>
+                        <span className="column-title">{t('guide.step1Stac')}</span>
                       </div>
                     </div>
                     <div className="column-header vision-module-header">
                       <div className="column-header-row">
                         <span className="column-title vision-module-title">
-                          Step 2: Vision Module
+                          {t('guide.step2Vision')}
                         </span>
                       </div>
                       <div className="vision-sub-headers">
                         <div className="sub-header raster-sub">
-                          <span className="sub-header-title">Raster Analysis</span>
+                          <span className="sub-header-title">{t('guide.rasterAnalysis')}</span>
                         </div>
                         <div className="sub-header screenshot-sub">
-                          <span className="sub-header-title">Image Analysis</span>
+                          <span className="sub-header-title">{t('guide.imageAnalysis')}</span>
                         </div>
                       </div>
                     </div>
@@ -757,7 +747,7 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                                   <button
                                     className="copy-query-btn"
                                     onClick={() => handleStacQueryClick(example.query)}
-                                    title="Run this query in OpenGeo AI Assistant"
+                                    title={t('guide.runQuery')}
                                   >
                                     Go
                                   </button>
@@ -765,7 +755,7 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                                     <button
                                       className="pc-explorer-btn"
                                       onClick={() => window.open(example.pc_link, '_blank')}
-                                      title="View in Planetary Computer Explorer"
+                                      title={t('guide.viewInPc')}
                                     >
                                       PC
                                     </button>
@@ -788,7 +778,7 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                                     onClick={() =>
                                       handleRasterQueryClick(example.rasterQuery || '')
                                     }
-                                    title="Run this Raster query"
+                                    title={t('guide.runRaster')}
                                     disabled={!example.rasterQuery}
                                   >
                                     Go
@@ -811,7 +801,7 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                                     onClick={() =>
                                       handleScreenshotQueryClick(example.screenshotQuery || '')
                                     }
-                                    title="Run this Image Analysis query"
+                                    title={t('guide.runImage')}
                                     disabled={!example.screenshotQuery}
                                   >
                                     Go
@@ -832,25 +822,27 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                 <div className="terrain-queries-section">
                   <div className="instructions-box" style={{ marginBottom: '20px' }}>
                     <p className="instruction-step">
-                      <strong>Step 1:</strong> Click{' '}
+                      <strong>{t('guide.step1')}</strong> {t('guide.click')}{' '}
                       <button
                         className="copy-query-btn"
                         style={{ cursor: 'default', pointerEvents: 'none' }}
                       >
                         Go
                       </button>{' '}
-                      on the <strong>Setup</strong> query to load data on the map.
+                      {t('guide.onThe')} <strong>{t('guide.setup')}</strong>{' '}
+                      {t('guide.queryLoadData')}
                     </p>
                     <p className="instruction-step">
-                      <strong>Step 2:</strong> Select the <strong>Terrain</strong> module, drop a
-                      pin, then click{' '}
+                      <strong>{t('guide.step2')}</strong> {t('guide.selectModule')}{' '}
+                      <strong>{t('guide.modTerrain')}</strong> {t('guide.thenDropPinClick')}{' '}
                       <button
                         className="copy-query-btn"
                         style={{ cursor: 'default', pointerEvents: 'none' }}
                       >
                         Go
                       </button>{' '}
-                      on the <strong>Analyze</strong> query or type it directly in the chat.
+                      {t('guide.onThe')} <strong>{t('guide.analyze')}</strong>{' '}
+                      {t('guide.queryOrType')}
                     </p>
                   </div>
                   <div className="terrain-queries-grid">
@@ -858,29 +850,29 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                       <div key={`terrain-${index}`} className="example-card terrain-card">
                         <div className="query-location">{query.location}</div>
                         <div className="setup-query">
-                          <span className="query-label">1. Setup:</span>
+                          <span className="query-label">{t('guide.n1Setup')}</span>
                           <strong>{query.setupQuery}</strong>
                           <button
                             className="copy-query-btn"
                             onClick={() => handleStacQueryClick(query.setupQuery)}
-                            title="Load the map first"
+                            title={t('guide.loadMapFirst')}
                           >
                             Go
                           </button>
                         </div>
                         <div className="terrain-question">
-                          <span className="query-label">2. Analyze:</span>
+                          <span className="query-label">{t('guide.n2Analyze')}</span>
                           <strong>{query.question}</strong>
                           <button
                             className="copy-query-btn"
                             onClick={() => handleVisionQueryClick(query.question)}
-                            title="Run terrain analysis"
+                            title={t('guide.runTerrain')}
                           >
                             Go
                           </button>
                         </div>
                         <div className="expected-tools">
-                          <span className="tools-label">Expected Tools:</span>
+                          <span className="tools-label">{t('guide.expectedTools')}</span>
                           {query.expectedTools.map((tool, i) => (
                             <span key={i} className="tool-tag">
                               {tool}
@@ -898,26 +890,28 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                 <div className="mobility-queries-section">
                   <div className="instructions-box" style={{ marginBottom: '20px' }}>
                     <p className="instruction-step">
-                      <strong>Step 1:</strong> Click{' '}
+                      <strong>{t('guide.step1')}</strong> {t('guide.click')}{' '}
                       <button
                         className="copy-query-btn"
                         style={{ cursor: 'default', pointerEvents: 'none' }}
                       >
                         Go
                       </button>{' '}
-                      on the <strong>Setup</strong> query to load imagery on the map.
+                      {t('guide.onThe')} <strong>{t('guide.setup')}</strong>{' '}
+                      {t('guide.queryLoadImagery')}
                     </p>
                     <p className="instruction-step">
-                      <strong>Step 2:</strong> Select the <strong>Mobility</strong> module, drop{' '}
-                      <strong>Pin A</strong> (start) and <strong>Pin B</strong> (destination), then
-                      click{' '}
+                      <strong>{t('guide.step2')}</strong> {t('guide.selectModule')}{' '}
+                      <strong>{t('guide.modMobility')}</strong> {t('guide.moduleDrop')}{' '}
+                      <strong>{t('guide.pinA')}</strong> {t('guide.startAnd')}{' '}
+                      <strong>{t('guide.pinB')}</strong> {t('guide.destThenClick')}{' '}
                       <button
                         className="copy-query-btn"
                         style={{ cursor: 'default', pointerEvents: 'none' }}
                       >
                         Go
                       </button>{' '}
-                      on the <strong>Ask</strong> query or type it directly in the chat.
+                      {t('guide.onThe')} <strong>{t('guide.ask')}</strong> {t('guide.queryOrType')}
                     </p>
                   </div>
                   <div className="mobility-queries-grid">
@@ -932,23 +926,23 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                           </span>
                         </div>
                         <div className="setup-query">
-                          <span className="query-label">1. Setup:</span>
+                          <span className="query-label">{t('guide.n1Setup')}</span>
                           <strong>{query.setupQuery}</strong>
                           <button
                             className="copy-query-btn"
                             onClick={() => handleStacQueryClick(query.setupQuery)}
-                            title="Load imagery on the map"
+                            title={t('guide.loadImagery')}
                           >
                             Go
                           </button>
                         </div>
                         <div className="mobility-question">
-                          <span className="query-label">2. Ask:</span>
+                          <span className="query-label">{t('guide.n2Ask')}</span>
                           <strong>{query.question}</strong>
                           <button
                             className="copy-query-btn"
                             onClick={() => handleVisionQueryClick(query.question)}
-                            title="Ask mobility question"
+                            title={t('guide.askMobility')}
                           >
                             Go
                           </button>
@@ -964,25 +958,27 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                 <div className="extreme-weather-queries-section">
                   <div className="instructions-box" style={{ marginBottom: '20px' }}>
                     <p className="instruction-step">
-                      <strong>Step 1:</strong> Click{' '}
+                      <strong>{t('guide.step1')}</strong> {t('guide.click')}{' '}
                       <button
                         className="copy-query-btn"
                         style={{ cursor: 'default', pointerEvents: 'none' }}
                       >
                         Go
                       </button>{' '}
-                      on the <strong>Setup</strong> query to move the map to the region.
+                      {t('guide.onThe')} <strong>{t('guide.setup')}</strong>{' '}
+                      {t('guide.queryMoveMap')}
                     </p>
                     <p className="instruction-step">
-                      <strong>Step 2:</strong> Select the <strong>Extreme Weather</strong> module,
-                      drop a pin, then click{' '}
+                      <strong>{t('guide.step2')}</strong> {t('guide.selectModule')}{' '}
+                      <strong>{t('guide.modWeather')}</strong> {t('guide.thenDropPinClick')}{' '}
                       <button
                         className="copy-query-btn"
                         style={{ cursor: 'default', pointerEvents: 'none' }}
                       >
                         Go
                       </button>{' '}
-                      on the <strong>Analyze</strong> query or type it directly in the chat.
+                      {t('guide.onThe')} <strong>{t('guide.analyze')}</strong>{' '}
+                      {t('guide.queryOrType')}
                     </p>
                   </div>
                   <div className="extreme-weather-queries-grid">
@@ -996,23 +992,23 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                           <span className="analysis-badge climate-variable">{query.variable}</span>
                         </div>
                         <div className="setup-query">
-                          <span className="query-label">1. Setup:</span>
+                          <span className="query-label">{t('guide.n1Setup')}</span>
                           <strong>{query.setupQuery}</strong>
                           <button
                             className="copy-query-btn"
                             onClick={() => handleStacQueryClick(query.setupQuery)}
-                            title="Navigate to region"
+                            title={t('guide.navRegion')}
                           >
                             Go
                           </button>
                         </div>
                         <div className="extreme-weather-question">
-                          <span className="query-label">2. Analyze:</span>
+                          <span className="query-label">{t('guide.n2Analyze')}</span>
                           <strong>{query.question}</strong>
                           <button
                             className="copy-query-btn"
                             onClick={() => handleVisionQueryClick(query.question)}
-                            title="Run climate analysis"
+                            title={t('guide.runClimate')}
                           >
                             Go
                           </button>
@@ -1028,25 +1024,27 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                 <div className="building-damage-queries-section">
                   <div className="instructions-box" style={{ marginBottom: '20px' }}>
                     <p className="instruction-step">
-                      <strong>Step 1:</strong> Click{' '}
+                      <strong>{t('guide.step1')}</strong> {t('guide.click')}{' '}
                       <button
                         className="copy-query-btn"
                         style={{ cursor: 'default', pointerEvents: 'none' }}
                       >
                         Go
                       </button>{' '}
-                      on the <strong>Setup</strong> query to load high-resolution aerial imagery.
+                      {t('guide.onThe')} <strong>{t('guide.setup')}</strong>{' '}
+                      {t('guide.queryLoadAerial')}
                     </p>
                     <p className="instruction-step">
-                      <strong>Step 2:</strong> Select the <strong>Building Damage</strong> module,
-                      drop a pin, then click{' '}
+                      <strong>{t('guide.step2')}</strong> {t('guide.selectModule')}{' '}
+                      <strong>{t('guide.modDamage')}</strong> {t('guide.thenDropPinClick')}{' '}
                       <button
                         className="copy-query-btn"
                         style={{ cursor: 'default', pointerEvents: 'none' }}
                       >
                         Go
                       </button>{' '}
-                      on the <strong>Assess</strong> query or type it directly in the chat.
+                      {t('guide.onThe')} <strong>{t('guide.assess')}</strong>{' '}
+                      {t('guide.queryOrType')}
                     </p>
                   </div>
                   <div className="building-damage-queries-grid">
@@ -1064,23 +1062,23 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                           </span>
                         </div>
                         <div className="setup-query">
-                          <span className="query-label">1. Setup:</span>
+                          <span className="query-label">{t('guide.n1Setup')}</span>
                           <strong>{query.setupQuery}</strong>
                           <button
                             className="copy-query-btn"
                             onClick={() => handleStacQueryClick(query.setupQuery)}
-                            title="Load satellite imagery"
+                            title={t('guide.loadSatellite')}
                           >
                             Go
                           </button>
                         </div>
                         <div className="building-damage-question">
-                          <span className="query-label">2. Assess:</span>
+                          <span className="query-label">{t('guide.n2Assess')}</span>
                           <strong>{query.question}</strong>
                           <button
                             className="copy-query-btn"
                             onClick={() => handleVisionQueryClick(query.question)}
-                            title="Run damage assessment"
+                            title={t('guide.runDamage')}
                           >
                             Go
                           </button>
@@ -1096,24 +1094,22 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                 <div className="comparison-queries-section">
                   <div className="instructions-box" style={{ marginBottom: '20px' }}>
                     <p className="instruction-step">
-                      <strong>Step 1:</strong> Select the <strong>Comparison</strong> module from
-                      the pin menu.
+                      <strong>{t('guide.step1')}</strong> {t('guide.selectModule')}{' '}
+                      <strong>{t('guide.modComparison')}</strong> {t('guide.moduleFromPin')}
                     </p>
                     <p className="instruction-step">
-                      <strong>Step 2:</strong> Navigate to a location and{' '}
-                      <strong>drop a pin</strong> on the map.
+                      <strong>{t('guide.step2')}</strong> {t('guide.navigateAnd')}{' '}
+                      <strong>{t('guide.dropPin')}</strong> {t('guide.onTheMap')}
                     </p>
                     <p className="instruction-step">
-                      <strong>Step 3:</strong> In the chat, type what to compare (time periods,
-                      collection). The system will load before/after imagery and analyze changes.
+                      <strong>{t('guide.step3')}</strong> {t('guide.compareBody')}
                     </p>
                     <p className="instruction-step" style={{ fontSize: '12px', color: '#94a3b8' }}>
-                      ℹ️ Use the BEFORE/AFTER toggle buttons on the map to switch between time
-                      periods.
+                      {t('guide.compareHint')}
                     </p>
                   </div>
                   <h4 style={{ color: '#e2e8f0', margin: '16px 0 12px', fontSize: '14px' }}>
-                    Example Scenarios
+                    {t('guide.exampleScenarios')}
                   </h4>
                   <div
                     className="comparison-queries-grid"
@@ -1123,25 +1119,23 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                       <div className="query-location">Paradise, California</div>
                       <div className="analysis-type">
                         <span className="analysis-badge wildfire-damage">
-                          Camp Fire - Sentinel-2
+                          {t('guide.campFire')}
                         </span>
                       </div>
                       <div className="setup-query">
-                        <span className="query-label">1. Navigate:</span>
-                        <strong>Navigate to Paradise, CA and drop a pin</strong>
+                        <span className="query-label">{t('guide.n1Navigate')}</span>
+                        <strong>{t('guide.navParadise')}</strong>
                         <button
                           className="copy-query-btn"
                           onClick={() => handleStacQueryClick('Navigate to Paradise, CA')}
-                          title="Navigate to region"
+                          title={t('guide.navRegion')}
                         >
                           Go
                         </button>
                       </div>
                       <div className="setup-query">
-                        <span className="query-label">2. Compare:</span>
-                        <strong>
-                          Compare Sentinel-2 imagery from October 2018 and February 2019
-                        </strong>
+                        <span className="query-label">{t('guide.n2Compare')}</span>
+                        <strong>{t('guide.cmpParadise')}</strong>
                         <button
                           className="copy-query-btn"
                           onClick={() =>
@@ -1149,7 +1143,7 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                               'Compare Sentinel-2 imagery from October 2018 and February 2019'
                             )
                           }
-                          title="Run comparison"
+                          title={t('guide.runComparison')}
                         >
                           Go
                         </button>
@@ -1158,26 +1152,22 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                     <div className="example-card comparison-card">
                       <div className="query-location">New York City</div>
                       <div className="analysis-type">
-                        <span className="analysis-badge flood-damage">
-                          Hurricane Sandy - Landsat
-                        </span>
+                        <span className="analysis-badge flood-damage">{t('guide.sandy')}</span>
                       </div>
                       <div className="setup-query">
-                        <span className="query-label">1. Navigate:</span>
-                        <strong>Navigate to NYC coastline and drop a pin</strong>
+                        <span className="query-label">{t('guide.n1Navigate')}</span>
+                        <strong>{t('guide.navNyc')}</strong>
                         <button
                           className="copy-query-btn"
                           onClick={() => handleStacQueryClick('Navigate to NYC coastline')}
-                          title="Navigate to region"
+                          title={t('guide.navRegion')}
                         >
                           Go
                         </button>
                       </div>
                       <div className="setup-query">
-                        <span className="query-label">2. Compare:</span>
-                        <strong>
-                          Compare Landsat imagery from September 2012 and November 2012
-                        </strong>
+                        <span className="query-label">{t('guide.n2Compare')}</span>
+                        <strong>{t('guide.cmpNyc')}</strong>
                         <button
                           className="copy-query-btn"
                           onClick={() =>
@@ -1185,7 +1175,7 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                               'Compare Landsat imagery from September 2012 and November 2012'
                             )
                           }
-                          title="Run comparison"
+                          title={t('guide.runComparison')}
                         >
                           Go
                         </button>
@@ -1200,21 +1190,19 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                 <div className="zoom-tip" style={{ marginTop: '24px' }}>
                   <span className="zoom-tip-icon"></span>
                   <div className="zoom-tip-content">
-                    <strong>Pro Tip:</strong> Some satellite collections (especially MODIS fire
-                    data) only display tiles at deeper zoom levels. Try zooming to{' '}
-                    <strong>level 10+</strong> and panning around the map to see all available
-                    tiles. Gray tiles represent clouds.
+                    <strong>{t('guide.proTip')}</strong> {t('guide.proTipBody')}{' '}
+                    <strong>{t('guide.level10')}</strong> {t('guide.proTipBody2')}
                   </div>
                 </div>
               )}
 
               {/* Learn More */}
               <section className="get-started-section learn-more-section">
-                <h3>Want to Learn More?</h3>
+                <h3>{t('guide.learnMore')}</h3>
                 <div className="learn-more-grid">
                   <div className="learn-more-card">
-                    <h4>Browse STAC Collections</h4>
-                    <p>Explore available datasets and visualization options</p>
+                    <h4>{t('guide.browseStac')}</h4>
+                    <p>{t('guide.browseStacDesc')}</p>
                     <button
                       className="learn-more-btn"
                       onClick={() => {
@@ -1228,13 +1216,13 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                         }, 100);
                       }}
                     >
-                      View STAC Collections →
+                      {t('guide.viewStac')}
                     </button>
                   </div>
 
                   <div className="learn-more-card">
-                    <h4>Check System Health</h4>
-                    <p>Monitor backend connectivity and service availability</p>
+                    <h4>{t('guide.checkHealth')}</h4>
+                    <p>{t('guide.checkHealthDesc')}</p>
                     <button
                       className="learn-more-btn"
                       onClick={() => {
@@ -1247,7 +1235,7 @@ const GetStartedButton: React.FC<GetStartedButtonProps> = ({ onQuerySelect }) =>
                         }, 100);
                       }}
                     >
-                      View System Status →
+                      {t('guide.viewStatus')}
                     </button>
                   </div>
                 </div>

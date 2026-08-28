@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import './PCSearchPanel.css';
 import { API_BASE_URL } from '../config/api';
 import { authenticatedFetch } from '../services/authHelper';
+import { useT } from '../i18n/I18nContext';
 
 interface CollectionData {
   collection_id: string;
@@ -43,6 +44,7 @@ export interface StructuredSearchParams {
 }
 
 const PCSearchPanel: React.FC<PCSearchPanelProps> = ({ onSearch }) => {
+  const t = useT();
   const [datasets, setDatasets] = useState<CollectionData[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<string>('');
   const [location, setLocation] = useState<string>('');
@@ -118,21 +120,21 @@ const PCSearchPanel: React.FC<PCSearchPanelProps> = ({ onSearch }) => {
   return (
     <div className="pc-search-panel">
       <div className="pc-search-header">
-        <h3>Planetary Computer Search</h3>
-        <p className="pc-search-subtitle">Search STAC API with structured parameters</p>
+        <h3>{t('pcSearch.title')}</h3>
+        <p className="pc-search-subtitle">{t('pcSearch.subtitle')}</p>
       </div>
 
       <div className="pc-search-body">
         {/* Dataset Dropdown */}
         <div className="pc-search-field">
-          <label htmlFor="dataset-select">Dataset</label>
+          <label htmlFor="dataset-select">{t('pcSearch.dataset')}</label>
           <select
             id="dataset-select"
             value={selectedCollection}
             onChange={(e) => setSelectedCollection(e.target.value)}
             className="pc-search-select"
           >
-            <option value="">-- Select a dataset --</option>
+            <option value="">{t('pcSearch.selectDataset')}</option>
             {Object.entries(groupedDatasets).map(([category, categoryDatasets]) => (
               <optgroup key={category} label={category}>
                 {categoryDatasets.map((dataset) => {
@@ -155,25 +157,23 @@ const PCSearchPanel: React.FC<PCSearchPanelProps> = ({ onSearch }) => {
 
         {/* Location Input */}
         <div className="pc-search-field">
-          <label htmlFor="location-input">Location</label>
+          <label htmlFor="location-input">{t('pcSearch.location')}</label>
           <input
             id="location-input"
             type="text"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="e.g., California, New York City, 40.7,-74.0"
+            placeholder={t('pcSearch.locationPlaceholder')}
             className="pc-search-input"
           />
-          <small className="pc-search-hint">
-            Enter a place name, city, state, or coordinates (lat,lon)
-          </small>
+          <small className="pc-search-hint">{t('pcSearch.locationHint')}</small>
         </div>
 
         {/* Time Section */}
         <div className="pc-search-field">
           <div className="pc-search-time-header">
-            <label>Time</label>
+            <label>{t('pcSearch.time')}</label>
             <button
               className={`pc-search-range-toggle ${useDateRange ? 'active' : ''}`}
               onClick={() => setUseDateRange(!useDateRange)}
@@ -190,7 +190,7 @@ const PCSearchPanel: React.FC<PCSearchPanelProps> = ({ onSearch }) => {
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="MM/DD/YYYY"
+                placeholder={t('pcSearch.datePlaceholder')}
                 className="pc-search-input pc-search-date-input"
               />
               <span className="pc-search-date-separator">to</span>
@@ -199,7 +199,7 @@ const PCSearchPanel: React.FC<PCSearchPanelProps> = ({ onSearch }) => {
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="MM/DD/YYYY"
+                placeholder={t('pcSearch.datePlaceholder')}
                 className="pc-search-input pc-search-date-input"
               />
             </div>
@@ -209,7 +209,7 @@ const PCSearchPanel: React.FC<PCSearchPanelProps> = ({ onSearch }) => {
               value={singleDate}
               onChange={(e) => setSingleDate(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="MM/DD/YYYY (optional)"
+              placeholder={t('pcSearch.datePlaceholderOptional')}
               className="pc-search-input"
             />
           )}
@@ -229,7 +229,7 @@ const PCSearchPanel: React.FC<PCSearchPanelProps> = ({ onSearch }) => {
           {isLoading ? (
             <>
               <span className="pc-search-spinner"></span>
-              Searching...
+              {t('common.searching')}
             </>
           ) : (
             <>
@@ -246,7 +246,7 @@ const PCSearchPanel: React.FC<PCSearchPanelProps> = ({ onSearch }) => {
                 <circle cx="11" cy="11" r="8"></circle>
                 <path d="m21 21-4.35-4.35"></path>
               </svg>
-              Search
+              {t('common.search')}
             </>
           )}
         </button>

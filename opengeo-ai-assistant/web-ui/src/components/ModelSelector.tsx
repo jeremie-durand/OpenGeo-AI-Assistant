@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './ModelSelector.css';
 import { authenticatedFetch } from '../services/authHelper';
+import { useT } from '../i18n/I18nContext';
 
 interface ModelOption {
   id: string;
@@ -28,6 +29,7 @@ const DEFAULT_MODELS: ModelOption[] = [
 ];
 
 const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, apiBaseUrl = '' }) => {
+  const t = useT();
   const [isOpen, setIsOpen] = useState(false);
   const [models, setModels] = useState<ModelOption[]>(DEFAULT_MODELS);
   const [currentModel, setCurrentModel] = useState<string>('unknown');
@@ -107,9 +109,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange, apiBaseUrl
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        title="Select AI Model"
+        title={t('model.select')}
       >
-        <span className="model-selector-label">Models</span>
+        <span className="model-selector-label">{t('model.models')}</span>
       </div>
 
       {isOpen && (
