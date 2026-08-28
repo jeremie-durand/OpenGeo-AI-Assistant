@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import './HealthCheckInfo.css';
 import { authenticatedFetch } from '../services/authHelper';
+import { useT } from '../i18n/I18nContext';
 
 interface HealthCheckData {
   status: string;
@@ -43,6 +44,7 @@ interface HealthCheckInfoProps {
 const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
   apiBaseUrl = import.meta.env.BACKEND_URL || 'http://localhost:8000',
 }) => {
+  const t = useT();
   const [healthData, setHealthData] = useState<HealthCheckData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,12 +111,12 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
       return (
         <div className="health-tooltip">
           <div className="health-tooltip-header">
-            <span className="health-tooltip-title">System Status</span>
+            <span className="health-tooltip-title">{t('health.systemStatus')}</span>
           </div>
           <div className="health-tooltip-content">
             {loading ? (
               <div className="health-status-item">
-                <span>Loading health status...</span>
+                <span>{t('health.loading')}</span>
               </div>
             ) : (
               <div className="health-status-item error">
@@ -129,7 +131,7 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
     return (
       <div className="health-tooltip">
         <div className="health-tooltip-header">
-          <span className="health-tooltip-title">System Status</span>
+          <span className="health-tooltip-title">{t('health.systemStatus')}</span>
           <span
             className="health-status-badge"
             style={{ backgroundColor: getStatusColor(healthData.status) }}
@@ -140,7 +142,7 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
 
         <div className="health-tooltip-content">
           <div className="health-section">
-            <div className="health-section-title">Core Services</div>
+            <div className="health-section-title">{t('health.coreServices')}</div>
 
             {(() => {
               // Backend may return 'checks' or 'connectivity_tests'
@@ -150,7 +152,7 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
               return (
                 <>
                   <div className="health-status-item">
-                    <span className="health-label">AI Model:</span>
+                    <span className="health-label">{t('health.aiModel')}</span>
                     <span className={`health-value ${isServiceOk(aiStatus) ? 'success' : 'error'}`}>
                       {isServiceOk(aiStatus) ? 'Connected' : 'Disconnected'}
                     </span>
@@ -159,7 +161,7 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
                   {/* Private STAC API — only show when configured */}
                   {privateStac && privateStac.status !== 'not_configured' && (
                     <div className="health-status-item">
-                      <span className="health-label">Private STAC API:</span>
+                      <span className="health-label">{t('health.privateStac')}</span>
                       <span
                         className={`health-value ${isServiceOk(privateStac.status) ? 'success' : 'error'}`}
                       >
@@ -169,7 +171,7 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
                   )}
 
                   <div className="health-status-item">
-                    <span className="health-label">Planetary Computer:</span>
+                    <span className="health-label">{t('health.planetaryComputer')}</span>
                     <span
                       className={`health-value ${isServiceOk(svc.planetary_computer?.status) ? 'success' : 'error'}`}
                     >
@@ -182,7 +184,7 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
           </div>
 
           <div className="health-section">
-            <div className="health-section-title">Last Check</div>
+            <div className="health-section-title">{t('health.lastCheck')}</div>
 
             <div className="health-status-item">
               <span className="health-value">
@@ -202,9 +204,7 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
           </div>
 
           <div className="health-info-footer">
-            <span style={{ fontSize: '10px', opacity: 0.7 }}>
-              If anything is not working it should have a red X and Disconnected
-            </span>
+            <span style={{ fontSize: '10px', opacity: 0.7 }}>{t('health.hint')}</span>
           </div>
         </div>
       </div>
@@ -222,9 +222,9 @@ const HealthCheckInfo: React.FC<HealthCheckInfoProps> = ({
         style={{
           cursor: 'pointer',
         }}
-        title="System Health Status"
+        title={t('health.title')}
       >
-        <span className="health-button-label">Health</span>
+        <span className="health-button-label">{t('health.health')}</span>
       </div>
 
       {showTooltip && hasInitialLoad && renderHealthTooltip()}
