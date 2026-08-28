@@ -40,6 +40,7 @@ import {
   endPerformanceTracking,
 } from '../utils/renderingLogger';
 import DataLegend from './DataLegend';
+import { useT } from '../i18n/I18nContext';
 
 // Centralized map provider configuration - set to 'leaflet' for open-source, no-auth setup
 const mapProvider = 'leaflet';
@@ -141,6 +142,7 @@ const MapView: React.FC<MapViewProps> = ({
   comparisonUserQuery = null,
   onTerrainSessionChange,
 }) => {
+  const t = useT();
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -4200,7 +4202,7 @@ const MapView: React.FC<MapViewProps> = ({
             padding: '20px',
           }}
         >
-          <div style={{ marginBottom: '10px' }}>Loading map...</div>
+          <div style={{ marginBottom: '10px' }}>{t('map.loading')}</div>
         </div>
       )}
 
@@ -4223,7 +4225,7 @@ const MapView: React.FC<MapViewProps> = ({
         >
           <div>
             <div style={{ fontSize: '12px', color: '#666', marginBottom: '2px' }}>
-              VIEWING DATASET
+              {t('map.viewingDataset')}
             </div>
             <div style={{ color: '#333' }}>{selectedDataset.title}</div>
           </div>
@@ -4236,7 +4238,7 @@ const MapView: React.FC<MapViewProps> = ({
           {/* Pin toggle button - Modern icon-only button */}
           <div
             onClick={handlePinButtonClick}
-            title="Geointelligence Modules"
+            title={t('map.geointModules')}
             style={{
               position: 'absolute',
               top: '10px',
@@ -4315,7 +4317,7 @@ const MapView: React.FC<MapViewProps> = ({
                   letterSpacing: '-0.01em',
                 }}
               >
-                Geointelligence Modules
+                {t('map.geointModules')}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -4352,11 +4354,9 @@ const MapView: React.FC<MapViewProps> = ({
                       marginBottom: '4px',
                     }}
                   >
-                    Vision Analysis
+                    {t('module.vision')}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                    AI image analysis of map imagery and raster analysis of geospatial data
-                  </div>
+                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{t('module.visionDesc')}</div>
                 </div>
 
                 {/* Extreme Weather Module */}
@@ -4393,10 +4393,10 @@ const MapView: React.FC<MapViewProps> = ({
                       marginBottom: '4px',
                     }}
                   >
-                    Extreme Weather
+                    {t('module.weather')}
                   </div>
                   <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                    Global climate projections: temperature, precipitation & wind from NASA CMIP6
+                    {t('module.weatherDesc')}
                   </div>
                 </div>
 
@@ -4433,10 +4433,10 @@ const MapView: React.FC<MapViewProps> = ({
                       marginBottom: '4px',
                     }}
                   >
-                    Terrain Analysis
+                    {t('module.terrain')}
                   </div>
                   <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                    Landscape, elevation & environmental characteristics
+                    {t('module.terrainDesc')}
                   </div>
                 </div>
 
@@ -4473,10 +4473,10 @@ const MapView: React.FC<MapViewProps> = ({
                       marginBottom: '4px',
                     }}
                   >
-                    Mobility Assessment
+                    {t('module.mobility')}
                   </div>
                   <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                    Traversability across two points based on terrain and context
+                    {t('module.mobilityDesc')}
                   </div>
                 </div>
 
@@ -4514,11 +4514,9 @@ const MapView: React.FC<MapViewProps> = ({
                       marginBottom: '4px',
                     }}
                   >
-                    Building Damage
+                    {t('module.damage')}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                    Aerial structural damage assessment
-                  </div>
+                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{t('module.damageDesc')}</div>
                 </div>
 
                 {/* Comparison Module */}
@@ -4555,10 +4553,10 @@ const MapView: React.FC<MapViewProps> = ({
                       marginBottom: '4px',
                     }}
                   >
-                    Comparison
+                    {t('module.comparison')}
                   </div>
                   <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                    Time comparison to identify environmental and structural changes
+                    {t('module.comparisonDesc')}
                   </div>
                 </div>
               </div>
@@ -4635,7 +4633,7 @@ const MapView: React.FC<MapViewProps> = ({
                     e.currentTarget.style.background = 'rgba(255, 255, 255, 0.9)';
                 }}
               >
-                Before
+                {t('map.before')}
               </div>
 
               <div
@@ -4668,7 +4666,7 @@ const MapView: React.FC<MapViewProps> = ({
                     e.currentTarget.style.background = 'rgba(255, 255, 255, 0.9)';
                 }}
               >
-                After
+                {t('map.after')}
               </div>
             </div>
           )}
@@ -4676,7 +4674,7 @@ const MapView: React.FC<MapViewProps> = ({
           {/* Zoom In Button */}
           <div
             onClick={handleZoomIn}
-            title="Zoom In"
+            title={t('map.zoomIn')}
             style={{
               position: 'absolute',
               top: '126px', // Under map style button
@@ -4714,7 +4712,7 @@ const MapView: React.FC<MapViewProps> = ({
           {/* Zoom Out Button - positioned under zoom in button */}
           <div
             onClick={handleZoomOut}
-            title="Zoom Out"
+            title={t('map.zoomOut')}
             style={{
               position: 'absolute',
               top: '184px', // Under zoom in button
@@ -4752,7 +4750,7 @@ const MapView: React.FC<MapViewProps> = ({
           {/* Compass/Reset Bearing Button - positioned under zoom out button */}
           <div
             onClick={handleResetBearing}
-            title="Reset Map Rotation"
+            title={t('map.resetRotation')}
             style={{
               position: 'absolute',
               top: '242px', // Under zoom out button
@@ -4856,7 +4854,7 @@ const MapView: React.FC<MapViewProps> = ({
 
           {/* Zoom Level Indicator - positioned under data catalog button */}
           <div
-            title="Current Zoom Level"
+            title={t('map.currentZoom')}
             style={{
               position: 'absolute',
               top: '358px', // Under data catalog button
@@ -4937,7 +4935,7 @@ const MapView: React.FC<MapViewProps> = ({
                   fontWeight: '500',
                 }}
               >
-                Clear
+                {t('common.clear')}
               </span>
             </div>
           )}
@@ -5023,7 +5021,7 @@ const MapView: React.FC<MapViewProps> = ({
               animation: 'spin 1s linear infinite',
             }}
           />
-          Adjusting tiles to zoom level
+          {t('map.adjustingTiles')}
         </div>
       )}
 
@@ -5032,7 +5030,7 @@ const MapView: React.FC<MapViewProps> = ({
       {/* Text Visibility Tip - shown when satellite data is loaded */}
       {showStyleTip && satelliteData && mapLoaded && (
         <div className={`map-style-tip ${showStyleTip ? 'show' : ''}`}>
-          ? <strong>Text Hard to Read?</strong>
+          ? <strong>{t('map.textHardToRead')}</strong>
           <br />� Use the style control (top-right) to switch to <strong>"Road"</strong> or{' '}
           <strong>"Road Shaded Relief"</strong>
           <br />

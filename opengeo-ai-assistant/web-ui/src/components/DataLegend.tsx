@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 import React, { useEffect, useState } from 'react';
+import { useT } from '../i18n/I18nContext';
 
 interface DataLegendProps {
   collection: string;
@@ -22,6 +23,7 @@ const DataLegend: React.FC<DataLegendProps> = ({
   min = -100,
   max = 8848, // Mt. Everest height
 }) => {
+  const t = useT();
   const [colormapData, setColormapData] = useState<ColormapData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -84,7 +86,7 @@ const DataLegend: React.FC<DataLegendProps> = ({
   if (loading) {
     return (
       <div className="absolute bottom-8 left-4 z-[500] bg-white rounded-lg shadow-lg p-4 min-w-[200px]">
-        <div className="text-sm text-gray-600">Loading colormap...</div>
+        <div className="text-sm text-gray-600">{t('legend.loadingColormap')}</div>
       </div>
     );
   }
@@ -389,7 +391,7 @@ const DataLegend: React.FC<DataLegendProps> = ({
             }}
           >
             <span>✓</span>
-            <span>TiTiler Colormap</span>
+            <span>{t('legend.titilerColormap')}</span>
           </div>
         )}
       </div>

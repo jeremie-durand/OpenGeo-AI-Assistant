@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import './STACInfoButton.css';
 import { API_BASE_URL } from '../config/api';
 import { authenticatedFetch } from '../services/authHelper';
+import { useT } from '../i18n/I18nContext';
 
 // Simplified collection info from categories array
 interface SimplifiedCollection {
@@ -75,6 +76,7 @@ interface PCCollectionsData {
 }
 
 const STACInfoButton: React.FC = () => {
+  const t = useT();
   const [showModal, setShowModal] = useState(false);
   const [collectionsData, setCollectionsData] = useState<PCCollectionsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -168,9 +170,9 @@ const STACInfoButton: React.FC = () => {
       <div
         className="stac-info-button"
         onClick={() => setShowModal(true)}
-        title="View STAC Collection Availability Guide"
+        title={t('stacInfo.viewGuide')}
       >
-        <span className="stac-button-label">Data Catalog</span>
+        <span className="stac-button-label">{t('common.dataCatalog')}</span>
       </div>
 
       {showModal && (
@@ -184,17 +186,17 @@ const STACInfoButton: React.FC = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="stac-header-link"
-                    title="Go to Planetary Computer Data Catalog"
+                    title={t('stacInfo.goToCatalog')}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    STAC Data Collection Availability
+                    {t('stacInfo.availability')}
                   </a>
                 </h2>
               </div>
               <button
                 className="stac-close-btn"
                 onClick={() => setShowModal(false)}
-                aria-label="Close"
+                aria-label={t('common.close')}
               >
                 ×
               </button>
@@ -207,10 +209,7 @@ const STACInfoButton: React.FC = () => {
                   Planetary Computer Collections (
                   {collectionsData?.metadata.total_collections || 47})
                 </h3>
-                <p className="stac-section-subtitle">
-                  Complete catalog of STAC collections available through Microsoft Planetary
-                  Computer. All collections support location-based queries; datetime is optional.
-                </p>
+                <p className="stac-section-subtitle">{t('stacInfo.intro')}</p>
 
                 {/* Category Filter Buttons */}
                 {collectionsData && (
@@ -233,7 +232,7 @@ const STACInfoButton: React.FC = () => {
                   </div>
                 )}
 
-                {loading && <div className="stac-loading">Loading collections...</div>}
+                {loading && <div className="stac-loading">{t('common.loadingCollections')}</div>}
 
                 {collectionsData?.categories
                   .filter(
@@ -246,10 +245,10 @@ const STACInfoButton: React.FC = () => {
                       </h3>
                       <div className="stac-table">
                         <div className="stac-table-header">
-                          <div className="stac-col-id">Collection ID</div>
-                          <div className="stac-col-description">Description</div>
-                          <div className="stac-col-temporal">Temporal Coverage</div>
-                          <div className="stac-col-params">Required Parameters</div>
+                          <div className="stac-col-id">{t('stacInfo.collectionId')}</div>
+                          <div className="stac-col-description">{t('stacInfo.description')}</div>
+                          <div className="stac-col-temporal">{t('stacInfo.temporalCoverage')}</div>
+                          <div className="stac-col-params">{t('stacInfo.requiredParameters')}</div>
                         </div>
                         {category.collections.map((collection, collIdx) => {
                           // Extra defensive check for collection object

@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { Dataset } from '../services/api';
+import { useT } from '../i18n/I18nContext';
 
 interface DatasetDropdownProps {
   datasets: Dataset[];
@@ -15,8 +16,9 @@ const DatasetDropdown: React.FC<DatasetDropdownProps> = ({
   datasets,
   selectedDataset,
   onDatasetSelect,
-  placeholder = 'Select a dataset...',
+  placeholder,
 }) => {
+  const t = useT();
   const [isOpen, setIsOpen] = useState(false);
 
   const handleToggle = () => {
@@ -31,7 +33,9 @@ const DatasetDropdown: React.FC<DatasetDropdownProps> = ({
   return (
     <div className="dataset-dropdown">
       <button className={`dropdown-button ${isOpen ? 'open' : ''}`} onClick={handleToggle}>
-        <span>{selectedDataset ? selectedDataset.title : placeholder}</span>
+        <span>
+          {selectedDataset ? selectedDataset.title : (placeholder ?? t('common.selectDataset'))}
+        </span>
         <span className={`dropdown-arrow ${isOpen ? 'open' : ''}`}>▼</span>
       </button>
 
@@ -49,7 +53,7 @@ const DatasetDropdown: React.FC<DatasetDropdownProps> = ({
             ))}
           {(!Array.isArray(datasets) || datasets.length === 0) && (
             <div className="dropdown-item" style={{ color: '#666', fontStyle: 'italic' }}>
-              No datasets available
+              {t('common.noDatasets')}
             </div>
           )}
         </div>
