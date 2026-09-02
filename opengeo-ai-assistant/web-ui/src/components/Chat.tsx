@@ -7,7 +7,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiService, Dataset, ChatMessage, MapContext } from '../services/api';
 import { enhanceMessageForMapVisualization, hasVisualizableData } from './OpenGeoMapIntegration';
 import vedaSearchService from '../services/vedaSearchService';
-import { useT } from '../i18n/I18nContext';
+import { useI18n } from '../i18n/I18nContext';
 
 // Enhanced function to extract text from complex response objects
 function extractTextFromResponse(content: any): string {
@@ -232,7 +232,7 @@ const Chat: React.FC<ChatProps> = ({
   onComparisonResult,
   selectedModel,
 }) => {
-  const t = useT();
+  const { lang, t } = useI18n();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [feedback, setFeedback] = useState<Record<number, string>>({});
@@ -277,13 +277,25 @@ const Chat: React.FC<ChatProps> = ({
     if (messages.length === 0 && !selectedDataset) {
       const welcomeMessage: ChatMessage = {
         role: 'assistant',
-        content:
-          "Welcome to OpenGeo AI Assistant! I'm here to help you find datasets that include location and date details. Whether you're tracking time-sensitive trends or exploring geospatial insights, I've got you covered. Just tell me what you're working on, and we'll get started!",
+        content: t('chat.welcome'),
         timestamp: new Date(),
+        isWelcome: true,
       };
       setMessages([welcomeMessage]);
     }
   }, []); // Run only once on mount
+
+  // The greeting is written into state once, so re-translate it when the language
+  // changes after mount. Every other message is user or model content and stays as is.
+  useEffect(() => {
+    setMessages((prev) =>
+      prev.some((message) => message.isWelcome)
+        ? prev.map((message) =>
+            message.isWelcome ? { ...message, content: t('chat.welcome') } : message
+          )
+        : prev
+    );
+  }, [lang, t]);
 
   // Add injection message when dataset is selected
   useEffect(() => {
