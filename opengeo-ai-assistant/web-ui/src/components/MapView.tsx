@@ -4099,7 +4099,7 @@ const MapView: React.FC<MapViewProps> = ({
           (item: {
             id: string;
             collection: string;
-            bbox: number[];
+            bbox?: number[];
             datetime: string;
             assets?: Record<string, unknown>;
           }) => ({
@@ -4131,7 +4131,10 @@ const MapView: React.FC<MapViewProps> = ({
         stac_items: stacItems, // Full STAC items with assets for NDVI computation
         item_id: satelliteData?.items?.[0]?.id || null,
         datetime: satelliteData?.items?.[0]?.datetime || null,
-        zoom_level: mapProvider === 'leaflet' ? map.getZoom() : (map as atlas.Map).getCamera().zoom,
+        // Azure Maps was removed, so the `atlas` types are gone; this branch only
+        // runs for a non-Leaflet provider, of which there is currently none.
+        zoom_level:
+          mapProvider === 'leaflet' ? map.getZoom() : (map as any).getCamera().zoom,
         has_satellite_data: !!satelliteData, // Flag to indicate if STAC imagery is loaded
         vision_mode: visionMode, // explicit vision mode flag
         vision_pin: visionMode ? visionPin : null, // pin coordinates for vision analysis

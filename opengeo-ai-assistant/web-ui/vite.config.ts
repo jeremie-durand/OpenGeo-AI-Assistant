@@ -90,24 +90,25 @@ export default defineConfig(({ command, mode }) => {
     build: {
       outDir: 'dist',
       sourcemap: !isProd, // Disable source maps in production
-      minify: isProd ? 'esbuild' : false,
+      // Vite 8 bundles with Rolldown, whose minifier is oxc. 'esbuild' is still a
+      // valid value but needs the esbuild package, which Vite 8 no longer installs.
+      minify: isProd ? 'oxc' : false,
       rollupOptions: {
         output: {
+          // Rolldown accepts only the function form — Rollup's object/record form
+          // throws "manualChunks is not a function" at build time.
           manualChunks: isProd
-            ? {
-                vendor: ['react', 'react-dom'],
-                query: ['@tanstack/react-query'],
-                utils: ['axios'],
+            ? (id: string) => {
+                if (!id.includes('node_modules')) return undefined;
+                if (id.includes('react')) return 'vendor';
+                if (id.includes('@tanstack/react-query')) return 'query';
+                if (id.includes('axios')) return 'utils';
+                return undefined;
               }
             : undefined,
         },
       },
     },
-    esbuild: isProd
-      ? {
-          drop: ['console', 'debugger'],
-        }
-      : undefined,
     define: {
       // Environment-specific configurations
       __DEV__: JSON.stringify(isDev),

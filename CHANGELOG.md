@@ -18,6 +18,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 ### Changed
 
 - `build_stac_query_agent()` now requests JSON mode and anchors the returned bbox, instead of trusting the model's coordinates verbatim.
+- Production minifier is now oxc (Rolldown's own). `minify: 'esbuild'` remains valid in Vite 8 but requires the `esbuild` package, which Vite 8 no longer installs.
+
+### Fixed
+
+- `vite build` failed outright with `TypeError: manualChunks is not a function`: Vite 8 bundles with Rolldown, which accepts only the function form of `manualChunks`, not Rollup's object/record form. The production build had been broken since the Vite 8 upgrade.
+- `src/utils/tileLayerFactory.ts` did not compile — a bad paste had left its module header comment unterminated, swallowing both imports and the `TileLayerOptions` interface. The same paste had also dropped the `else` branch of the TileJSON check, which is restored: the per-collection config supplies the zoom range, and the chosen range is logged. The zoom numbers the lost code hardcoded are deliberately *not* reinstated — `getCollectionConfig()` already returns the same 6-22 range for optical collections and for its default fallback, while HLS (8+) and MODIS (8-10+) need higher floors that the old override would have lowered, reintroducing tile 404s.
+- Type errors across the web UI: `@types/node` was not in `tsconfig.json` `types` (so `global` and `NodeJS` were unresolved), an optional-chained `.length` was compared without a default, a `QueryCategory` entry was missing its `icon`, a STAC item callback required a `bbox` its input does not always carry, and a leftover `atlas.Map` cast referenced Azure Maps types removed in 0.1.0.
+
+### Removed
+
+- `esbuild: { drop: ['console', 'debugger'] }` — the option needs the esbuild transform, and oxc exposes no equivalent, so it was dead configuration. **Console output is no longer stripped from production bundles**; restoring that would mean adopting terser.
 
 ---
 

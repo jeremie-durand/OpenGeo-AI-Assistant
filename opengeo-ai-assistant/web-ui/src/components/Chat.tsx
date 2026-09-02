@@ -423,8 +423,8 @@ const Chat: React.FC<ChatProps> = ({
             // Check if STAC data is loaded (has tiles or stac_items)
             if (requiresStacData) {
               const hasStacData =
-                currentMapContext?.tile_urls?.length > 0 ||
-                currentMapContext?.stac_items?.length > 0;
+                (currentMapContext?.tile_urls?.length ?? 0) > 0 ||
+                (currentMapContext?.stac_items?.length ?? 0) > 0;
               if (!hasStacData) {
                 validationErrors.push(
                   '**No satellite data loaded.** Please run a STAC Search query (Step 1) first to load tiles on the map.'
