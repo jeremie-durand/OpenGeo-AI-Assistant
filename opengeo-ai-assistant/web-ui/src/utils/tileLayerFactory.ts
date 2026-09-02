@@ -1,39 +1,30 @@
 /**
  * Tile Layer Factory
- * 
+ *
  * Creates and configures TileLayer instances with optimized settings
- * based o    // High-resolution optical: enable deep zoom
-    // Covers: sentinel-2-l2a, landsat-c2-l2, landsat-8-c2-l2, landsat-9-c2-l2, naip, hls (all variants)
-    if (collectionLower.includes('sentinel-2') || 
-        collectionLower.includes('landsat') ||
-        collectionLower.includes('hls') ||
-        collectionLower.includes('naip')) {
-      minZoom = 6;
-      maxZoom = 22; // Maximum zoom for crisp detail
-      console.log(`[TileLayerFactory] High-res optical (no TileJSON): zoom range ${minZoom}-${maxZoom}`);
-    }
-    // MODIS: enforce minimum zoom to avoid 404 errors with large footprints
+ * based on the collection being rendered.
+ */
 
-    import { getCollectionConfig } from './renderingConfig';
-    import type { TileJsonResponse } from './tileJsonFetcher';
+import { getCollectionConfig } from './renderingConfig';
+import type { TileJsonResponse } from './tileJsonFetcher';
 
-    export interface TileLayerOptions {
-      tileUrl: string;
-      collection: string;
-      bounds?: number[];
-      tilejson?: TileJsonResponse;
-      isElevation?: boolean;
-      isThermal?: boolean;
-      isFire?: boolean;
-      customOpacity?: number;
-    }
+export interface TileLayerOptions {
+  tileUrl: string;
+  collection: string;
+  bounds?: number[];
+  tilejson?: TileJsonResponse;
+  isElevation?: boolean;
+  isThermal?: boolean;
+  isFire?: boolean;
+  customOpacity?: number;
+}
 
-    /**
-     * Creates a Leaflet TileLayer with optimized configuration
-     * @param options - Configuration options for tile layer
-     * @param leaflet - Leaflet library (window.L)
-     * @returns Configured Leaflet TileLayer instance
-     */
+/**
+ * Creates a Leaflet TileLayer with optimized configuration
+ * @param options - Configuration options for tile layer
+ * @param leaflet - Leaflet library (window.L)
+ * @returns Configured Leaflet TileLayer instance
+ */
 export function createTileLayer(options: TileLayerOptions, leaflet: any): any {
   const {
     tileUrl,
@@ -58,6 +49,15 @@ export function createTileLayer(options: TileLayerOptions, leaflet: any): any {
   if (tilejson) {
     if (tilejson.minzoom !== undefined) minZoom = tilejson.minzoom;
     if (tilejson.maxzoom !== undefined) maxZoom = tilejson.maxzoom;
+  } else {
+    // Without TileJSON the per-collection config decides the range, and it already
+    // encodes what each collection needs: optical 6-22 (including the default
+    // fallback that catches unlisted Sentinel-2/Landsat/NAIP variants), HLS 8+ and
+    // MODIS 8-10+, whose tiles 404 below those zooms. Nothing is overridden here —
+    // forcing the optical floor onto HLS or MODIS would bring those 404s back.
+    console.log(
+      `[TileLayerFactory] No TileJSON for ${collection}: zoom range ${minZoom}-${maxZoom}`
+    );
   }
 
   // Opacity
