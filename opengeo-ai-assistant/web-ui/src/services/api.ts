@@ -47,6 +47,7 @@ export interface ChatMessage {
   timestamp: Date;
   source?: string;
   isThinking?: boolean; // Flag to indicate "thinking" animation
+  isWelcome?: boolean; // Flag the mount-time greeting so it can be re-translated
 }
 
 export interface MapContext {

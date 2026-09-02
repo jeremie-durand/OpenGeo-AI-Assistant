@@ -14,10 +14,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 - Canadian entries in `_KNOWN_BBOXES` (Canada, Québec, Ontario, and the main Québec cities), with accented and unaccented keys so both spellings resolve in the keyword fallback.
 - `_anchor_bbox()` replaces an LLM-supplied bbox with the vetted one whenever the reported `location_name` is a known location.
 - `tests/test_generic_query_translator.py` covering the above.
+- `chat.welcome` translation key (EN/FR) for the chat greeting, which was the last hardcoded English string in the chat UI.
+- `isWelcome` flag on `ChatMessage`, marking the mount-time greeting so it can be re-translated in place.
+- `src/i18n/__tests__/translations.test.tsx` covering catalog key parity between languages and the host language contract (`sdss-lang` + `sdss-lang-change`, including the cross-tab `storage` path).
 
 ### Changed
 
 - `build_stac_query_agent()` now requests JSON mode and anchors the returned bbox, instead of trusting the model's coordinates verbatim.
+- The chat greeting is rendered through `t()` and re-translates when the host switches language after mount, instead of being fixed to English at mount time.
 - Production minifier is now oxc (Rolldown's own). `minify: 'esbuild'` remains valid in Vite 8 but requires the `esbuild` package, which Vite 8 no longer installs.
 
 ### Fixed

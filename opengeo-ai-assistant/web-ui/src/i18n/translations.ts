@@ -23,6 +23,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'chat.thinking': 'Thinking...',
     'chat.thumbsUp': 'Thumbs up',
     'chat.thumbsDown': 'Thumbs down',
+    'chat.welcome':
+      "Welcome to OpenGeo AI Assistant! I'm here to help you find datasets that include location and date details. Whether you're tracking time-sensitive trends or exploring geospatial insights, I've got you covered. Just tell me what you're working on, and we'll get started!",
 
     'legend.loadingColormap': 'Loading colormap...',
     'legend.titilerColormap': 'TiTiler Colormap',
@@ -203,6 +205,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     'chat.thinking': 'Réflexion en cours…',
     'chat.thumbsUp': 'Pouce en l’air',
     'chat.thumbsDown': 'Pouce en bas',
+    'chat.welcome':
+      "Bienvenue sur OpenGeo AI Assistant ! Je suis là pour vous aider à trouver des jeux de données comportant des informations de localisation et de date. Que vous suiviez des tendances temporelles ou exploriez des analyses géospatiales, je peux vous aider. Dites-moi sur quoi vous travaillez et commençons !",
 
     'legend.loadingColormap': 'Chargement de la palette…',
     'legend.titilerColormap': 'Palette TiTiler',
