@@ -14,11 +14,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 - `isWelcome` flag on `ChatMessage`, marking the mount-time greeting so it can be re-translated in place.
 - `src/i18n/__tests__/translations.test.tsx` covering catalog key parity between languages and the host language contract (`sdss-lang` + `sdss-lang-change`, including the cross-tab `storage` path).
 - CI now builds the production bundle (`npm run build`) in the frontend job. Vitest never invokes the production bundler, so a Rolldown-incompatible `vite.config.ts` shipped in two releases with every test green.
+- CI now type-checks the web UI (`npm run typecheck`, a new script running `tsc --noEmit`), which had never run in CI and had accumulated 37 errors.
+- `apiService.structuredSearch()` and its `StructuredSearchParams` type, calling the `POST /api/structured-search` endpoint that already existed on the backend. `Chat.tsx` invoked this method without it ever having been written, so the Planetary Computer structured-search path threw at runtime.
 
 ### Changed
 
 - The chat greeting is rendered through `t()` and re-translates when the host switches language after mount, instead of being fixed to English at mount time.
-- Production minifier is now oxc (Rolldown's own). `minify: 'esbuild'` remains valid in Vite 8 but requires the `esbuild` package, which Vite 8 no longer installs.
+- Production minifier is now terser, configured with `drop_console` and `drop_debugger`. Vite 8's Rolldown default is oxc, but oxc exposes no way to drop console statements, and the app ships ~800 ungated `console` calls — some logging message content. `minify: 'esbuild'` is still a valid value but needs the `esbuild` package, which Vite 8 no longer installs.
+- The web UI package is `opengeo-ai-assistant-ui` at `0.2.0-alpha`, replacing the fork's `earth-copilot-ui` at `0.1.0`, which had never been bumped.
 
 ### Fixed
 
@@ -28,7 +31,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Removed
 
-- `esbuild: { drop: ['console', 'debugger'] }` — the option needs the esbuild transform, and oxc exposes no equivalent, so it was dead configuration. **Console output is no longer stripped from production bundles**; restoring that would mean adopting terser.
+- `esbuild: { drop: ['console', 'debugger'] }` — the option needs the esbuild transform, which Vite 8 no longer installs, so it was dead configuration. Console stripping is preserved through terser instead (see Changed).
+- `src/components/IntelligentLandingPage.tsx` — nothing imported it, and it called an `apiService.routeQuery()` that does not exist.
 
 ---
 
