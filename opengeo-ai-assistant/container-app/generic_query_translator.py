@@ -98,12 +98,22 @@ async def _llm_text(
     messages: List[Dict],
     max_tokens: int = 512,
     temperature: float = 0.2,
+    response_format: Optional[Dict[str, Any]] = None,
 ) -> str:
-    """Call *client* (LLMClient) and return the assistant text."""
+    """Call *client* (LLMClient) and return the assistant text.
+
+    *response_format* is forwarded to the provider only when set, letting callers
+    opt into API-level JSON enforcement (``{"type": "json_object"}``) that small
+    local models need to reliably return parsable JSON.
+    """
+    chat_kwargs: Dict[str, Any] = {
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if response_format is not None:
+        chat_kwargs["response_format"] = response_format
     try:
-        response = await client.chat(
-            messages, max_tokens=max_tokens, temperature=temperature
-        )
+        response = await client.chat(messages, **chat_kwargs)
     except Exception as exc:
         logger.error(f"[GQT] _llm_text chat() raised: {type(exc).__name__}: {exc}")
         return ""
@@ -152,7 +162,32 @@ _KNOWN_BBOXES: Dict[str, List[float]] = {
     "tokyo": [139.50, 35.50, 140.00, 35.90],
     "amazon": [-73.99, -9.00, -44.00, 2.00],
     "sahara": [-17.00, 15.00, 37.00, 35.00],
+    "canada": [-141.00, 41.68, -52.63, 83.11],
+    "quebec": [-79.76, 44.99, -57.10, 62.59],
+    "québec": [-79.76, 44.99, -57.10, 62.59],
+    "ontario": [-95.16, 41.67, -74.32, 56.85],
+    "quebec city": [-71.42, 46.76, -71.17, 46.89],
+    "ville de québec": [-71.42, 46.76, -71.17, 46.89],
+    "montreal": [-73.97, 45.41, -73.47, 45.71],
+    "montréal": [-73.97, 45.41, -73.47, 45.71],
+    "laval": [-73.82, 45.53, -73.62, 45.62],
+    "longueuil": [-73.55, 45.47, -73.43, 45.59],
+    "gatineau": [-75.92, 45.37, -75.68, 45.49],
+    "sherbrooke": [-71.97, 45.33, -71.81, 45.42],
+    "toronto": [-79.64, 43.58, -79.12, 43.86],
 }
+
+
+def _anchor_bbox(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Replace an LLM-supplied bbox with the vetted one for that location.
+
+    Small models often return a plausible-looking but inaccurate bbox. When the
+    location they report is one we have vetted coordinates for, those win.
+    """
+    name = (params.get("location_name") or "").strip().lower()
+    if name in _KNOWN_BBOXES:
+        params["bbox"] = _KNOWN_BBOXES[name]
+    return params
 
 
 def _keyword_extract_stac_params(query: str) -> Dict[str, Any]:
@@ -405,10 +440,11 @@ Examples:
                 [{"role": "user", "content": prompt}],
                 max_tokens=256,
                 temperature=0.0,
+                response_format={"type": "json_object"},
             )
             result = _parse_json(raw)
             if isinstance(result, dict):
-                return result
+                return _anchor_bbox(result)
         except Exception as exc:
             logger.error(f"[GQT] build_stac_query_agent failed: {exc}")
 
