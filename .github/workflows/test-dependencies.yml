@@ -61,3 +61,10 @@ jobs:
       - name: Run frontend tests
         working-directory: opengeo-ai-assistant/web-ui
         run: npm run test:run
+
+      # The unit tests run through Vitest, which never touches the production
+      # bundler. A Rolldown-incompatible vite.config.ts therefore shipped in two
+      # releases with every test green. Build what we actually publish.
+      - name: Build production bundle
+        working-directory: opengeo-ai-assistant/web-ui
+        run: npm run build

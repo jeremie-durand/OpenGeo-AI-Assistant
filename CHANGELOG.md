@@ -13,6 +13,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 - `chat.welcome` translation key (EN/FR) for the chat greeting, which was the last hardcoded English string in the chat UI.
 - `isWelcome` flag on `ChatMessage`, marking the mount-time greeting so it can be re-translated in place.
 - `src/i18n/__tests__/translations.test.tsx` covering catalog key parity between languages and the host language contract (`sdss-lang` + `sdss-lang-change`, including the cross-tab `storage` path).
+- CI now builds the production bundle (`npm run build`) in the frontend job. Vitest never invokes the production bundler, so a Rolldown-incompatible `vite.config.ts` shipped in two releases with every test green.
 
 ### Changed
 
