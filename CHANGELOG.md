@@ -8,6 +8,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Added
+
+- `_llm_text()` accepts an optional `response_format`, forwarded to the provider only when set, so callers can opt into API-level JSON enforcement (`{"type": "json_object"}`). Small local models ignore prompt-level "return only JSON" instructions.
+- Canadian entries in `_KNOWN_BBOXES` (Canada, Québec, Ontario, and the main Québec cities), with accented and unaccented keys so both spellings resolve in the keyword fallback.
+- `_anchor_bbox()` replaces an LLM-supplied bbox with the vetted one whenever the reported `location_name` is a known location.
+- `tests/test_generic_query_translator.py` covering the above.
+
+### Changed
+
+- `build_stac_query_agent()` now requests JSON mode and anchors the returned bbox, instead of trusting the model's coordinates verbatim.
+
 ---
 
 ## [0.1.0] — 2026-04-08
