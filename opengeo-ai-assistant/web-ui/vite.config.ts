@@ -90,9 +90,19 @@ export default defineConfig(({ command, mode }) => {
     build: {
       outDir: 'dist',
       sourcemap: !isProd, // Disable source maps in production
-      // Vite 8 bundles with Rolldown, whose minifier is oxc. 'esbuild' is still a
-      // valid value but needs the esbuild package, which Vite 8 no longer installs.
-      minify: isProd ? 'oxc' : false,
+      // Vite 8 bundles with Rolldown, whose default minifier is oxc. terser is
+      // used instead only because oxc exposes no way to drop console/debugger
+      // statements, and the app carries ~800 ungated console calls — some of
+      // which log message content. Revisit if oxc gains a `drop` equivalent.
+      minify: isProd ? 'terser' : false,
+      terserOptions: isProd
+        ? {
+            compress: {
+              drop_console: true,
+              drop_debugger: true,
+            },
+          }
+        : undefined,
       rollupOptions: {
         output: {
           // Rolldown accepts only the function form — Rollup's object/record form

@@ -58,6 +58,10 @@ jobs:
         working-directory: opengeo-ai-assistant/web-ui
         run: npm ci
 
+      - name: Type-check
+        working-directory: opengeo-ai-assistant/web-ui
+        run: npm run typecheck
+
       - name: Run frontend tests
         working-directory: opengeo-ai-assistant/web-ui
         run: npm run test:run
