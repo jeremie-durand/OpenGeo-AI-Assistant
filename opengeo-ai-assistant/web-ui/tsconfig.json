@@ -11,7 +11,10 @@
     "skipLibCheck": true,
     "strict": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["vite/client"]
+    "types": ["vite/client", "node"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Written against an outdated MapView prop interface and already excluded from
+  // the Vitest run for the same reason. Drop this entry once it is rewritten.
+  "exclude": ["src/components/__tests__/GeointModulesFlow.test.tsx"]
 }

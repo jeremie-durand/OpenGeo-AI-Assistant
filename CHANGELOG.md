@@ -10,6 +10,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Added
 
+- `chat.welcome` translation key (EN/FR) for the chat greeting, which was the last hardcoded English string in the chat UI.
+- `isWelcome` flag on `ChatMessage`, marking the mount-time greeting so it can be re-translated in place.
+- `src/i18n/__tests__/translations.test.tsx` covering catalog key parity between languages and the host language contract (`sdss-lang` + `sdss-lang-change`, including the cross-tab `storage` path).
+- CI now builds the production bundle (`npm run build`) in the frontend job. Vitest never invokes the production bundler, so a Rolldown-incompatible `vite.config.ts` shipped in two releases with every test green.
+- CI now type-checks the web UI (`npm run typecheck`, a new script running `tsc --noEmit`), which had never run in CI and had accumulated 37 errors.
+- `apiService.structuredSearch()` and its `StructuredSearchParams` type, calling the `POST /api/structured-search` endpoint that already existed on the backend. `Chat.tsx` invoked this method without it ever having been written, so the Planetary Computer structured-search path threw at runtime.
+
+### Changed
+
+- The chat greeting is rendered through `t()` and re-translates when the host switches language after mount, instead of being fixed to English at mount time.
+- Production minifier is now terser, configured with `drop_console` and `drop_debugger`. Vite 8's Rolldown default is oxc, but oxc exposes no way to drop console statements, and the app ships ~800 ungated `console` calls — some logging message content. `minify: 'esbuild'` is still a valid value but needs the `esbuild` package, which Vite 8 no longer installs.
+- The web UI package is `opengeo-ai-assistant-ui` at `0.2.0-alpha`, replacing the fork's `earth-copilot-ui` at `0.1.0`, which had never been bumped.
+
+### Fixed
+
+- `vite build` failed outright with `TypeError: manualChunks is not a function`: Vite 8 bundles with Rolldown, which accepts only the function form of `manualChunks`, not Rollup's object/record form. The production build had been broken since the Vite 8 upgrade.
+- `src/utils/tileLayerFactory.ts` did not compile — a bad paste had left its module header comment unterminated, swallowing both imports and the `TileLayerOptions` interface. The same paste had also dropped the `else` branch of the TileJSON check, which is restored: the per-collection config supplies the zoom range, and the chosen range is logged. The zoom numbers the lost code hardcoded are deliberately *not* reinstated — `getCollectionConfig()` already returns the same 6-22 range for optical collections and for its default fallback, while HLS (8+) and MODIS (8-10+) need higher floors that the old override would have lowered, reintroducing tile 404s.
+- Type errors across the web UI: `@types/node` was not in `tsconfig.json` `types` (so `global` and `NodeJS` were unresolved), an optional-chained `.length` was compared without a default, a `QueryCategory` entry was missing its `icon`, a STAC item callback required a `bbox` its input does not always carry, and a leftover `atlas.Map` cast referenced Azure Maps types removed in 0.1.0-alpha.
+
+### Removed
+
+- `esbuild: { drop: ['console', 'debugger'] }` — the option needs the esbuild transform, which Vite 8 no longer installs, so it was dead configuration. Console stripping is preserved through terser instead (see Changed).
+- `src/components/IntelligentLandingPage.tsx` — nothing imported it, and it called an `apiService.routeQuery()` that does not exist.
+
+---
+
+## [0.2.0-alpha] — 2026-09-02
+
+### Added
+
 - `_llm_text()` accepts an optional `response_format`, forwarded to the provider only when set, so callers can opt into API-level JSON enforcement (`{"type": "json_object"}`). Small local models ignore prompt-level "return only JSON" instructions.
 - Canadian entries in `_KNOWN_BBOXES` (Canada, Québec, Ontario, and the main Québec cities), with accented and unaccented keys so both spellings resolve in the keyword fallback.
 - `_anchor_bbox()` replaces an LLM-supplied bbox with the vetted one whenever the reported `location_name` is a known location.
@@ -21,7 +51,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ---
 
-## [0.1.0] — 2026-04-08
+## [0.1.3-alpha] — 2026-08-28
+
+Tagged `v.0.1.3-alpha` — the stray dot after `v` is a typo in the tag name, and it breaks `v*.*.*` matching and version sorting. Kept as-is so the link below resolves.
+
+### Added
+
+- FR/EN bilingual support in the web UI (`i18n/I18nContext.tsx`, `i18n/translations.ts`). Language is shared with a host platform through the `sdss-lang` localStorage key and the `sdss-lang-change` event, so an embedding site's language toggle drives the chat UI.
+
+---
+
+## [0.1.2-alpha] — 2026-07-13
+
+No release notes were kept for this version. See the compare link below.
+
+---
+
+## [0.1.1-alpha] — 2026-04-30
+
+No release notes were kept for this version. See the compare link below.
+
+---
+
+## [0.1.0-alpha] — 2026-04-08
 
 Initial open-source release — a fork of [Microsoft Earth Copilot](https://github.com/microsoft/Earth-Copilot) adapted to be Azure-independent with flexible LLM provider support.
 
@@ -59,5 +111,9 @@ Initial open-source release — a fork of [Microsoft Earth Copilot](https://gith
 - Replaced hardcoded OpenAI SDK calls with provider-agnostic `llm_client.py`
 - Removed Azure Functions port references; all services on standard Docker ports
 
-[Unreleased]: https://github.com/JeremieDurandUdS/opengeo-ai-assistant/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/JeremieDurandUdS/opengeo-ai-assistant/releases/tag/v0.1.0
+[Unreleased]: https://github.com/jeremie-durand/OpenGeo-AI-Assistant/compare/v0.2.0-alpha...HEAD
+[0.2.0-alpha]: https://github.com/jeremie-durand/OpenGeo-AI-Assistant/compare/v.0.1.3-alpha...v0.2.0-alpha
+[0.1.3-alpha]: https://github.com/jeremie-durand/OpenGeo-AI-Assistant/compare/v0.1.2-alpha...v.0.1.3-alpha
+[0.1.2-alpha]: https://github.com/jeremie-durand/OpenGeo-AI-Assistant/compare/v0.1.1-alpha...v0.1.2-alpha
+[0.1.1-alpha]: https://github.com/jeremie-durand/OpenGeo-AI-Assistant/compare/v0.1.0-alpha...v0.1.1-alpha
+[0.1.0-alpha]: https://github.com/jeremie-durand/OpenGeo-AI-Assistant/releases/tag/v0.1.0-alpha

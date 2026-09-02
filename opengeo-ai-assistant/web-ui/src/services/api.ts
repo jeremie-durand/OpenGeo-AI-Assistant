@@ -47,6 +47,16 @@ export interface ChatMessage {
   timestamp: Date;
   source?: string;
   isThinking?: boolean; // Flag to indicate "thinking" animation
+  isWelcome?: boolean; // Flag the mount-time greeting so it can be re-translated
+}
+
+/** Mirrors StructuredSearchRequest in container-app/request_models.py. */
+export interface StructuredSearchParams {
+  collection: string;
+  location: string;
+  datetime?: string;
+  datetime_start?: string;
+  datetime_end?: string;
 }
 
 export interface MapContext {
@@ -508,6 +518,39 @@ class ApiService {
       }
 
       throw new Error('Failed to search private data. Please try again.');
+    }
+  }
+
+  /**
+   * Structured search - POST /api/structured-search
+   *
+   * Collection plus location, and optionally a date or a date range, instead of
+   * a natural language query. The backend builds the query from them and runs it
+   * through the usual agent pipeline.
+   */
+  async structuredSearch(params: StructuredSearchParams): Promise<any> {
+    debugLog('structuredSearch called', params);
+
+    if (!this.api) {
+      console.error('API instance is not initialized');
+      throw new Error('API service not initialized');
+    }
+
+    try {
+      const response = await this.api.post('/api/structured-search', params);
+      debugLog('Structured search response received', {
+        status: response.status,
+        data: response.data,
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Structured search API error:', error);
+      if (error.response) {
+        console.error('Error response status:', error.response.status);
+        console.error('Error response data:', error.response.data);
+      }
+
+      throw new Error('Failed to run the structured search. Please try again.');
     }
   }
 

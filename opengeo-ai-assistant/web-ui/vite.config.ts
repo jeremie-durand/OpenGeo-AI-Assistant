@@ -90,24 +90,35 @@ export default defineConfig(({ command, mode }) => {
     build: {
       outDir: 'dist',
       sourcemap: !isProd, // Disable source maps in production
-      minify: isProd ? 'esbuild' : false,
+      // Vite 8 bundles with Rolldown, whose default minifier is oxc. terser is
+      // used instead only because oxc exposes no way to drop console/debugger
+      // statements, and the app carries ~800 ungated console calls — some of
+      // which log message content. Revisit if oxc gains a `drop` equivalent.
+      minify: isProd ? 'terser' : false,
+      terserOptions: isProd
+        ? {
+            compress: {
+              drop_console: true,
+              drop_debugger: true,
+            },
+          }
+        : undefined,
       rollupOptions: {
         output: {
+          // Rolldown accepts only the function form — Rollup's object/record form
+          // throws "manualChunks is not a function" at build time.
           manualChunks: isProd
-            ? {
-                vendor: ['react', 'react-dom'],
-                query: ['@tanstack/react-query'],
-                utils: ['axios'],
+            ? (id: string) => {
+                if (!id.includes('node_modules')) return undefined;
+                if (id.includes('react')) return 'vendor';
+                if (id.includes('@tanstack/react-query')) return 'query';
+                if (id.includes('axios')) return 'utils';
+                return undefined;
               }
             : undefined,
         },
       },
     },
-    esbuild: isProd
-      ? {
-          drop: ['console', 'debugger'],
-        }
-      : undefined,
     define: {
       // Environment-specific configurations
       __DEV__: JSON.stringify(isDev),
