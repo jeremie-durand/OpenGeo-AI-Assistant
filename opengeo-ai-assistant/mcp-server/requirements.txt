@@ -16,7 +16,7 @@ aiohttp>=3.14.3
 requests>=2.31.0
 
 # Data processing and validation
-pydantic>=2.0.0
+pydantic>=2.13.5
 pydantic-settings>=2.0.0
 
 # Geospatial libraries (optional, for local processing)
