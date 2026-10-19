@@ -7,7 +7,7 @@ import logging
 import os
 import traceback
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -98,7 +98,7 @@ def log_pipeline_step(
             pipeline_traces[session_id] = []
 
         trace_entry = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "step": step_name,
             "stage": stage,
             "data": data,  # Keep full data for trace
@@ -747,7 +747,7 @@ async def execute_direct_stac_search(
                             "total_found": len(features),
                             "total_selected": len(selected_features),
                             "query_used": stac_query,
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         },
                     }
 
@@ -2235,7 +2235,7 @@ async def unified_query_processor(body: QueryRequest):
                         "collections_searched": qs_location["collections"],
                         "spatial_extent": qs_location["bbox"],
                         "temporal_range": datetime_range,
-                        "search_timestamp": datetime.utcnow().isoformat(),
+                        "search_timestamp": datetime.now(timezone.utc).isoformat(),
                     },
                     "query_classification": {
                         "intent_type": "stac",
@@ -2248,7 +2248,7 @@ async def unified_query_processor(body: QueryRequest):
                     "original_query": natural_query,
                     "translated_params": qs_stac_params,
                     "stac_query": qs_stac_query,
-                    "translation_timestamp": datetime.utcnow().isoformat(),
+                    "translation_timestamp": datetime.now(timezone.utc).isoformat(),
                     "all_tile_urls": qs_tile_urls if qs_tile_urls else None,
                     "mosaic_tilejson": qs_mosaic,
                 },
@@ -2459,7 +2459,7 @@ async def unified_query_processor(body: QueryRequest):
                                     "location_name": location_display,
                                 },
                                 "processing_type": "map_navigation",
-                                "timestamp": datetime.utcnow().isoformat(),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
                             }
                         else:
                             logger.warning(
@@ -2471,7 +2471,7 @@ async def unified_query_processor(body: QueryRequest):
                                 "response": f"I couldn't pinpoint the exact location for '{location_display}'. Could you try a more specific place name or add the country?",
                                 "user_response": f"I couldn't pinpoint the exact location for '{location_display}'. Could you try a more specific place name or add the country?",
                                 "processing_type": "contextual",
-                                "timestamp": datetime.utcnow().isoformat(),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
                             }
                     except Exception as loc_error:
                         logger.error(f"[FAIL] Location resolution failed: {loc_error}")
@@ -2482,7 +2482,7 @@ async def unified_query_processor(body: QueryRequest):
                             "response": f"I had trouble resolving the location '{location_display}'. Please try again or use a different place name.",
                             "user_response": f"I had trouble resolving the location '{location_display}'. Please try again or use a different place name.",
                             "processing_type": "contextual",
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
 
                 # ================================================================
@@ -2581,7 +2581,7 @@ async def unified_query_processor(body: QueryRequest):
                                 },
                                 "processing_type": "climate_projection",
                                 "session_id": climate_session_id,
-                                "timestamp": datetime.utcnow().isoformat(),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
                             }
                     except asyncio.TimeoutError:
                         logger.error(
@@ -2592,7 +2592,7 @@ async def unified_query_processor(body: QueryRequest):
                             "response": f"[TIME] Climate analysis for {location} timed out. Please try a more specific question.",
                             "user_response": f"[TIME] Climate analysis for {location} timed out. Please try a more specific question.",
                             "processing_type": "climate_projection",
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
                     except Exception as climate_error:
                         logger.error(
@@ -3146,7 +3146,9 @@ async def unified_query_processor(body: QueryRequest):
                                         "response": response_text,
                                         "vision_analysis": vision_result,
                                         "processing_type": "vision_agent",
-                                        "timestamp": datetime.utcnow().isoformat(),
+                                        "timestamp": datetime.now(
+                                            timezone.utc
+                                        ).isoformat(),
                                     }
                                 else:
                                     # ================================================================
@@ -3175,7 +3177,9 @@ async def unified_query_processor(body: QueryRequest):
                                         "response": "I tried to analyze the map but couldn't generate a response. Please try asking your question again.",
                                         "error": "Vision Agent returned empty response",
                                         "processing_type": "vision_agent_error",
-                                        "timestamp": datetime.utcnow().isoformat(),
+                                        "timestamp": datetime.now(
+                                            timezone.utc
+                                        ).isoformat(),
                                     }
                         except Exception as e:
                             logger.warning(
@@ -3189,7 +3193,7 @@ async def unified_query_processor(body: QueryRequest):
                                 "response": "I encountered an error analyzing the imagery.",
                                 "error": "internal error",
                                 "processing_type": "vision_agent_error",
-                                "timestamp": datetime.utcnow().isoformat(),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
                             }
                     else:
                         # ================================================================
@@ -3261,7 +3265,7 @@ async def unified_query_processor(body: QueryRequest):
                                     "response": response_text,
                                     "vision_analysis": vision_result,
                                     "processing_type": "vision_agent_llm",
-                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
                                 }
                             else:
                                 # ================================================================
@@ -3276,7 +3280,7 @@ async def unified_query_processor(body: QueryRequest):
                                     "success": True,
                                     "response": "I can see you're asking about what's on the map. I can see satellite imagery is displayed. Could you ask a more specific question about what you'd like to know, such as 'What city is shown?' or 'What features can you identify?'",
                                     "processing_type": "vision_agent_no_context",
-                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
                                 }
                         except Exception as e:
                             logger.warning(
@@ -3290,7 +3294,7 @@ async def unified_query_processor(body: QueryRequest):
                                 "response": "I can see satellite imagery on the map but couldn't analyze it in detail. Please try asking a specific question about the location or features you see.",
                                 "error": "internal error",
                                 "processing_type": "vision_agent_error",
-                                "timestamp": datetime.utcnow().isoformat(),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
                             }
 
                 # For contextual queries, skip STAC search and generate direct educational response
@@ -3359,7 +3363,7 @@ async def unified_query_processor(body: QueryRequest):
                                     "needs_contextual_info": True,
                                 },
                                 "processing_type": "contextual_only",
-                                "timestamp": datetime.utcnow().isoformat(),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
                             }
                     except Exception as e:
                         logger.warning(
@@ -3524,7 +3528,7 @@ async def unified_query_processor(body: QueryRequest):
                                 "message", "Please specify a location for your search."
                             ),
                             "suggestions": stac_params.get("suggestions", []),
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
                     # ========================================================================
 
@@ -4671,7 +4675,7 @@ async def unified_query_processor(body: QueryRequest):
                     "temporal_range": (
                         stac_query.get("datetime") if stac_query else None
                     ),
-                    "search_timestamp": datetime.utcnow().isoformat(),
+                    "search_timestamp": datetime.now(timezone.utc).isoformat(),
                 },
                 "query_classification": (
                     {
@@ -4702,7 +4706,7 @@ async def unified_query_processor(body: QueryRequest):
                 "original_query": natural_query,
                 "translated_params": stac_params,
                 "stac_query": stac_query,
-                "translation_timestamp": datetime.utcnow().isoformat(),
+                "translation_timestamp": datetime.now(timezone.utc).isoformat(),
                 "all_tile_urls": (
                     all_tile_urls if all_tile_urls else None
                 ),  # [+] Individual tile URLs for multi-tile rendering
@@ -4722,7 +4726,7 @@ async def unified_query_processor(body: QueryRequest):
                     "query_processing": {
                         "original_query": natural_query,
                         "stac_parameters": stac_params,
-                        "processing_timestamp": datetime.utcnow().isoformat(),
+                        "processing_timestamp": datetime.now(timezone.utc).isoformat(),
                     },
                 },
                 # [MICRO] INSTANT PIPELINE TRACE - Visible in browser console!
@@ -5036,7 +5040,7 @@ async def structured_search(body: StructuredSearchRequest):
                         "spatial_extent": bbox,
                         "temporal_range": datetime_param,
                         "location_name": location_name,
-                        "search_timestamp": datetime.utcnow().isoformat(),
+                        "search_timestamp": datetime.now(timezone.utc).isoformat(),
                     },
                     "query_classification": {
                         "intent_type": "stac",
@@ -5092,7 +5096,7 @@ async def session_reset(body: SessionResetRequest, request: Request):
             "status": "success",
             "message": message,
             "session_id": conversation_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -5307,7 +5311,7 @@ async def geoint_mobility_analysis(body: MobilityRequest):
         return {
             "status": "success",
             "result": analysis_result,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -5349,7 +5353,7 @@ async def geoint_terrain_analysis(body: TerrainRequest):
     """
     import uuid
 
-    request_id = f"terrain-{datetime.utcnow().timestamp()}"
+    request_id = f"terrain-{datetime.now(timezone.utc).timestamp()}"
     try:
         logger.info(
             f"[MTN] [{request_id}] ============================================================"
@@ -5504,7 +5508,7 @@ async def geoint_terrain_analysis(body: TerrainRequest):
                 "message_count": agent_result.get("message_count", 1),
             },
             "session_id": session_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -5555,7 +5559,7 @@ async def geoint_terrain_chat(body: TerrainChatRequest):
     """
     import uuid
 
-    request_id = f"terrain-chat-{datetime.utcnow().timestamp()}"
+    request_id = f"terrain-chat-{datetime.now(timezone.utc).timestamp()}"
 
     try:
         logger.info(
@@ -5689,7 +5693,7 @@ async def geoint_terrain_chat(body: TerrainChatRequest):
         return {
             "status": "success",
             **result,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -5769,7 +5773,7 @@ async def geoint_vision_analysis(body: VisionRequest):
     """
     import uuid
 
-    request_id = f"vision-{datetime.utcnow().timestamp()}"
+    request_id = f"vision-{datetime.now(timezone.utc).timestamp()}"
     try:
         logger.info(
             f"[EYE] [{request_id}] ============================================================"
@@ -5958,7 +5962,7 @@ async def geoint_vision_analysis(body: VisionRequest):
                 "vision_data": result.get("vision_data", {}),
             },
             "session_id": session_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -5986,7 +5990,7 @@ async def geoint_vision_chat(body: VisionChatRequest):
         "collection": str (optional - current collection name)
     }
     """
-    request_id = f"vision-chat-{datetime.utcnow().timestamp()}"
+    request_id = f"vision-chat-{datetime.now(timezone.utc).timestamp()}"
     try:
         logger.info(f"[MSG] [{request_id}] VISION CHAT endpoint called")
 
@@ -6103,7 +6107,7 @@ async def geoint_vision_chat(body: VisionChatRequest):
                 "tools_used": result.get("tools_used", []),
             },
             "session_id": session_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -6260,9 +6264,9 @@ async def geoint_building_damage_analysis(body: BuildingDamageRequest):
                         "tool_calls": [{"tool": "gpt_vision_analysis"}],
                         "location": {"latitude": latitude, "longitude": longitude},
                         "radius_miles": radius_miles,
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     },
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             except Exception as vis_err:
                 logger.warning(
@@ -6404,7 +6408,7 @@ async def geoint_building_damage_analysis(body: BuildingDamageRequest):
                 ],
                 "location": {"latitude": latitude, "longitude": longitude},
                 "radius_miles": radius_miles,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             logger.info("Building Damage: Direct fallback completed successfully")
 
@@ -6413,7 +6417,7 @@ async def geoint_building_damage_analysis(body: BuildingDamageRequest):
         return {
             "status": "success",
             "result": analysis_result,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -6451,7 +6455,7 @@ async def geoint_extreme_weather_analysis(body: ExtremeWeatherRequest):
     """
     import uuid
 
-    request_id = f"climate-{datetime.utcnow().timestamp()}"
+    request_id = f"climate-{datetime.now(timezone.utc).timestamp()}"
     try:
         logger.info(f"[STORM] [{request_id}] EXTREME WEATHER ENDPOINT CALLED")
 
@@ -6596,7 +6600,7 @@ async def geoint_extreme_weather_analysis(body: ExtremeWeatherRequest):
                             "message_count": 1,
                         },
                         "session_id": session_id,
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
             except asyncio.TimeoutError:
                 logger.warning(
@@ -6719,7 +6723,7 @@ async def geoint_extreme_weather_analysis(body: ExtremeWeatherRequest):
                             "message_count": 1,
                         },
                         "session_id": session_id,
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
             except asyncio.TimeoutError:
                 logger.warning(
@@ -6923,7 +6927,7 @@ async def geoint_extreme_weather_analysis(body: ExtremeWeatherRequest):
                                 "message_count": 1,
                             },
                             "session_id": session_id,
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
 
                 # --------------------------------------------------------
@@ -7001,7 +7005,7 @@ async def geoint_extreme_weather_analysis(body: ExtremeWeatherRequest):
                                 "message_count": 1,
                             },
                             "session_id": session_id,
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
             except asyncio.TimeoutError:
                 logger.warning(
@@ -7087,7 +7091,7 @@ async def geoint_extreme_weather_analysis(body: ExtremeWeatherRequest):
                 "message_count": result.get("message_count", 1),
             },
             "session_id": session_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -7266,7 +7270,7 @@ async def geoint_comparison_analysis(body: ComparisonRequest):
                         "status": "success",
                         "type": "prompt",
                         "message": result.get("message"),
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
 
                 # If it's an error, return with error status
@@ -7274,7 +7278,7 @@ async def geoint_comparison_analysis(body: ComparisonRequest):
                     return {
                         "status": "error",
                         "message": result.get("message"),
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
 
                 # Success - return comparison result with before/after data
@@ -7282,7 +7286,7 @@ async def geoint_comparison_analysis(body: ComparisonRequest):
                     "status": "success",
                     "type": "comparison",
                     "result": result,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             except Exception as e:
                 logger.warning(
@@ -7381,7 +7385,7 @@ async def geoint_comparison_analysis(body: ComparisonRequest):
                         return {
                             "status": "error",
                             "message": f"No imagery found for {location_name} in either time period ({before_dt} / {after_dt}).",
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
 
                     center_lng = (bbox[0] + bbox[2]) / 2
@@ -7421,7 +7425,7 @@ async def geoint_comparison_analysis(body: ComparisonRequest):
                         f"**Before:** {_format_date_display(before_dt)} ({len(before_features)} scenes)\n"
                         f"**After:** {_format_date_display(after_dt)} ({len(after_features)} scenes)\n\n"
                         f"Use the **BEFORE/AFTER** toggle buttons on the map to switch between time periods.",
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
 
                     logger.info(
@@ -7431,7 +7435,7 @@ async def geoint_comparison_analysis(body: ComparisonRequest):
                         "status": "success",
                         "type": "comparison",
                         "result": fallback_result,
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
                 except Exception as fallback_err:
                     logger.error(
@@ -7441,7 +7445,7 @@ async def geoint_comparison_analysis(body: ComparisonRequest):
                     return {
                         "status": "error",
                         "message": f"Comparison query processing failed: {str(e)}",
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
 
         # ================================================================
@@ -7561,7 +7565,7 @@ async def geoint_comparison_analysis(body: ComparisonRequest):
         return {
             "status": "success",
             "result": analysis_result,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -7604,7 +7608,7 @@ async def geoint_animation_analysis(body: AnimationRequest):
         return {
             "status": "success",
             "result": analysis_result,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -7673,7 +7677,7 @@ async def geoint_orchestrator_endpoint(body: OrchestrateRequest):
         return {
             "status": "success",
             "result": result,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -7701,7 +7705,7 @@ async def debug_location_resolver(location: str):
             "original_query": location,
             "preprocessed_query": preprocessed,
             "resolved_bbox": bbox,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error(f"Location resolver debug failed: {str(e)}")
@@ -7721,7 +7725,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={
             "error": "Internal server error",
             "message": str(exc),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 
