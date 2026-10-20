@@ -68,6 +68,7 @@ SENTINEL_PARAMS = {
     "location_name": "Paris",
 }
 STAC_ACTION = {"action_type": "stac_search"}
+SERVER_ERROR = {"http_error": 500, "detail": "Query processing failed"}
 NAVIGATE_ACTION = {"action_type": "navigate_to", "location": "paris", "zoom_level": 11}
 WEATHER_ACTION = {
     "action_type": "extreme_weather",
@@ -546,6 +547,8 @@ class Harness:
                 },
             ]
         )
+        if isinstance(self.keyword_vision, BaseException):
+            raise self.keyword_vision
         return self.keyword_vision
 
 
@@ -1365,6 +1368,28 @@ def test_quickstart_network_error_returns_502(
     harness.stac_responses = [aiohttp.ClientError("pc down")]
     result = harness.run(query="show sentinel 1 rtc for baltimore", session_id=SESSION)
     assert result["response"]["http_error"] == 502
+    check(result)
+
+
+def test_unexpected_error_returns_500(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(stac_params=SENTINEL_PARAMS, action=STAC_ACTION)
+    result = harness.run(
+        query="Show Sentinel-2 imagery of Paris",
+        session_id=SESSION,
+        pin={"lat": None, "lng": 2.35},
+    )
+    assert result["response"] == SERVER_ERROR
+    check(result)
+
+
+def test_early_intent_failure_runs_stac_with_defaults(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(stac_params=SENTINEL_PARAMS, action={"action_type": "contextual"})
+    harness.keyword_vision = RuntimeError("detector down")
+    harness.stac_responses = [results(feature("S2A_1"))]
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    assert calls_named(result, "stac_search")
     check(result)
 
 
