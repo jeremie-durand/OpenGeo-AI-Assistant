@@ -9,12 +9,14 @@ and review the JSON diff before committing.
 import asyncio
 import copy
 import importlib
+import inspect
 import json
+import logging
 import os
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import Any, Callable, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 import pytest
 from generic_query_translator import GenericQueryTranslator
@@ -28,8 +30,28 @@ VOLATILE_KEYS = frozenset(
         "translation_timestamp",
         "processing_timestamp",
         "fast_path_elapsed_ms",
+        "elapsed_ms",
     }
 )
+VOLATILE = "<volatile>"
+APP_DIR = str(Path(__file__).resolve().parent.parent)
+PATCH_TARGETS = [
+    ("services.stac_search", "execute_direct_stac_search"),
+    ("services.stac_search", "try_alternative_queries"),
+    ("hybrid_rendering_system", "get_mosaic_tilejson_url"),
+    ("location_resolver", "EnhancedLocationResolver"),
+    ("agents", "get_vision_agent"),
+    ("geoint.chat_vision_analyzer", "get_chat_vision_analyzer"),
+    ("geoint.extreme_weather_agent", "get_extreme_weather_agent"),
+]
+for _module_name in [name for name, _ in PATCH_TARGETS] + [
+    "routers.query",
+    "geoint.router_agent",
+]:
+    importlib.import_module(_module_name)
+ORIGINALS: Dict[Tuple[str, str], Any] = {
+    (name, attr): getattr(sys.modules[name], attr) for name, attr in PATCH_TARGETS
+}
 SESSION = "session-1"
 PARIS_BBOX = [2.22, 48.81, 2.47, 48.9]
 PARIS_BOUNDS = {
@@ -98,10 +120,41 @@ def results(*features: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def feature_ids(payload: Any) -> List[Any]:
+    """Ids of the features in a STAC response or FeatureCollection."""
+    if not isinstance(payload, dict):
+        return []
+    collection = payload.get("results", payload)
+    if not isinstance(collection, dict):
+        return []
+    return [f.get("id") for f in collection.get("features", []) if isinstance(f, dict)]
+
+
+def json_default(value: Any) -> Any:
+    """Strict JSON conversion: sets become sorted lists, anything else fails."""
+    if isinstance(value, (set, frozenset)):
+        return sorted(value)
+    raise TypeError(f"not JSON serializable: {type(value).__name__}")
+
+
+class ErrorCollector(logging.Handler):
+    """Collects the first line of every ERROR record."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.ERROR)
+        self.lines: List[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lines.append(record.getMessage().splitlines()[0])
+
+
 def normalize(value: Any) -> Any:
     """Drop wall-clock values and the random pipeline id so snapshots are stable."""
     if isinstance(value, dict):
-        out = {k: normalize(v) for k, v in value.items() if k not in VOLATILE_KEYS}
+        out = {
+            k: VOLATILE if k in VOLATILE_KEYS else normalize(v)
+            for k, v in value.items()
+        }
         if isinstance(out.get("pipeline_trace"), dict):
             out["pipeline_trace"]["session_id"] = "<pipeline>"
         return out
@@ -142,7 +195,7 @@ class FakeTranslator:
         return {}
 
     def determine_stac_source(self, query: str, entities: Dict[str, Any]) -> str:
-        self._record("determine_stac_source", entities)
+        self._record("determine_stac_source", {"query": query, "entities": entities})
         return self.endpoint
 
     async def translate_query(
@@ -173,6 +226,9 @@ class FakeTranslator:
                 "query": natural_query,
                 "intent": classification.get("intent_type"),
                 "features": count,
+                "classification": classification,
+                "geoint_results": geoint_results,
+                "feature_ids": feature_ids(stac_response),
             },
         )
         if self.contextual_error:
@@ -187,7 +243,16 @@ class FakeTranslator:
         diagnostics: Dict[str, Any],
     ) -> str:
         stage = diagnostics.get("failure_stage")
-        self._record("generate_empty", {"collections": collections, "stage": stage})
+        self._record(
+            "generate_empty",
+            {
+                "collections": collections,
+                "stage": stage,
+                "query": natural_query,
+                "stac_query": stac_query,
+                "diagnostics": diagnostics,
+            },
+        )
         return f"no results ({stage})"
 
     async def generate_alternative_result_response(
@@ -202,7 +267,13 @@ class FakeTranslator:
     ) -> Dict[str, Any]:
         self._record(
             "generate_alternative",
-            {"original": original_filters, "alternative": alternative_filters},
+            {
+                "original": original_filters,
+                "alternative": alternative_filters,
+                "explanation": explanation,
+                "classification": classification,
+                "feature_ids": feature_ids(stac_response),
+            },
         )
         return {"message": f"alternative: {explanation}"}
 
@@ -339,12 +410,24 @@ class Harness:
         from request_models import QueryRequest
         from routers.query import unified_query_processor
 
+        collector = ErrorCollector()
+        logging.getLogger().addHandler(collector)
         try:
             response = asyncio.run(unified_query_processor(QueryRequest(**body)))
         except HTTPException as exc:
             response = {"http_error": exc.status_code, "detail": exc.detail}
-        snapshot = normalize({"response": response, "calls": self.calls})
-        return json.loads(json.dumps(snapshot, default=repr))
+        finally:
+            logging.getLogger().removeHandler(collector)
+        router = self.app_state.router_agent
+        snapshot = normalize(
+            {
+                "response": response,
+                "calls": self.calls,
+                "errors": collector.lines,
+                "session_contexts": router.tools.session_contexts if router else None,
+            }
+        )
+        return json.loads(json.dumps(snapshot, default=json_default))
 
     def _install_fakes(self) -> None:
         patch = self._patch_everywhere
@@ -372,10 +455,13 @@ class Harness:
 
     def _patch_everywhere(self, module_name: str, attr: str, fake: Any) -> None:
         """Replace module.attr and every module-level alias of the same object."""
-        original = getattr(importlib.import_module(module_name), attr)
+        original = ORIGINALS[(module_name, attr)]
         for module in list(sys.modules.values()):
-            if isinstance(module, ModuleType) and module.__dict__.get(attr) is original:
-                self.monkeypatch.setattr(module, attr, fake)
+            if not isinstance(module, ModuleType):
+                continue
+            for name, value in list(vars(module).items()):
+                if value is original:
+                    self.monkeypatch.setattr(module, name, fake)
 
     async def _stac(
         self,
@@ -386,7 +472,11 @@ class Harness:
         self.calls.append(
             [
                 "stac_search",
-                {"query": copy.deepcopy(stac_query), "endpoint": stac_endpoint},
+                {
+                    "query": copy.deepcopy(stac_query),
+                    "endpoint": stac_endpoint,
+                    "original_query": original_query,
+                },
             ]
         )
         if self.stac_responses:
@@ -405,7 +495,13 @@ class Harness:
         self.calls.append(
             [
                 "try_alternative_queries",
-                {"endpoint": stac_endpoint, "bbox": requested_bbox},
+                {
+                    "endpoint": stac_endpoint,
+                    "bbox": requested_bbox,
+                    "original_query": original_query,
+                    "original_stac_query": copy.deepcopy(original_stac_query),
+                    "original_stac_params": copy.deepcopy(original_stac_params),
+                },
             ]
         )
         return copy.deepcopy(self.alternative_result)
@@ -433,7 +529,15 @@ class Harness:
         return copy.deepcopy(self.vision_result)
 
     def _should_use_vision(self, query: str, conversation_history: List[Any]) -> bool:
-        self.calls.append(["should_use_vision", query])
+        self.calls.append(
+            [
+                "should_use_vision",
+                {
+                    "query": query,
+                    "conversation_history": copy.deepcopy(conversation_history),
+                },
+            ]
+        )
         return self.keyword_vision
 
 
@@ -450,7 +554,10 @@ class SnapshotBook:
             self.recorded[name] = actual
             return
         assert name in self.recorded, f"no snapshot for {name}; record it first"
-        assert actual == self.recorded[name]
+        recorded = self.recorded[name]
+        if json.dumps(actual, sort_keys=True) != json.dumps(recorded, sort_keys=True):
+            assert actual == recorded
+            pytest.fail(f"{name}: snapshot differs in value types")
 
     def save(self) -> None:
         SNAPSHOT_PATH.parent.mkdir(exist_ok=True)
@@ -466,9 +573,26 @@ def snapshots() -> Iterator[SnapshotBook]:
         book.save()
 
 
+def leaked_fakes() -> Set[str]:
+    """Names of module attributes that still hold a Harness fake."""
+    leaks = set()
+    for module in list(sys.modules.values()):
+        path = getattr(module, "__file__", None)
+        if not isinstance(module, ModuleType) or not str(path).startswith(APP_DIR):
+            continue
+        for name, value in list(vars(module).items()):
+            func = getattr(value, "__func__", value)
+            qualname = getattr(func, "__qualname__", None)
+            if isinstance(qualname, str) and qualname.startswith("Harness."):
+                leaks.add(f"{module.__name__}.{name}")
+    return leaks
+
+
 @pytest.fixture
-def harness(monkeypatch: pytest.MonkeyPatch) -> Harness:
-    return Harness(monkeypatch)
+def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness]:
+    yield Harness(monkeypatch)
+    monkeypatch.undo()
+    assert leaked_fakes() == set()
 
 
 @pytest.fixture
@@ -643,3 +767,17 @@ def test_router_error_defaults_to_stac(harness: Harness, check: Callable) -> Non
     result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
     assert result["response"]["data"]["query_classification"]["confidence"] == 0.5
     check(result)
+
+
+def test_snapshot_has_no_orphans() -> None:
+    """Every recorded snapshot belongs to a scenario that still exists."""
+    if UPDATE:
+        pytest.skip("recording snapshots")
+    scenarios = {
+        name
+        for name, obj in globals().items()
+        if name.startswith("test_")
+        and callable(obj)
+        and "check" in inspect.signature(obj).parameters
+    }
+    assert set(json.loads(SNAPSHOT_PATH.read_text())) == scenarios

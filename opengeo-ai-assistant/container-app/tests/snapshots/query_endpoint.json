@@ -34,6 +34,7 @@
         }
       ]
     ],
+    "errors": [],
     "response": {
       "data": {
         "query_classification": {
@@ -44,6 +45,7 @@
         },
         "search_metadata": {
           "collections_searched": [],
+          "search_timestamp": "<volatile>",
           "spatial_extent": null,
           "temporal_range": null,
           "total_items": 0
@@ -65,7 +67,8 @@
                 "session_id": "session-1"
               },
               "stage": "INPUT",
-              "step": "QUERY_RECEIVED"
+              "step": "QUERY_RECEIVED",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -74,7 +77,8 @@
                 "needs_vision": false
               },
               "stage": "OUTPUT",
-              "step": "ROUTER_AGENT"
+              "step": "ROUTER_AGENT",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -86,7 +90,8 @@
                 "reasoning": "RouterAgent routed to STAC search"
               },
               "stage": "OUTPUT",
-              "step": "CLASSIFICATION"
+              "step": "CLASSIFICATION",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -94,7 +99,8 @@
                 "raw_params": "None"
               },
               "stage": "ERROR",
-              "step": "SEMANTIC_TRANSLATION"
+              "step": "SEMANTIC_TRANSLATION",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -105,7 +111,8 @@
                 "total_tiles": 0
               },
               "stage": "OUTPUT",
-              "step": "RESPONSE"
+              "step": "RESPONSE",
+              "timestamp": "<volatile>"
             }
           ]
         },
@@ -117,6 +124,7 @@
           },
           "query_processing": {
             "original_query": "Show Sentinel-2 imagery of Paris",
+            "processing_timestamp": "<volatile>",
             "stac_parameters": null
           },
           "selected_collections": []
@@ -129,7 +137,13 @@
         "mosaic_tilejson": null,
         "original_query": "Show Sentinel-2 imagery of Paris",
         "stac_query": null,
-        "translated_params": null
+        "translated_params": null,
+        "translation_timestamp": "<volatile>"
+      }
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false
       }
     }
   },
@@ -173,6 +187,7 @@
         }
       ]
     ],
+    "errors": [],
     "response": {
       "action": "navigate_to",
       "navigate_to": {
@@ -191,7 +206,13 @@
       "response": "Climate summary for the location.",
       "session_id": "session-1",
       "success": true,
+      "timestamp": "<volatile>",
       "user_response": "Climate summary for the location."
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false
+      }
     }
   },
   "test_extreme_weather_failure_falls_through": {
@@ -242,6 +263,9 @@
         }
       ]
     ],
+    "errors": [
+      "[STORM] Climate analysis failed: model down"
+    ],
     "response": {
       "data": {
         "query_classification": {
@@ -252,6 +276,7 @@
         },
         "search_metadata": {
           "collections_searched": [],
+          "search_timestamp": "<volatile>",
           "spatial_extent": null,
           "temporal_range": null,
           "total_items": 0
@@ -273,7 +298,8 @@
                 "session_id": "session-1"
               },
               "stage": "INPUT",
-              "step": "QUERY_RECEIVED"
+              "step": "QUERY_RECEIVED",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -282,7 +308,8 @@
                 "needs_vision": false
               },
               "stage": "OUTPUT",
-              "step": "ROUTER_AGENT"
+              "step": "ROUTER_AGENT",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -294,7 +321,8 @@
                 "reasoning": "Fallback: RouterAgent unavailable"
               },
               "stage": "OUTPUT",
-              "step": "CLASSIFICATION"
+              "step": "CLASSIFICATION",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -302,7 +330,8 @@
                 "raw_params": "None"
               },
               "stage": "ERROR",
-              "step": "SEMANTIC_TRANSLATION"
+              "step": "SEMANTIC_TRANSLATION",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -313,7 +342,8 @@
                 "total_tiles": 0
               },
               "stage": "OUTPUT",
-              "step": "RESPONSE"
+              "step": "RESPONSE",
+              "timestamp": "<volatile>"
             }
           ]
         },
@@ -325,6 +355,7 @@
           },
           "query_processing": {
             "original_query": "How hot will Miami get by 2050?",
+            "processing_timestamp": "<volatile>",
             "stac_parameters": null
           },
           "selected_collections": []
@@ -337,7 +368,13 @@
         "mosaic_tilejson": null,
         "original_query": "How hot will Miami get by 2050?",
         "stac_query": null,
-        "translated_params": null
+        "translated_params": null,
+        "translation_timestamp": "<volatile>"
+      }
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false
       }
     }
   },
@@ -381,11 +418,20 @@
         }
       ]
     ],
+    "errors": [
+      "[STORM] Climate analysis timed out for miami"
+    ],
     "response": {
       "processing_type": "climate_projection",
       "response": "[TIME] Climate analysis for miami timed out. Please try a more specific question.",
       "success": false,
+      "timestamp": "<volatile>",
       "user_response": "[TIME] Climate analysis for miami timed out. Please try a more specific question."
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false
+      }
     }
   },
   "test_extreme_weather_uses_session_bbox": {
@@ -431,6 +477,7 @@
         }
       ]
     ],
+    "errors": [],
     "response": {
       "action": "navigate_to",
       "navigate_to": {
@@ -449,18 +496,39 @@
       "response": "Climate summary for the location.",
       "session_id": "session-1",
       "success": true,
+      "timestamp": "<volatile>",
       "user_response": "Climate summary for the location."
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false,
+        "last_bbox": [
+          2.22,
+          48.81,
+          2.47,
+          48.9
+        ],
+        "last_location": "paris"
+      }
     }
   },
   "test_keyword_mode_quickstart_query_returns_500": {
     "calls": [],
+    "errors": [
+      "[FAIL] Unified query processor error: 'NoneType' object has no attribute 'determine_stac_source'",
+      "Traceback (most recent call last):"
+    ],
     "response": {
       "detail": "Query processing failed",
       "http_error": 500
-    }
+    },
+    "session_contexts": null
   },
   "test_keyword_mode_without_translator": {
     "calls": [],
+    "errors": [
+      "[FAIL] STAC search execution error: 'NoneType' object has no attribute 'determine_stac_source'"
+    ],
     "response": {
       "data": {
         "query_classification": null,
@@ -469,6 +537,7 @@
             "sentinel-2-l2a",
             "landsat-c2-l2"
           ],
+          "search_timestamp": "<volatile>",
           "spatial_extent": null,
           "temporal_range": null,
           "total_items": 0
@@ -490,7 +559,8 @@
                 "session_id": null
               },
               "stage": "INPUT",
-              "step": "QUERY_RECEIVED"
+              "step": "QUERY_RECEIVED",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -503,7 +573,8 @@
                 "filter": null
               },
               "stage": "INPUT",
-              "step": "STAC_SEARCH"
+              "step": "STAC_SEARCH",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -517,7 +588,8 @@
                 "total_tiles": 0
               },
               "stage": "OUTPUT",
-              "step": "RESPONSE"
+              "step": "RESPONSE",
+              "timestamp": "<volatile>"
             }
           ]
         },
@@ -529,6 +601,7 @@
           },
           "query_processing": {
             "original_query": "Show Sentinel-2 imagery of Paris",
+            "processing_timestamp": "<volatile>",
             "stac_parameters": {
               "collections": [
                 "sentinel-2-l2a",
@@ -570,9 +643,11 @@
           ],
           "limit": 20,
           "original_query": "Show Sentinel-2 imagery of Paris"
-        }
+        },
+        "translation_timestamp": "<volatile>"
       }
-    }
+    },
+    "session_contexts": null
   },
   "test_navigate_to_resolved_location": {
     "calls": [
@@ -622,6 +697,7 @@
         }
       ]
     ],
+    "errors": [],
     "response": {
       "action": "navigate_to",
       "navigate_to": {
@@ -639,7 +715,22 @@
       "processing_type": "map_navigation",
       "response": "Navigating to Paris.",
       "success": true,
+      "timestamp": "<volatile>",
       "user_response": "Navigating to Paris."
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_rendered_map": false,
+        "has_screenshot": false,
+        "last_bbox": [
+          2.22,
+          48.81,
+          2.47,
+          48.9
+        ],
+        "last_location": "Paris",
+        "query_count": 1
+      }
     }
   },
   "test_navigate_to_resolver_error": {
@@ -673,12 +764,21 @@
         "paris"
       ]
     ],
+    "errors": [
+      "[FAIL] Location resolution failed: geocoder down"
+    ],
     "response": {
       "action": "contextual",
       "processing_type": "contextual",
       "response": "I had trouble resolving the location 'Paris'. Please try again or use a different place name.",
       "success": true,
+      "timestamp": "<volatile>",
       "user_response": "I had trouble resolving the location 'Paris'. Please try again or use a different place name."
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false
+      }
     }
   },
   "test_navigate_to_unresolved_location": {
@@ -712,12 +812,19 @@
         "paris"
       ]
     ],
+    "errors": [],
     "response": {
       "action": "contextual",
       "processing_type": "contextual",
       "response": "I couldn't pinpoint the exact location for 'Paris'. Could you try a more specific place name or add the country?",
       "success": true,
+      "timestamp": "<volatile>",
       "user_response": "I couldn't pinpoint the exact location for 'Paris'. Could you try a more specific place name or add the country?"
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false
+      }
     }
   },
   "test_quickstart_fast_path": {
@@ -729,24 +836,28 @@
       [
         "translator.determine_stac_source",
         {
-          "bbox": [
-            -76.71,
-            39.2,
-            -76.53,
-            39.37
-          ],
-          "collections": [
-            "sentinel-1-rtc"
-          ],
-          "datetime": null,
-          "is_quickstart": true,
-          "location_name": "Baltimore"
+          "entities": {
+            "bbox": [
+              -76.71,
+              39.2,
+              -76.53,
+              39.37
+            ],
+            "collections": [
+              "sentinel-1-rtc"
+            ],
+            "datetime": null,
+            "is_quickstart": true,
+            "location_name": "Baltimore"
+          },
+          "query": "show sentinel 1 rtc for baltimore"
         }
       ],
       [
         "stac_search",
         {
           "endpoint": "planetary_computer",
+          "original_query": "show sentinel 1 rtc for baltimore",
           "query": {
             "bbox": [
               -76.71,
@@ -838,6 +949,7 @@
         }
       ]
     ],
+    "errors": [],
     "response": {
       "data": {
         "query_classification": {
@@ -850,6 +962,7 @@
           "collections_searched": [
             "sentinel-1-rtc"
           ],
+          "search_timestamp": "<volatile>",
           "spatial_extent": [
             -76.71,
             39.2,
@@ -917,6 +1030,7 @@
       },
       "debug": {
         "fast_path": true,
+        "fast_path_elapsed_ms": "<volatile>",
         "semantic_translator": {
           "available": true,
           "location_info": {
@@ -981,7 +1095,74 @@
           "datetime": null,
           "is_quickstart": true,
           "location_name": "Baltimore"
-        }
+        },
+        "translation_timestamp": "<volatile>"
+      }
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_rendered_map": true,
+        "last_bbox": [
+          -76.71,
+          39.2,
+          -76.53,
+          39.37
+        ],
+        "last_collections": [
+          "sentinel-1-rtc"
+        ],
+        "last_location": "Baltimore",
+        "last_stac_items": [
+          {
+            "assets": {
+              "tilejson": {
+                "href": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=sentinel-1-rtc&item=S1_1&assets=visual&asset_bidx=visual%7C1%2C2%2C3&nodata=0&expression=HH%3BHV&rescale=0%2C0.5&rescale=0%2C0.1",
+                "type": "application/json"
+              },
+              "visual": {
+                "href": "https://data.test/S1_1.tif",
+                "type": "image/tiff; application=geotiff"
+              }
+            },
+            "bbox": [
+              -76.7,
+              39.2,
+              -76.5,
+              39.4
+            ],
+            "collection": "sentinel-1-rtc",
+            "id": "S1_1",
+            "properties": {
+              "datetime": "2024-06-01T10:00:00Z",
+              "eo:cloud_cover": 5.0
+            }
+          },
+          {
+            "assets": {
+              "tilejson": {
+                "href": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=sentinel-1-rtc&item=S1_2&assets=visual&asset_bidx=visual%7C1%2C2%2C3&nodata=0",
+                "type": "application/json"
+              },
+              "visual": {
+                "href": "https://data.test/S1_2.tif",
+                "type": "image/tiff; application=geotiff"
+              }
+            },
+            "bbox": [
+              null,
+              39.2,
+              -76.5,
+              39.4
+            ],
+            "collection": "sentinel-1-rtc",
+            "id": "S1_2",
+            "properties": {
+              "datetime": "2024-06-01T10:00:00Z",
+              "eo:cloud_cover": 5.0
+            }
+          }
+        ],
+        "query_count": 1
       }
     }
   },
@@ -994,25 +1175,29 @@
       [
         "translator.determine_stac_source",
         {
-          "bbox": [
-            23.27,
-            37.81,
-            24.57,
-            38.83
-          ],
-          "collections": [
-            "hls2-l30",
-            "hls2-s30"
-          ],
-          "datetime": null,
-          "is_quickstart": true,
-          "location_name": "Athens"
+          "entities": {
+            "bbox": [
+              23.27,
+              37.81,
+              24.57,
+              38.83
+            ],
+            "collections": [
+              "hls2-l30",
+              "hls2-s30"
+            ],
+            "datetime": null,
+            "is_quickstart": true,
+            "location_name": "Athens"
+          },
+          "query": "show harmonized landsat sentinel-2 imagery of athens"
         }
       ],
       [
         "stac_search",
         {
           "endpoint": "planetary_computer",
+          "original_query": "show harmonized landsat sentinel-2 imagery of athens",
           "query": {
             "bbox": [
               23.27,
@@ -1099,6 +1284,7 @@
         }
       ]
     ],
+    "errors": [],
     "response": {
       "data": {
         "query_classification": {
@@ -1112,6 +1298,7 @@
             "hls2-l30",
             "hls2-s30"
           ],
+          "search_timestamp": "<volatile>",
           "spatial_extent": [
             23.27,
             37.81,
@@ -1154,6 +1341,7 @@
       },
       "debug": {
         "fast_path": true,
+        "fast_path_elapsed_ms": "<volatile>",
         "semantic_translator": {
           "available": true,
           "location_info": {
@@ -1223,7 +1411,51 @@
           "datetime": null,
           "is_quickstart": true,
           "location_name": "Athens"
-        }
+        },
+        "translation_timestamp": "<volatile>"
+      }
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_rendered_map": true,
+        "last_bbox": [
+          23.27,
+          37.81,
+          24.57,
+          38.83
+        ],
+        "last_collections": [
+          "hls2-l30",
+          "hls2-s30"
+        ],
+        "last_location": "Athens",
+        "last_stac_items": [
+          {
+            "assets": {
+              "tilejson": {
+                "href": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=hls2-l30&item=HLS_1&assets=visual&asset_bidx=visual%7C1%2C2%2C3&nodata=0",
+                "type": "application/json"
+              },
+              "visual": {
+                "href": "https://data.test/HLS_1.tif",
+                "type": "image/tiff; application=geotiff"
+              }
+            },
+            "bbox": [
+              23.3,
+              37.9,
+              24.5,
+              38.8
+            ],
+            "collection": "hls2-l30",
+            "id": "HLS_1",
+            "properties": {
+              "datetime": "2024-06-01T10:00:00Z",
+              "eo:cloud_cover": 5.0
+            }
+          }
+        ],
+        "query_count": 1
       }
     }
   },
@@ -1236,24 +1468,28 @@
       [
         "translator.determine_stac_source",
         {
-          "bbox": [
-            -79.76,
-            44.99,
-            -57.1,
-            62.59
-          ],
-          "collections": [
-            "modis-10A1-061"
-          ],
-          "datetime": "2025-01-01/2025-01-31",
-          "is_quickstart": true,
-          "location_name": "Quebec"
+          "entities": {
+            "bbox": [
+              -79.76,
+              44.99,
+              -57.1,
+              62.59
+            ],
+            "collections": [
+              "modis-10A1-061"
+            ],
+            "datetime": "2025-01-01/2025-01-31",
+            "is_quickstart": true,
+            "location_name": "Quebec"
+          },
+          "query": "show modis snow cover daily for quebec for january 2025"
         }
       ],
       [
         "stac_search",
         {
           "endpoint": "planetary_computer",
+          "original_query": "show modis snow cover daily for quebec for january 2025",
           "query": {
             "bbox": [
               -79.76,
@@ -1276,6 +1512,7 @@
         }
       ]
     ],
+    "errors": [],
     "response": {
       "data": {
         "query_classification": {
@@ -1288,6 +1525,7 @@
           "collections_searched": [
             "modis-10A1-061"
           ],
+          "search_timestamp": "<volatile>",
           "spatial_extent": [
             -79.76,
             44.99,
@@ -1304,6 +1542,7 @@
       },
       "debug": {
         "fast_path": true,
+        "fast_path_elapsed_ms": "<volatile>",
         "semantic_translator": {
           "available": true,
           "location_info": {
@@ -1358,9 +1597,11 @@
           "datetime": "2025-01-01/2025-01-31",
           "is_quickstart": true,
           "location_name": "Quebec"
-        }
+        },
+        "translation_timestamp": "<volatile>"
       }
-    }
+    },
+    "session_contexts": {}
   },
   "test_request_without_session_skips_router": {
     "calls": [
@@ -1379,23 +1620,27 @@
       [
         "translator.determine_stac_source",
         {
-          "bbox": [
-            2.22,
-            48.81,
-            2.47,
-            48.9
-          ],
-          "collections": [
-            "sentinel-2-l2a"
-          ],
-          "datetime": "2024-06-01/2024-06-30",
-          "location_name": "Paris"
+          "entities": {
+            "bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "collections": [
+              "sentinel-2-l2a"
+            ],
+            "datetime": "2024-06-01/2024-06-30",
+            "location_name": "Paris"
+          },
+          "query": "Show Sentinel-2 imagery of Paris"
         }
       ],
       [
         "stac_search",
         {
           "endpoint": "planetary_computer",
+          "original_query": "Show Sentinel-2 imagery of Paris",
           "query": {
             "bbox": [
               2.22,
@@ -1420,7 +1665,20 @@
       [
         "translator.generate_contextual",
         {
+          "classification": {
+            "confidence": 0.5,
+            "intent_type": "stac",
+            "modules": [],
+            "needs_contextual_info": false,
+            "needs_satellite_data": true,
+            "needs_vision_analysis": false,
+            "reasoning": "Fallback: RouterAgent unavailable"
+          },
+          "feature_ids": [
+            "S2A_1"
+          ],
           "features": 1,
+          "geoint_results": null,
           "intent": "stac",
           "query": "Show Sentinel-2 imagery of Paris"
         }
@@ -1447,6 +1705,7 @@
         }
       ]
     ],
+    "errors": [],
     "response": {
       "data": {
         "query_classification": {
@@ -1459,6 +1718,7 @@
           "collections_searched": [
             "sentinel-2-l2a"
           ],
+          "search_timestamp": "<volatile>",
           "spatial_extent": [
             2.22,
             48.81,
@@ -1511,7 +1771,8 @@
                 "session_id": null
               },
               "stage": "INPUT",
-              "step": "QUERY_RECEIVED"
+              "step": "QUERY_RECEIVED",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -1523,7 +1784,8 @@
                 "reasoning": "Fallback: RouterAgent unavailable"
               },
               "stage": "OUTPUT",
-              "step": "CLASSIFICATION"
+              "step": "CLASSIFICATION",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -1540,7 +1802,8 @@
                 "location_name": "Paris"
               },
               "stage": "OUTPUT",
-              "step": "SEMANTIC_TRANSLATION"
+              "step": "SEMANTIC_TRANSLATION",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -1557,7 +1820,8 @@
                 "filter": null
               },
               "stage": "INPUT",
-              "step": "STAC_SEARCH"
+              "step": "STAC_SEARCH",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -1571,7 +1835,8 @@
                 "first_feature_id": "S2A_1"
               },
               "stage": "OUTPUT",
-              "step": "STAC_SEARCH"
+              "step": "STAC_SEARCH",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -1583,7 +1848,8 @@
                 ]
               },
               "stage": "OUTPUT",
-              "step": "TILE_URLS"
+              "step": "TILE_URLS",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -1597,7 +1863,8 @@
                 "width_deg": 0.3
               },
               "stage": "OUTPUT",
-              "step": "UNION_BBOX"
+              "step": "UNION_BBOX",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -1610,7 +1877,8 @@
                 "total_tiles": 1
               },
               "stage": "OUTPUT",
-              "step": "RESPONSE"
+              "step": "RESPONSE",
+              "timestamp": "<volatile>"
             }
           ]
         },
@@ -1627,6 +1895,7 @@
           },
           "query_processing": {
             "original_query": "Show Sentinel-2 imagery of Paris",
+            "processing_timestamp": "<volatile>",
             "stac_parameters": {
               "bbox": [
                 2.2,
@@ -1694,9 +1963,11 @@
           ],
           "datetime": "2024-06-01/2024-06-30",
           "location_name": "Paris"
-        }
+        },
+        "translation_timestamp": "<volatile>"
       }
-    }
+    },
+    "session_contexts": {}
   },
   "test_router_error_defaults_to_stac": {
     "calls": [
@@ -1735,23 +2006,27 @@
       [
         "translator.determine_stac_source",
         {
-          "bbox": [
-            2.22,
-            48.81,
-            2.47,
-            48.9
-          ],
-          "collections": [
-            "sentinel-2-l2a"
-          ],
-          "datetime": "2024-06-01/2024-06-30",
-          "location_name": "Paris"
+          "entities": {
+            "bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "collections": [
+              "sentinel-2-l2a"
+            ],
+            "datetime": "2024-06-01/2024-06-30",
+            "location_name": "Paris"
+          },
+          "query": "Show Sentinel-2 imagery of Paris"
         }
       ],
       [
         "stac_search",
         {
           "endpoint": "planetary_computer",
+          "original_query": "Show Sentinel-2 imagery of Paris",
           "query": {
             "bbox": [
               2.22,
@@ -1776,7 +2051,20 @@
       [
         "translator.generate_contextual",
         {
+          "classification": {
+            "confidence": 0.5,
+            "intent_type": "stac",
+            "modules": [],
+            "needs_contextual_info": false,
+            "needs_satellite_data": true,
+            "needs_vision_analysis": false,
+            "reasoning": "Fallback: RouterAgent unavailable"
+          },
+          "feature_ids": [
+            "S2A_1"
+          ],
           "features": 1,
+          "geoint_results": null,
           "intent": "stac",
           "query": "Show Sentinel-2 imagery of Paris"
         }
@@ -1850,6 +2138,7 @@
         }
       ]
     ],
+    "errors": [],
     "response": {
       "data": {
         "query_classification": {
@@ -1862,6 +2151,7 @@
           "collections_searched": [
             "sentinel-2-l2a"
           ],
+          "search_timestamp": "<volatile>",
           "spatial_extent": [
             2.22,
             48.81,
@@ -1914,7 +2204,8 @@
                 "session_id": "session-1"
               },
               "stage": "INPUT",
-              "step": "QUERY_RECEIVED"
+              "step": "QUERY_RECEIVED",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -1926,7 +2217,8 @@
                 "reasoning": "Fallback: RouterAgent unavailable"
               },
               "stage": "OUTPUT",
-              "step": "CLASSIFICATION"
+              "step": "CLASSIFICATION",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -1943,7 +2235,8 @@
                 "location_name": "Paris"
               },
               "stage": "OUTPUT",
-              "step": "SEMANTIC_TRANSLATION"
+              "step": "SEMANTIC_TRANSLATION",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -1960,7 +2253,8 @@
                 "filter": null
               },
               "stage": "INPUT",
-              "step": "STAC_SEARCH"
+              "step": "STAC_SEARCH",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -1974,7 +2268,8 @@
                 "first_feature_id": "S2A_1"
               },
               "stage": "OUTPUT",
-              "step": "STAC_SEARCH"
+              "step": "STAC_SEARCH",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -1986,7 +2281,8 @@
                 ]
               },
               "stage": "OUTPUT",
-              "step": "TILE_URLS"
+              "step": "TILE_URLS",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -2000,7 +2296,8 @@
                 "width_deg": 0.3
               },
               "stage": "OUTPUT",
-              "step": "UNION_BBOX"
+              "step": "UNION_BBOX",
+              "timestamp": "<volatile>"
             },
             {
               "data": {
@@ -2013,7 +2310,8 @@
                 "total_tiles": 1
               },
               "stage": "OUTPUT",
-              "step": "RESPONSE"
+              "step": "RESPONSE",
+              "timestamp": "<volatile>"
             }
           ]
         },
@@ -2030,6 +2328,7 @@
           },
           "query_processing": {
             "original_query": "Show Sentinel-2 imagery of Paris",
+            "processing_timestamp": "<volatile>",
             "stac_parameters": {
               "bbox": [
                 2.2,
@@ -2097,7 +2396,52 @@
           ],
           "datetime": "2024-06-01/2024-06-30",
           "location_name": "Paris"
-        }
+        },
+        "translation_timestamp": "<volatile>"
+      }
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_rendered_map": true,
+        "has_screenshot": false,
+        "last_bbox": [
+          2.22,
+          48.81,
+          2.47,
+          48.9
+        ],
+        "last_collections": [
+          "sentinel-2-l2a"
+        ],
+        "last_location": "Paris",
+        "last_stac_items": [
+          {
+            "assets": {
+              "tilejson": {
+                "href": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=sentinel-2-l2a&item=S2A_1&assets=visual&asset_bidx=visual%7C1%2C2%2C3&nodata=0",
+                "type": "application/json"
+              },
+              "visual": {
+                "href": "https://data.test/S2A_1.tif",
+                "type": "image/tiff; application=geotiff"
+              }
+            },
+            "bbox": [
+              2.2,
+              48.8,
+              2.5,
+              48.95
+            ],
+            "collection": "sentinel-2-l2a",
+            "id": "S2A_1",
+            "properties": {
+              "cloud_cover": null,
+              "datetime": "2024-06-01T10:00:00Z",
+              "eo:cloud_cover": 5.0
+            }
+          }
+        ],
+        "query_count": 1
       }
     }
   }
