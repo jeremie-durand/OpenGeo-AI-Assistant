@@ -43,6 +43,11 @@ from request_models import (
     VisionChatRequest,
     VisionRequest,
 )
+from services.pc_metadata import (
+    PC_METADATA_AVAILABLE,
+    check_collection_coverage,
+    load_pc_metadata,
+)
 from services.pipeline_trace import (
     clear_pipeline_trace,
     get_pipeline_trace,
@@ -92,50 +97,6 @@ def build_tile_url_params(collection_id: str, query_context: str = None) -> str:
     4. Safe fallbacks for unknown collections
     """
     return HybridRenderingSystem.build_titiler_url_params(collection_id, query_context)
-
-
-# Import PC config loader for STAC search and rendering (single source of truth)
-try:
-    from pc_tasks_config_loader import get_all_collection_ids, get_collection_metadata
-    from pc_tasks_config_loader import get_pc_rendering_config as get_rendering_config
-    from pc_tasks_config_loader import load_pc_metadata
-
-    PC_METADATA_AVAILABLE = True
-    metadata = load_pc_metadata()
-    total_collections = metadata.get("metadata", {}).get("total_collections", 0)
-    logging.info(
-        f"[OK] PC metadata loaded: {total_collections} collections from PC repository"
-    )
-except ImportError as e:
-    PC_METADATA_AVAILABLE = False
-    logging.warning(f"[WARN] PC config loader not available: {e}")
-
-    # Fallback stubs
-    def load_pc_metadata():
-        return {"categories": []}
-
-    def get_collection_metadata(cid):
-        return None
-
-    def get_rendering_config(cid):
-        return None
-
-    def get_all_collection_ids():
-        return []
-
-
-# Coverage check function (using PC metadata)
-def check_collection_coverage(collection_id: str, bbox: list) -> dict:
-    """Check if collection covers the requested bbox - using PC metadata"""
-    coll_metadata = get_collection_metadata(collection_id)
-    if coll_metadata:
-        # For now, assume all collections have global or sufficient coverage
-        # Can be enhanced with actual spatial extent checks
-        return {"covered": True, "message": f"Collection {collection_id} available"}
-    return {
-        "covered": False,
-        "message": f"Collection {collection_id} not found in PC metadata",
-    }
 
 
 # Import GEOINT functionality - endpoints use lazy imports per request
