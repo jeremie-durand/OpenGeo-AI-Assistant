@@ -22,6 +22,7 @@ from services.pipeline_trace import (
     log_pipeline_step,
 )
 from services.query_pipeline.response import summarize_stac_items
+from services.query_pipeline.state import QueryState
 from services.query_pipeline.tiles import (
     has_numeric_bbox,
     needs_optical_mosaic,
@@ -51,13 +52,14 @@ async def unified_query_processor(body: QueryRequest):
     This implements the complete OpenGeo AI Assistant query processing pipeline
     """
     try:
-        natural_query = body.query or body.user_query or "No query provided"
-        session_id = body.session_id
-        pin = body.pin
+        state = QueryState()
+        state.natural_query = body.query or body.user_query or "No query provided"
+        state.session_id = body.session_id
+        state.pin = body.pin
         selected_model = body.model
 
         # Mutable dict alias so all downstream req_body.get() calls keep working
-        req_body = body.model_dump()
+        state.req_body = body.model_dump()
 
         logger.info(f"[BOT] Selected Model: {selected_model}")
 
@@ -72,37 +74,43 @@ async def unified_query_processor(body: QueryRequest):
         # [MICRO] Generate unique pipeline session ID for tracing
         import uuid
 
-        pipeline_session_id = str(uuid.uuid4())[:8]
+        state.pipeline_session_id = str(uuid.uuid4())[:8]
 
         # [MICRO] Clear any stale trace and start fresh
-        clear_pipeline_trace(pipeline_session_id)
+        clear_pipeline_trace(state.pipeline_session_id)
 
         # [MICRO] TRACE: Initial query received
         log_pipeline_step(
-            pipeline_session_id,
+            state.pipeline_session_id,
             "QUERY_RECEIVED",
             "INPUT",
             {
-                "query": natural_query,
-                "session_id": session_id,
-                "has_pin": bool(pin),
+                "query": state.natural_query,
+                "session_id": state.session_id,
+                "has_pin": bool(state.pin),
                 "pin_coords": (
-                    f"({pin.get('lat'):.4f}, {pin.get('lng'):.4f})" if pin else None
+                    f"({state.pin.get('lat'):.4f}, {state.pin.get('lng'):.4f})"
+                    if state.pin
+                    else None
                 ),
             },
         )
 
-        pin_str = f"({pin.get('lat'):.4f},{pin.get('lng'):.4f})" if pin else "none"
+        pin_str = (
+            f"({state.pin.get('lat'):.4f},{state.pin.get('lng'):.4f})"
+            if state.pin
+            else "none"
+        )
         logger.info(
-            f"[TEXT] Query='{natural_query}' session={session_id} pin={pin_str}"
+            f"[TEXT] Query='{state.natural_query}' session={state.session_id} pin={pin_str}"
         )
 
         # Normal STAC search routing (vision handled by /api/geoint/vision)
 
         # Check for pin parameter
-        if pin:
-            pin_lat = pin.get("lat")
-            pin_lng = pin.get("lng")
+        if state.pin:
+            pin_lat = state.pin.get("lat")
+            pin_lng = state.pin.get("lng")
             logger.info(f"[PIN] Pin detected: ({pin_lat:.4f}, {pin_lng:.4f})")
 
         # ================================================================
@@ -115,14 +123,14 @@ async def unified_query_processor(body: QueryRequest):
         #   3. generate_contextual_earth_science_response GPT call (~2-4s saved)
         # Total savings: ~7-14 seconds per demo query
         # ================================================================
-        if is_quickstart_query(natural_query):
+        if is_quickstart_query(state.natural_query):
             import time as _time
 
             _qs_start = _time.perf_counter()
 
-            qs_location = get_quickstart_location(natural_query)
+            qs_location = get_quickstart_location(state.natural_query)
             logger.info(
-                f"[FAST] QUICKSTART FAST PATH: '{natural_query}' -> {qs_location['collections']} @ {qs_location['location']}"
+                f"[FAST] QUICKSTART FAST PATH: '{state.natural_query}' -> {qs_location['collections']} @ {qs_location['location']}"
             )
 
             # Build STAC params from pre-computed data
@@ -152,13 +160,13 @@ async def unified_query_processor(body: QueryRequest):
             # Execute STAC search — route to local STAC if configured, else Planetary Computer
             qs_stac_endpoint = (
                 app_state.global_translator.determine_stac_source(
-                    natural_query, qs_stac_params
+                    state.natural_query, qs_stac_params
                 )
                 if app_state.global_translator
                 else "planetary_computer"
             )
             qs_stac_response = await execute_direct_stac_search(
-                qs_stac_query, qs_stac_endpoint, original_query=natural_query
+                qs_stac_query, qs_stac_endpoint, original_query=state.natural_query
             )
 
             qs_features = []
@@ -211,7 +219,7 @@ async def unified_query_processor(body: QueryRequest):
 
                     optimized_url = optimize_tilejson_url(
                         tj_asset["href"],
-                        build_tile_url_params(qs_collection_id, natural_query),
+                        build_tile_url_params(qs_collection_id, state.natural_query),
                     )
 
                     qs_tile_urls.append(
@@ -233,18 +241,22 @@ async def unified_query_processor(body: QueryRequest):
                         bbox=qs_location["bbox"],
                         datetime_range=datetime_range,
                         query_filters=None,
-                        query_context=natural_query,
+                        query_context=state.natural_query,
                     )
                 except Exception:
                     pass
 
             # Update session context
-            if app_state.router_agent and session_id and (qs_tile_urls or qs_features):
+            if (
+                app_state.router_agent
+                and state.session_id
+                and (qs_tile_urls or qs_features)
+            ):
                 stac_items_for_session = summarize_stac_items(
                     qs_features, include_cloud_cover_alias=False
                 )
                 app_state.router_agent.update_session_context(
-                    session_id,
+                    state.session_id,
                     {
                         "has_rendered_map": True,
                         "last_bbox": qs_location["bbox"],
@@ -252,7 +264,7 @@ async def unified_query_processor(body: QueryRequest):
                         "last_collections": qs_location["collections"],
                         "last_stac_items": stac_items_for_session,
                         "query_count": app_state.router_agent.tools.session_contexts.get(
-                            session_id, {}
+                            state.session_id, {}
                         ).get(
                             "query_count", 0
                         )
@@ -289,7 +301,7 @@ async def unified_query_processor(body: QueryRequest):
                     },
                 },
                 "translation_metadata": {
-                    "original_query": natural_query,
+                    "original_query": state.natural_query,
                     "translated_params": qs_stac_params,
                     "stac_query": qs_stac_query,
                     "translation_timestamp": datetime.now(timezone.utc).isoformat(),
@@ -318,10 +330,10 @@ async def unified_query_processor(body: QueryRequest):
         # map_bounds with the session bbox here so that ALL downstream
         # handlers (vision, contextual, STAC) get the correct coordinates.
         # ================================================================
-        frontend_map_bounds = req_body.get("map_bounds")
-        if app_state.router_agent and session_id:
+        frontend_map_bounds = state.req_body.get("map_bounds")
+        if app_state.router_agent and state.session_id:
             session_ctx = app_state.router_agent.tools.session_contexts.get(
-                session_id, {}
+                state.session_id, {}
             )
             session_bbox_early = session_ctx.get("last_bbox")
             recently_navigated_early = session_bbox_early and not session_ctx.get(
@@ -344,13 +356,13 @@ async def unified_query_processor(body: QueryRequest):
                     "center_lat": (session_bbox_early[1] + session_bbox_early[3]) / 2,
                     "center_lng": (session_bbox_early[0] + session_bbox_early[2]) / 2,
                 }
-                req_body["map_bounds"] = corrected_bounds
+                state.req_body["map_bounds"] = corrected_bounds
                 logger.info(
                     f"[PIN] EARLY BBOX OVERRIDE ({override_reason_early}): Using session bbox for {session_ctx.get('last_location')}: center=({corrected_bounds['center_lat']:.4f}, {corrected_bounds['center_lng']:.4f})"
                 )
 
         # Continue with regular STAC search flow
-        router_action = None
+        state.router_action = None
 
         # ========================================================================
         # [ROUTE] ROUTER AGENT: Intelligent Query Classification and Routing
@@ -366,14 +378,16 @@ async def unified_query_processor(body: QueryRequest):
         # route directly to the Vision Agent.
         # ========================================================================
 
-        if router_action is None and app_state.router_agent and session_id:
+        if state.router_action is None and app_state.router_agent and state.session_id:
             try:
                 # Update session context for the router
                 if app_state.global_translator:
                     context = app_state.global_translator.get_conversation_context(
-                        session_id
+                        state.session_id
                     )
-                    context["has_screenshot"] = bool(req_body.get("imagery_base64"))
+                    context["has_screenshot"] = bool(
+                        state.req_body.get("imagery_base64")
+                    )
                     # ================================================================
                     # CRITICAL FIX: Preserve has_rendered_map from router's existing context
                     # The router agent may have set has_rendered_map=True from a previous
@@ -383,7 +397,7 @@ async def unified_query_processor(body: QueryRequest):
                     # ================================================================
                     existing_router_context = (
                         app_state.router_agent.tools.session_contexts.get(
-                            session_id, {}
+                            state.session_id, {}
                         )
                     )
 
@@ -391,7 +405,7 @@ async def unified_query_processor(body: QueryRequest):
                     if existing_router_context.get("has_rendered_map"):
                         context["has_rendered_map"] = True
                     # Also set from frontend's has_satellite_data flag (new request indicator)
-                    elif req_body.get("has_satellite_data"):
+                    elif state.req_body.get("has_satellite_data"):
                         context["has_rendered_map"] = True
 
                     # Preserve last_bbox and last_location from router context if not in translator context
@@ -412,27 +426,31 @@ async def unified_query_processor(body: QueryRequest):
                             "last_collections"
                         )
 
-                    app_state.router_agent.update_session_context(session_id, context)
+                    app_state.router_agent.update_session_context(
+                        state.session_id, context
+                    )
 
                 # Vision mode already checked above - just invoke RouterAgent
                 logger.info("[ROUTE] Invoking RouterAgent for query classification...")
-                router_action = await app_state.router_agent.route_query(
-                    query=natural_query,
-                    session_id=session_id,
-                    has_screenshot=bool(req_body.get("imagery_base64")),
+                state.router_action = await app_state.router_agent.route_query(
+                    query=state.natural_query,
+                    session_id=state.session_id,
+                    has_screenshot=bool(state.req_body.get("imagery_base64")),
                 )
 
                 logger.info(
-                    f"[ROUTE] RouterAgent decision: {router_action.get('action_type', 'unknown')}"
+                    f"[ROUTE] RouterAgent decision: {state.router_action.get('action_type', 'unknown')}"
                 )
                 log_pipeline_step(
-                    pipeline_session_id,
+                    state.pipeline_session_id,
                     "ROUTER_AGENT",
                     "OUTPUT",
                     {
-                        "action_type": router_action.get("action_type"),
-                        "needs_stac": router_action.get("needs_stac_search", False),
-                        "needs_vision": router_action.get(
+                        "action_type": state.router_action.get("action_type"),
+                        "needs_stac": state.router_action.get(
+                            "needs_stac_search", False
+                        ),
+                        "needs_vision": state.router_action.get(
                             "needs_vision_analysis", False
                         ),
                     },
@@ -441,12 +459,12 @@ async def unified_query_processor(body: QueryRequest):
                 # ================================================================
                 # HANDLE NAVIGATE_TO ACTION: Map-only navigation (no STAC search)
                 # ================================================================
-                if router_action.get("action_type") == "navigate_to":
+                if state.router_action.get("action_type") == "navigate_to":
                     # Get location from router action, or fall back to original query for bare locations
-                    location = router_action.get("location") or router_action.get(
-                        "original_query", ""
-                    )
-                    zoom_level = router_action.get("zoom_level", 12)
+                    location = state.router_action.get(
+                        "location"
+                    ) or state.router_action.get("original_query", "")
+                    zoom_level = state.router_action.get("zoom_level", 12)
 
                     # Capitalize location name properly (e.g., "albania" -> "Albania")
                     location_display = location.title() if location else location
@@ -477,20 +495,20 @@ async def unified_query_processor(body: QueryRequest):
                             # When user navigates to a location, we store the bbox so that
                             # follow-up queries like "show me Sentinel tiles" will use this location
                             # ============================================================
-                            if app_state.router_agent and session_id:
+                            if app_state.router_agent and state.session_id:
                                 navigate_context = {
                                     "last_bbox": bbox,
                                     "last_location": location_display,
                                     "has_rendered_map": False,  # No imagery yet, just navigation
                                     "query_count": app_state.router_agent.tools.session_contexts.get(
-                                        session_id, {}
+                                        state.session_id, {}
                                     ).get(
                                         "query_count", 0
                                     )
                                     + 1,
                                 }
                                 app_state.router_agent.update_session_context(
-                                    session_id, navigate_context
+                                    state.session_id, navigate_context
                                 )
                                 logger.info(
                                     f"[PIN] Updated session context with navigate_to location: {location_display}, bbox: {bbox}"
@@ -542,10 +560,10 @@ async def unified_query_processor(body: QueryRequest):
                 # so users can ask climate questions from the normal chat without
                 # needing to manually select the extreme weather module + drop a pin.
                 # ================================================================
-                if router_action.get("action_type") == "extreme_weather":
-                    location = router_action.get("location") or router_action.get(
-                        "original_query", ""
-                    )
+                if state.router_action.get("action_type") == "extreme_weather":
+                    location = state.router_action.get(
+                        "location"
+                    ) or state.router_action.get("original_query", "")
                     logger.info(
                         f"[STORM] EXTREME_WEATHER ACTION: Climate query for '{location}'"
                     )
@@ -563,9 +581,9 @@ async def unified_query_processor(body: QueryRequest):
                         )
 
                         # Use session context bbox as fallback
-                        if not bbox and app_state.router_agent and session_id:
+                        if not bbox and app_state.router_agent and state.session_id:
                             ctx = app_state.router_agent.tools.session_contexts.get(
-                                session_id, {}
+                                state.session_id, {}
                             )
                             bbox = ctx.get("last_bbox")
                             location = location or ctx.get(
@@ -590,8 +608,8 @@ async def unified_query_processor(body: QueryRequest):
                             )
 
                             agent = get_extreme_weather_agent()
-                            climate_session_id = session_id or str(_uuid.uuid4())
-                            user_query = router_action.get(
+                            climate_session_id = state.session_id or str(_uuid.uuid4())
+                            user_query = state.router_action.get(
                                 "original_query", "Provide a climate overview."
                             )
 
@@ -654,13 +672,13 @@ async def unified_query_processor(body: QueryRequest):
                 logger.warning(
                     f"[WARN] RouterAgent failed: {router_error}, falling back to legacy classification"
                 )
-                router_action = None
+                state.router_action = None
 
         # PHASE 0: EARLY QUERY INTENT CLASSIFICATION
-        classification = None
+        state.classification = None
         early_contextual_response = None
-        translator = None
-        vision_task = None  # For parallel processing of hybrid queries
+        state.translator = None
+        state.vision_task = None  # For parallel processing of hybrid queries
 
         # ========================================================================
         # ROUTER AGENT -> CLASSIFICATION BRIDGE
@@ -669,65 +687,65 @@ async def unified_query_processor(body: QueryRequest):
         # with existing downstream handlers. This is the SINGLE source of truth for
         # query classification - no legacy Intent Classifier fallback needed.
         # ========================================================================
-        if router_action:
-            action_type = router_action.get("action_type", "")
+        if state.router_action:
+            action_type = state.router_action.get("action_type", "")
 
             if action_type == "stac_search":
                 logger.info(
                     "Converting RouterAgent 'stac_search' to classification format"
                 )
-                classification = {
+                state.classification = {
                     "intent_type": "stac",
                     "confidence": 0.95,
                     "needs_satellite_data": True,
                     "needs_vision_analysis": False,
                     "needs_contextual_info": False,
                     "reasoning": "RouterAgent routed to STAC search",
-                    "router_action": router_action,
+                    "router_action": state.router_action,
                 }
             elif action_type == "vision_analysis":
                 logger.info(
                     "Converting RouterAgent 'vision_analysis' to classification format"
                 )
-                classification = {
+                state.classification = {
                     "intent_type": "vision",
                     "confidence": 0.95,
                     "needs_satellite_data": False,
                     "needs_vision_analysis": True,
                     "needs_contextual_info": False,
                     "reasoning": "RouterAgent routed to vision analysis",
-                    "router_action": router_action,
+                    "router_action": state.router_action,
                 }
             elif action_type == "contextual":
                 logger.info(
                     "Converting RouterAgent 'contextual' to classification format"
                 )
-                classification = {
+                state.classification = {
                     "intent_type": "contextual",
                     "confidence": 0.95,
                     "needs_satellite_data": False,
                     "needs_vision_analysis": False,
                     "needs_contextual_info": True,
                     "reasoning": "RouterAgent routed to contextual/knowledge response",
-                    "router_action": router_action,
+                    "router_action": state.router_action,
                 }
             elif action_type == "hybrid":
                 logger.info("Converting RouterAgent 'hybrid' to classification format")
-                classification = {
+                state.classification = {
                     "intent_type": "hybrid",
                     "confidence": 0.95,
                     "needs_satellite_data": True,
                     "needs_vision_analysis": True,
                     "needs_contextual_info": False,
                     "reasoning": "RouterAgent routed to hybrid (STAC + vision)",
-                    "router_action": router_action,
+                    "router_action": state.router_action,
                 }
             elif action_type == "gis_feature_query":
                 _vector_base = os.getenv(
                     "VECTOR_API_URL", "http://vector-api:8080"
                 ).rstrip("/")
-                collection = router_action.get("collection", "")
-                feature_id = router_action.get("feature_id", "")
+                collection = state.router_action.get("collection", "")
+                feature_id = state.router_action.get("feature_id", "")
                 try:
                     async with aiohttp.ClientSession() as _sess:
                         async with _sess.get(
@@ -748,7 +766,7 @@ async def unified_query_processor(body: QueryRequest):
                         f"Platform STAC collections: {', '.join(cols)}. "
                         f"Please analyse this feature."
                     )
-                    router_action = {
+                    state.router_action = {
                         "action_type": "contextual",
                         "original_query": synthesised_query,
                         "needs_stac_search": False,
@@ -756,14 +774,14 @@ async def unified_query_processor(body: QueryRequest):
                     }
                 except Exception as _e:
                     logger.warning(f"GIS feature query failed: {_e}")
-                classification = {
+                state.classification = {
                     "intent_type": "contextual",
                     "confidence": 0.95,
                     "needs_satellite_data": False,
                     "needs_vision_analysis": False,
                     "needs_contextual_info": True,
                     "reasoning": "RouterAgent routed to GIS platform feature query",
-                    "router_action": router_action,
+                    "router_action": state.router_action,
                 }
             # Note: navigate_to and extreme_weather return early before this point
             # Safety net: if navigate_to somehow didn't return early, treat as contextual
@@ -771,25 +789,27 @@ async def unified_query_processor(body: QueryRequest):
                 logger.warning(
                     "[WARN] navigate_to reached classification bridge (should have returned early). Treating as contextual."
                 )
-                classification = {
+                state.classification = {
                     "intent_type": "contextual",
                     "confidence": 0.7,
                     "needs_satellite_data": False,
                     "needs_vision_analysis": False,
                     "needs_contextual_info": True,
                     "reasoning": "navigate_to fallthrough safety net",
-                    "router_action": router_action,
+                    "router_action": state.router_action,
                 }
 
-        intent_type = (
-            classification.get("intent_type", "stac") if classification else None
+        state.intent_type = (
+            state.classification.get("intent_type", "stac")
+            if state.classification
+            else None
         )
         logger.info(
             f"[SEARCH] SEMANTIC_KERNEL_AVAILABLE: {app_state.SEMANTIC_KERNEL_AVAILABLE}"
         )
         if app_state.SEMANTIC_KERNEL_AVAILABLE and app_state.global_translator:
             try:
-                translator = app_state.global_translator
+                state.translator = app_state.global_translator
 
                 # ========================================================================
                 # [BRAIN] UNIFIED INTENT CLASSIFICATION - Single GPT-5 call
@@ -808,12 +828,12 @@ async def unified_query_processor(body: QueryRequest):
                 # No fallback to legacy Intent Classifier needed.
                 # If RouterAgent fails (router_action is None), default to STAC search.
                 # ========================================================================
-                if not classification:
+                if not state.classification:
                     # RouterAgent failed or wasn't available - default to STAC search
                     logger.warning(
                         "RouterAgent did not provide classification, defaulting to STAC search"
                     )
-                    classification = {
+                    state.classification = {
                         "intent_type": "stac",
                         "confidence": 0.5,
                         "needs_satellite_data": True,
@@ -825,42 +845,42 @@ async def unified_query_processor(body: QueryRequest):
                 else:
                     logger.info("Using RouterAgent classification")
 
-                intent_type = classification.get(
+                state.intent_type = state.classification.get(
                     "intent_type", "stac"
                 )  # Default to STAC query
-                confidence = classification.get("confidence", 0)
-                modules_to_execute = classification.get("modules", [])
+                state.confidence = state.classification.get("confidence", 0)
+                modules_to_execute = state.classification.get("modules", [])
 
                 logger.info("CLASSIFICATION RESULT (from RouterAgent):")
-                logger.info(f"   Query: '{natural_query}'")
-                logger.info(f"   Intent: {intent_type}")
-                logger.info(f"   Confidence: {confidence:.2f}")
+                logger.info(f"   Query: '{state.natural_query}'")
+                logger.info(f"   Intent: {state.intent_type}")
+                logger.info(f"   Confidence: {state.confidence:.2f}")
                 logger.info(
-                    f"   Needs satellite data: {classification.get('needs_satellite_data', False)}"
+                    f"   Needs satellite data: {state.classification.get('needs_satellite_data', False)}"
                 )
                 logger.info(
-                    f"   Needs contextual info: {classification.get('needs_contextual_info', False)}"
+                    f"   Needs contextual info: {state.classification.get('needs_contextual_info', False)}"
                 )
                 logger.info(
-                    f"   Needs vision analysis: {classification.get('needs_vision_analysis', False)}"
+                    f"   Needs vision analysis: {state.classification.get('needs_vision_analysis', False)}"
                 )
 
                 # TRACE: Classification result
                 log_pipeline_step(
-                    pipeline_session_id,
+                    state.pipeline_session_id,
                     "CLASSIFICATION",
                     "OUTPUT",
                     {
-                        "intent_type": intent_type,
-                        "confidence": round(confidence, 2),
+                        "intent_type": state.intent_type,
+                        "confidence": round(state.confidence, 2),
                         "modules": modules_to_execute,
-                        "needs_satellite_data": classification.get(
+                        "needs_satellite_data": state.classification.get(
                             "needs_satellite_data", False
                         ),
-                        "needs_vision": classification.get(
+                        "needs_vision": state.classification.get(
                             "needs_vision_analysis", False
                         ),
-                        "reasoning": classification.get("reasoning", "N/A")[
+                        "reasoning": state.classification.get("reasoning", "N/A")[
                             :100
                         ],  # Truncate for readability
                     },
@@ -888,14 +908,15 @@ async def unified_query_processor(body: QueryRequest):
                 from agents import get_vision_agent  # EnhancedVisionAgent with 5 tools
 
                 vision_agent = get_vision_agent()
-                conversation_history = req_body.get(
+                conversation_history = state.req_body.get(
                     "conversation_history", []
-                ) or req_body.get("messages", [])
+                ) or state.req_body.get("messages", [])
 
                 # STEP 1: Check if Router explicitly classified as STAC search
                 # If so, do NOT let keyword detector override — the user wants to LOAD data, not analyze it
                 router_says_stac = (
-                    classification and classification.get("intent_type") == "stac"
+                    state.classification
+                    and state.classification.get("intent_type") == "stac"
                 )
 
                 if router_says_stac:
@@ -909,7 +930,7 @@ async def unified_query_processor(body: QueryRequest):
 
                     chat_vision_detector = get_chat_vision_analyzer()
                     needs_vision = chat_vision_detector.should_use_vision(
-                        natural_query, conversation_history
+                        state.natural_query, conversation_history
                     )
 
                     if needs_vision:
@@ -919,7 +940,7 @@ async def unified_query_processor(body: QueryRequest):
                     else:
                         # STEP 3: Fallback to classification if keywords didn't match
                         # This catches edge cases where user doesn't use explicit vision keywords
-                        needs_vision = classification.get(
+                        needs_vision = state.classification.get(
                             "needs_vision_analysis", False
                         )
                         if needs_vision:
@@ -940,27 +961,27 @@ async def unified_query_processor(body: QueryRequest):
                     )
 
                     # Check if frontend provided map context
-                    map_bounds = req_body.get(
+                    map_bounds = state.req_body.get(
                         "map_bounds"
                     )  # {north, south, east, west, center_lat, center_lng}
-                    imagery_url = req_body.get(
+                    imagery_url = state.req_body.get(
                         "imagery_url"
                     )  # Current visible imagery URL
-                    imagery_base64 = req_body.get(
+                    imagery_base64 = state.req_body.get(
                         "imagery_base64"
                     )  # Base64 screenshot from frontend
-                    current_collection = req_body.get(
+                    current_collection = state.req_body.get(
                         "current_collection"
                     )  # Collection ID (string)
-                    tile_urls = req_body.get(
+                    tile_urls = state.req_body.get(
                         "tile_urls", []
                     )  # TiTiler URLs from prior STAC response
-                    has_satellite_data = req_body.get(
+                    has_satellite_data = state.req_body.get(
                         "has_satellite_data", False
                     )  # Flag if STAC imagery loaded
-                    conversation_history = req_body.get(
+                    conversation_history = state.req_body.get(
                         "conversation_history", []
-                    ) or req_body.get("messages", [])
+                    ) or state.req_body.get("messages", [])
 
                     # Initialize collections_list (will be populated from session context or current_collection)
                     collections_list = []
@@ -975,10 +996,10 @@ async def unified_query_processor(body: QueryRequest):
                     # ================================================================
                     session_context = {}
                     stac_items_from_session = []
-                    if app_state.router_agent and session_id:
+                    if app_state.router_agent and state.session_id:
                         session_context = (
                             app_state.router_agent.tools.session_contexts.get(
-                                session_id, {}
+                                state.session_id, {}
                             )
                         )
                         logger.info(
@@ -1052,7 +1073,7 @@ async def unified_query_processor(body: QueryRequest):
                     logger.info(f"[MAP] Map bounds available: {bool(map_bounds)}")
 
                     # Check if this is a HYBRID query (vision + data)
-                    needs_data = classification.get("needs_satellite_data", False)
+                    needs_data = state.classification.get("needs_satellite_data", False)
                     is_hybrid_vision = needs_vision and needs_data
 
                     if is_hybrid_vision:
@@ -1064,17 +1085,17 @@ async def unified_query_processor(body: QueryRequest):
                         try:
                             # For hybrid queries, we'll start vision analysis but continue to STAC
                             # Both will run in parallel (vision task created, STAC search proceeds)
-                            vision_task = None
+                            state.vision_task = None
 
                             if is_hybrid_vision:
                                 # Create vision agent task (runs in background)
                                 logger.info(
                                     "[FAST] Starting Vision Agent task (parallel execution)..."
                                 )
-                                vision_task = asyncio.create_task(
+                                state.vision_task = asyncio.create_task(
                                     vision_agent.analyze(
-                                        user_query=natural_query,
-                                        session_id=session_id,
+                                        user_query=state.natural_query,
+                                        session_id=state.session_id,
                                         imagery_base64=imagery_base64,
                                         map_bounds=map_bounds or {},
                                         collections=collections_list,
@@ -1104,8 +1125,8 @@ async def unified_query_processor(body: QueryRequest):
 
                                 # EnhancedVisionAgent with tools - pass full context including STAC items
                                 vision_result = await vision_agent.analyze(
-                                    user_query=natural_query,
-                                    session_id=session_id,
+                                    user_query=state.natural_query,
+                                    session_id=state.session_id,
                                     imagery_base64=imagery_base64,
                                     map_bounds=map_bounds or {},
                                     collections=collections_list,
@@ -1156,7 +1177,7 @@ async def unified_query_processor(body: QueryRequest):
 
                                     # Log to pipeline trace
                                     log_pipeline_step(
-                                        pipeline_session_id,
+                                        state.pipeline_session_id,
                                         "VISION_AGENT",
                                         "OUTPUT",
                                         {
@@ -1189,7 +1210,7 @@ async def unified_query_processor(body: QueryRequest):
                                         f"[WARN] Vision Agent returned empty response. Result: {vision_result}"
                                     )
                                     log_pipeline_step(
-                                        pipeline_session_id,
+                                        state.pipeline_session_id,
                                         "VISION_AGENT",
                                         "ERROR",
                                         {
@@ -1239,8 +1260,8 @@ async def unified_query_processor(body: QueryRequest):
                         )
                         try:
                             vision_result = await vision_agent.analyze(
-                                user_query=natural_query,
-                                session_id=session_id,
+                                user_query=state.natural_query,
+                                session_id=state.session_id,
                                 imagery_base64=None,
                                 map_bounds=map_bounds or {},
                                 collections=collections_list,
@@ -1279,7 +1300,7 @@ async def unified_query_processor(body: QueryRequest):
 
                                 # Log to pipeline trace
                                 log_pipeline_step(
-                                    pipeline_session_id,
+                                    state.pipeline_session_id,
                                     "VISION_AGENT_LLM",
                                     "OUTPUT",
                                     {
@@ -1331,9 +1352,9 @@ async def unified_query_processor(body: QueryRequest):
                 # For contextual queries, skip STAC search and generate direct educational response
                 # intent_type = "contextual" for information/education queries (e.g., "How do hurricanes form?")
                 if (
-                    intent_type == "contextual"
-                    and confidence > 0.8
-                    and not classification.get("needs_satellite_data", False)
+                    state.intent_type == "contextual"
+                    and state.confidence > 0.8
+                    and not state.classification.get("needs_satellite_data", False)
                 ):
                     logger.info(
                         "[MSG] CONTEXTUAL REQUEST: Skipping STAC search, generating educational response..."
@@ -1346,14 +1367,14 @@ async def unified_query_processor(body: QueryRequest):
                     # the contextual handler has no idea where the user is looking.
                     # We inject the session location so the LLM generates a correct answer.
                     # ================================================================
-                    contextual_query = natural_query
-                    if app_state.router_agent and session_id:
+                    contextual_query = state.natural_query
+                    if app_state.router_agent and state.session_id:
                         ctx = app_state.router_agent.tools.session_contexts.get(
-                            session_id, {}
+                            state.session_id, {}
                         )
                         session_location = ctx.get("last_location")
                         session_bbox = ctx.get("last_bbox")
-                        current_map_bounds = req_body.get("map_bounds")
+                        current_map_bounds = state.req_body.get("map_bounds")
                         if session_location or session_bbox or current_map_bounds:
                             location_hint = session_location or ""
                             if not location_hint and current_map_bounds:
@@ -1364,16 +1385,16 @@ async def unified_query_processor(body: QueryRequest):
                                 location_hint = f"({center_lat:.4f}, {center_lng:.4f})"
 
                             if location_hint:
-                                contextual_query = f"{natural_query} [The user is currently viewing the map at: {location_hint}]"
+                                contextual_query = f"{state.natural_query} [The user is currently viewing the map at: {location_hint}]"
                                 logger.info(
                                     f"[PIN] Enriched contextual query with location: {location_hint}"
                                 )
 
                     try:
                         contextual_response = await asyncio.wait_for(
-                            translator.generate_contextual_earth_science_response(
+                            state.translator.generate_contextual_earth_science_response(
                                 contextual_query,
-                                classification,
+                                state.classification,
                                 {
                                     "success": True,
                                     "results": {"features": []},
@@ -1390,8 +1411,8 @@ async def unified_query_processor(body: QueryRequest):
                                 "success": True,
                                 "response": contextual_response.get("message"),
                                 "query_classification": {
-                                    "intent_type": intent_type,
-                                    "confidence": confidence,
+                                    "intent_type": state.intent_type,
+                                    "confidence": state.confidence,
                                     "needs_satellite_data": False,
                                     "needs_contextual_info": True,
                                 },
@@ -1405,7 +1426,7 @@ async def unified_query_processor(body: QueryRequest):
 
             except Exception as e:
                 logger.error(f"[FAIL] Early classification failed: {e}")
-                classification = None
+                state.classification = None
 
         # PHASE 1: SEMANTIC TRANSLATION TO STAC PARAMETERS
         # ========================================================================
@@ -1418,17 +1439,17 @@ async def unified_query_processor(body: QueryRequest):
         # - "stac" queries (load new imagery)
         # - "hybrid" queries (load new imagery + analyze)
         # ========================================================================
-        stac_params = None
-        stac_query = None
-        response_message = "I can help you find Earth science data, but I need more specific information."
+        state.stac_params = None
+        state.stac_query = None
+        state.response_message = "I can help you find Earth science data, but I need more specific information."
 
         # Check if we need to run collection mapping based on intent
         skip_collection_mapping = False
-        if classification and intent_type:
-            if intent_type in ["vision", "contextual"]:
+        if state.classification and state.intent_type:
+            if state.intent_type in ["vision", "contextual"]:
                 skip_collection_mapping = True
                 logger.info(
-                    f"[SKIP] Skipping collection mapping for {intent_type} query (no STAC search needed)"
+                    f"[SKIP] Skipping collection mapping for {state.intent_type} query (no STAC search needed)"
                 )
 
         if not skip_collection_mapping:
@@ -1438,23 +1459,23 @@ async def unified_query_processor(body: QueryRequest):
                 )
 
                 # Fallback: Simple collection detection (like Router Function App)
-                collections = detect_collections(natural_query)
-                stac_params = {
+                collections = detect_collections(state.natural_query)
+                state.stac_params = {
                     "collections": collections,
                     "limit": 20,  # PERFORMANCE: Reduced from 100 to 20 for faster queries (3-5s improvement)
-                    "original_query": natural_query,
+                    "original_query": state.natural_query,
                 }
 
                 if collections:
-                    stac_query = build_stac_query(stac_params)
+                    state.stac_query = build_stac_query(state.stac_params)
                     logger.info(
-                        f"[TOOL] Built fallback STAC query: {json.dumps(stac_query, indent=2)}"
+                        f"[TOOL] Built fallback STAC query: {json.dumps(state.stac_query, indent=2)}"
                     )
 
-            elif app_state.SEMANTIC_KERNEL_AVAILABLE and translator:
+            elif app_state.SEMANTIC_KERNEL_AVAILABLE and state.translator:
                 try:
                     logger.info(
-                        f"[BOT] Starting multi-agent pipeline — query='{natural_query}' pin={pin}"
+                        f"[BOT] Starting multi-agent pipeline — query='{state.natural_query}' pin={state.pin}"
                     )
 
                     # ========================================================================
@@ -1469,11 +1490,11 @@ async def unified_query_processor(body: QueryRequest):
                     session_location = None
 
                     # Get session context from router_agent (session_contexts is on router_agent.tools)
-                    if app_state.router_agent and session_id:
+                    if app_state.router_agent and state.session_id:
                         try:
                             session_context = (
                                 app_state.router_agent.tools.session_contexts.get(
-                                    session_id, {}
+                                    state.session_id, {}
                                 )
                             )
                             session_bbox = session_context.get("last_bbox")
@@ -1488,7 +1509,9 @@ async def unified_query_processor(body: QueryRequest):
                             )
 
                     # If router explicitly said use_current_location, prioritize it
-                    if router_action and router_action.get("use_current_location"):
+                    if state.router_action and state.router_action.get(
+                        "use_current_location"
+                    ):
                         logger.info("[PIN] Router set use_current_location=True")
 
                     logger.info(
@@ -1496,52 +1519,57 @@ async def unified_query_processor(body: QueryRequest):
                     )
 
                     # Use the semantic translator's translate_query method with pin and session_bbox fallback
-                    stac_params = await translator.translate_query(
-                        natural_query, pin_location=pin, session_bbox=session_bbox
+                    state.stac_params = await state.translator.translate_query(
+                        state.natural_query,
+                        pin_location=state.pin,
+                        session_bbox=session_bbox,
                     )
 
                     # ========================================================================
                     # [ALERT] LOCATION VALIDATION: Check if location is required but missing
                     # ========================================================================
-                    if stac_params and stac_params.get("error") == "LOCATION_REQUIRED":
+                    if (
+                        state.stac_params
+                        and state.stac_params.get("error") == "LOCATION_REQUIRED"
+                    ):
                         logger.warning(
                             "[WARN] Location required but not found in query"
                         )
                         return {
                             "success": False,
                             "error": "LOCATION_REQUIRED",
-                            "response": stac_params.get(
+                            "response": state.stac_params.get(
                                 "message", "Please specify a location for your search."
                             ),
-                            "suggestions": stac_params.get("suggestions", []),
+                            "suggestions": state.stac_params.get("suggestions", []),
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
                     # ========================================================================
 
-                    if stac_params and stac_params.get("collections"):
+                    if state.stac_params and state.stac_params.get("collections"):
                         logger.info(
-                            f"[OK] Translation successful: {len(stac_params.get('collections', []))} collections selected"
+                            f"[OK] Translation successful: {len(state.stac_params.get('collections', []))} collections selected"
                         )
 
                         # [MICRO] TRACE: Semantic translation result
                         log_pipeline_step(
-                            pipeline_session_id,
+                            state.pipeline_session_id,
                             "SEMANTIC_TRANSLATION",
                             "OUTPUT",
                             {
-                                "collections": stac_params.get("collections", []),
-                                "bbox": stac_params.get("bbox"),
-                                "datetime": stac_params.get("datetime"),
-                                "location_name": stac_params.get(
+                                "collections": state.stac_params.get("collections", []),
+                                "bbox": state.stac_params.get("bbox"),
+                                "datetime": state.stac_params.get("datetime"),
+                                "location_name": state.stac_params.get(
                                     "location_name", "N/A"
                                 ),
                             },
                         )
 
                         # Build STAC query from semantic analysis (like Router Function App)
-                        stac_query = build_stac_query(stac_params)
+                        state.stac_query = build_stac_query(state.stac_params)
                         logger.info(
-                            f"[TOOL] Built STAC query from params: {json.dumps(stac_query, indent=2)}"
+                            f"[TOOL] Built STAC query from params: {json.dumps(state.stac_query, indent=2)}"
                         )
 
                         # ========================================================================
@@ -1551,11 +1579,11 @@ async def unified_query_processor(body: QueryRequest):
                         # use regex extraction as a deterministic fallback. This catches cases
                         # where the GPT datetime_translation_agent returns None or fails.
                         # ========================================================================
-                        if not stac_query.get("datetime") and natural_query:
+                        if not state.stac_query.get("datetime") and state.natural_query:
                             import calendar as cal_mod
                             import re
 
-                            query_lower = natural_query.lower()
+                            query_lower = state.natural_query.lower()
                             month_names = {
                                 "january": 1,
                                 "february": 2,
@@ -1611,25 +1639,25 @@ async def unified_query_processor(body: QueryRequest):
                                     extracted_datetime = f"{y_str}-01-01/{y_str}-12-31"
 
                             if extracted_datetime:
-                                stac_query["datetime"] = extracted_datetime
-                                stac_params["datetime"] = extracted_datetime
+                                state.stac_query["datetime"] = extracted_datetime
+                                state.stac_params["datetime"] = extracted_datetime
                                 logger.info(
                                     f"[DATE] REGEX FALLBACK: Extracted datetime '{extracted_datetime}' from query (GPT agent missed it)"
                                 )
 
                     else:
                         logger.warning(
-                            f"[WARN] Translation did not produce valid STAC parameters. Got: {stac_params}"
+                            f"[WARN] Translation did not produce valid STAC parameters. Got: {state.stac_params}"
                         )
 
                         # [MICRO] TRACE: Translation failed
                         log_pipeline_step(
-                            pipeline_session_id,
+                            state.pipeline_session_id,
                             "SEMANTIC_TRANSLATION",
                             "ERROR",
                             {
                                 "error": "No valid collections returned",
-                                "raw_params": str(stac_params)[:200],
+                                "raw_params": str(state.stac_params)[:200],
                             },
                         )
 
@@ -1638,84 +1666,93 @@ async def unified_query_processor(body: QueryRequest):
                         f"[FAIL] Semantic translation failed: {e}", exc_info=True
                     )
                     logger.error(f"[FAIL] Full traceback: {traceback.format_exc()}")
-                    stac_params = None
-                    stac_query = None
+                    state.stac_params = None
+                    state.stac_query = None
 
         # PHASE 2: EXECUTE STAC SEARCH (if we have a valid query)
-        stac_response = {"results": {"type": "FeatureCollection", "features": []}}
-        features = []
+        state.stac_response = {"results": {"type": "FeatureCollection", "features": []}}
+        state.features = []
 
         # [CHART] DIAGNOSTICS: Track filtering stages for helpful error messages
-        search_diagnostics = {
+        state.search_diagnostics = {
             "raw_count": 0,
             "spatial_filtered_count": 0,
             "final_count": 0,
-            "stac_query": stac_query,
+            "stac_query": state.stac_query,
             "failure_stage": "unknown",
         }
 
         # Note: pipeline_session_id already set at start of query processing
 
-        if stac_query:
+        if state.stac_query:
             try:
                 logger.info("[WEB] Executing STAC search...")
 
                 # [SEARCH] PIPELINE LOG: STAC Search Input
                 log_pipeline_step(
-                    pipeline_session_id,
+                    state.pipeline_session_id,
                     "STAC_SEARCH",
                     "INPUT",
                     {
-                        "collections": stac_query.get("collections"),
-                        "bbox": stac_query.get("bbox"),
-                        "datetime": stac_query.get("datetime"),
-                        "filter": stac_query.get("filter"),
+                        "collections": state.stac_query.get("collections"),
+                        "bbox": state.stac_query.get("bbox"),
+                        "datetime": state.stac_query.get("datetime"),
+                        "filter": state.stac_query.get("filter"),
                     },
                 )
 
                 # Determine which STAC endpoint to use (intelligent routing from Router Function App)
-                stac_endpoint = (
-                    translator.determine_stac_source(natural_query, stac_params)
-                    if translator
+                state.stac_endpoint = (
+                    state.translator.determine_stac_source(
+                        state.natural_query, state.stac_params
+                    )
+                    if state.translator
                     else "planetary_computer"
                 )
-                logger.info(f"[SIGNAL] STAC source determined: {stac_endpoint}")
+                logger.info(f"[SIGNAL] STAC source determined: {state.stac_endpoint}")
 
                 # Pass original_query for smart deduplication (removes duplicate grid cells)
-                stac_response = await execute_direct_stac_search(
-                    stac_query, stac_endpoint, original_query=natural_query
+                state.stac_response = await execute_direct_stac_search(
+                    state.stac_query,
+                    state.stac_endpoint,
+                    original_query=state.natural_query,
                 )
 
                 # If local STAC returned nothing, fall back to Planetary Computer.
                 # Always substitute PC-compatible collection IDs in case local STAC used
                 # non-standard names (e.g. "sentinel2_eo_products" instead of "sentinel-2-l2a").
-                if stac_endpoint != "planetary_computer":
-                    local_features = stac_response.get("results", {}).get(
+                if state.stac_endpoint != "planetary_computer":
+                    local_features = state.stac_response.get("results", {}).get(
                         "features", []
                     )
                     if not local_features:
                         logger.info(
                             "[SIGNAL] Local STAC returned 0 features — retrying against Planetary Computer"
                         )
-                        pc_collections = detect_collections(natural_query)
-                        pc_stac_query = {**stac_query, "collections": pc_collections}
-                        stac_response = await execute_direct_stac_search(
+                        pc_collections = detect_collections(state.natural_query)
+                        pc_stac_query = {
+                            **state.stac_query,
+                            "collections": pc_collections,
+                        }
+                        state.stac_response = await execute_direct_stac_search(
                             pc_stac_query,
                             "planetary_computer",
-                            original_query=natural_query,
+                            original_query=state.natural_query,
                         )
-                        stac_query = pc_stac_query
+                        state.stac_query = pc_stac_query
 
-                if stac_response.get("success"):
-                    raw_features = stac_response.get("results", {}).get("features", [])
-                    search_diagnostics["raw_count"] = len(raw_features)
+                if state.stac_response.get("success"):
+                    raw_features = state.stac_response.get("results", {}).get(
+                        "features", []
+                    )
+                    state.search_diagnostics["raw_count"] = len(raw_features)
                     logger.info(
                         f"[OK] STAC search completed: {len(raw_features)} raw features found"
                     )
 
                     # [SEARCH] PIPELINE LOG: STAC Search Output
                     log_pipeline_step(
-                        pipeline_session_id,
+                        state.pipeline_session_id,
                         "STAC_SEARCH",
                         "OUTPUT",
                         {
@@ -1733,9 +1770,9 @@ async def unified_query_processor(body: QueryRequest):
                     # MODIS uses sinusoidal grid (h/v tiles), so bbox filter isn't strict in PC STAC API
                     # Filter out tiles whose center is outside requested bbox to prevent showing
                     # Arizona/Texas tiles when user requested California
-                    collections = stac_query.get("collections", [])
+                    collections = state.stac_query.get("collections", [])
                     is_modis = any(col.startswith("modis-") for col in collections)
-                    requested_bbox = stac_query.get("bbox")
+                    requested_bbox = state.stac_query.get("bbox")
 
                     if is_modis and requested_bbox and raw_features:
                         logger.info(
@@ -1773,8 +1810,8 @@ async def unified_query_processor(body: QueryRequest):
                             f"[OK] MODIS BBOX FILTER: Kept {len(filtered_features)}/{len(raw_features)} tiles within requested bbox"
                         )
                         raw_features = filtered_features
-                        search_diagnostics["raw_count"] = len(raw_features)
-                        search_diagnostics["modis_bbox_filtered"] = True
+                        state.search_diagnostics["raw_count"] = len(raw_features)
+                        state.search_diagnostics["modis_bbox_filtered"] = True
 
                     # [SEARCH] NO SPATIAL PRE-FILTERING: Agent 3 handles spatial coverage intelligently
                     # Agent 3's GPT-5 ensures full coverage by:
@@ -1784,16 +1821,18 @@ async def unified_query_processor(body: QueryRequest):
                     # Pre-filtering with geometric overlap could remove tiles Agent 3 needs for seamless coverage
                     if (
                         app_state.SEMANTIC_KERNEL_AVAILABLE
-                        and translator
+                        and state.translator
                         and raw_features
-                        and stac_query.get("bbox")
+                        and state.stac_query.get("bbox")
                     ):
-                        requested_bbox = stac_query.get("bbox")
+                        requested_bbox = state.stac_query.get("bbox")
 
                         # Pass ALL tiles to Agent 3 for intelligent selection
                         spatially_filtered_features = raw_features
-                        search_diagnostics["spatial_filter_skipped"] = True
-                        search_diagnostics["spatial_filtered_count"] = len(raw_features)
+                        state.search_diagnostics["spatial_filter_skipped"] = True
+                        state.search_diagnostics["spatial_filtered_count"] = len(
+                            raw_features
+                        )
                         logger.info(
                             f"[SKIP] Skipping spatial pre-filter: Agent 3 will ensure coverage from {len(raw_features)} tiles"
                         )
@@ -1803,14 +1842,17 @@ async def unified_query_processor(body: QueryRequest):
                         cloud_cover_limit = None
 
                         # Primary source: LLM-extracted cloud_cover from translate_query
-                        if stac_params and stac_params.get("cloud_cover") is not None:
-                            cloud_cover_limit = int(stac_params["cloud_cover"])
+                        if (
+                            state.stac_params
+                            and state.stac_params.get("cloud_cover") is not None
+                        ):
+                            cloud_cover_limit = int(state.stac_params["cloud_cover"])
                             logger.info(
                                 f"[CLOUD] Cloud cover limit from stac_params: {cloud_cover_limit}%"
                             )
                         else:
                             # Secondary: check STAC query filter (eo:cloud_cover / cloud_cover CQL2 extension)
-                            query_filter = stac_query.get("query", {})
+                            query_filter = state.stac_query.get("query", {})
                             logger.info(
                                 f"[SEARCH] DEBUG: Client-side check - stac_query.get('query') = {query_filter}"
                             )
@@ -1832,8 +1874,8 @@ async def unified_query_processor(body: QueryRequest):
 
                         # [TOOL] FALLBACK: Keyword detection if no cloud filter in query parameters
                         # This catches cases where the cloud filter wasn't propagated through the pipeline
-                        if cloud_cover_limit is None and natural_query:
-                            query_lower = natural_query.lower()
+                        if cloud_cover_limit is None and state.natural_query:
+                            query_lower = state.natural_query.lower()
                             low_cloud_keywords = [
                                 "low cloud",
                                 "no cloud",
@@ -1857,7 +1899,7 @@ async def unified_query_processor(body: QueryRequest):
                         )
 
                         # Get collection ID for property name lookup
-                        collections = stac_query.get("collections", [])
+                        collections = state.stac_query.get("collections", [])
                         primary_collection = collections[0] if collections else None
 
                         # Apply client-side cloud cover filtering with PROGRESSIVE RELAXATION
@@ -1872,12 +1914,10 @@ async def unified_query_processor(body: QueryRequest):
                             ]  # Progressive relaxation
 
                             for threshold in relaxation_thresholds:
-                                cloud_filtered_results = (
-                                    translator._filter_stac_results_by_cloud_cover(
-                                        {"features": spatially_filtered_features},
-                                        max_cloud_cover=threshold,
-                                        collection_id=primary_collection,
-                                    )
+                                cloud_filtered_results = state.translator._filter_stac_results_by_cloud_cover(
+                                    {"features": spatially_filtered_features},
+                                    max_cloud_cover=threshold,
+                                    collection_id=primary_collection,
                                 )
                                 filtered_features = cloud_filtered_results.get(
                                     "features", []
@@ -1885,15 +1925,15 @@ async def unified_query_processor(body: QueryRequest):
 
                                 if filtered_features or threshold == 100:
                                     spatially_filtered_features = filtered_features
-                                    search_diagnostics["cloud_filtered_count"] = len(
-                                        filtered_features
+                                    state.search_diagnostics["cloud_filtered_count"] = (
+                                        len(filtered_features)
                                     )
 
                                     if threshold > original_cloud_limit:
                                         logger.info(
                                             f"[CLOUD] Cloud filter relaxed: {original_cloud_limit}% -> {threshold}% (found {len(filtered_features)} tiles)"
                                         )
-                                        search_diagnostics["cloud_relaxation"] = (
+                                        state.search_diagnostics["cloud_relaxation"] = (
                                             f"{original_cloud_limit}% -> {threshold}%"
                                         )
                                     else:
@@ -1910,48 +1950,50 @@ async def unified_query_processor(body: QueryRequest):
                         )
 
                         # Use all spatially filtered features (already ordered by recency from STAC API)
-                        features = spatially_filtered_features
-                        search_diagnostics["final_count"] = len(features)
-                        search_diagnostics["tile_selection_method"] = (
+                        state.features = spatially_filtered_features
+                        state.search_diagnostics["final_count"] = len(state.features)
+                        state.search_diagnostics["tile_selection_method"] = (
                             "stac_api_ordering"
                         )
                         logger.info(
-                            f"[OK] Using {len(features)} tiles from STAC API (pre-sorted by datetime desc)"
+                            f"[OK] Using {len(state.features)} tiles from STAC API (pre-sorted by datetime desc)"
                         )
 
                         # Update stac_response with filtered results
-                        stac_response["results"]["features"] = features
+                        state.stac_response["results"]["features"] = state.features
                     else:
-                        features = raw_features
-                        search_diagnostics["spatial_filtered_count"] = len(raw_features)
-                        search_diagnostics["final_count"] = len(features)
+                        state.features = raw_features
+                        state.search_diagnostics["spatial_filtered_count"] = len(
+                            raw_features
+                        )
+                        state.search_diagnostics["final_count"] = len(state.features)
                         logger.info(
                             "[WARN] Skipping spatial filtering and tile ranking (no translator or bbox)"
                         )
 
                     # Determine failure stage if no results
-                    if search_diagnostics["final_count"] == 0:
-                        if search_diagnostics["raw_count"] == 0:
-                            search_diagnostics["failure_stage"] = "stac_api"
-                        elif search_diagnostics["spatial_filtered_count"] == 0:
-                            search_diagnostics["failure_stage"] = "spatial_filter"
+                    if state.search_diagnostics["final_count"] == 0:
+                        if state.search_diagnostics["raw_count"] == 0:
+                            state.search_diagnostics["failure_stage"] = "stac_api"
+                        elif state.search_diagnostics["spatial_filtered_count"] == 0:
+                            state.search_diagnostics["failure_stage"] = "spatial_filter"
                         else:
-                            search_diagnostics["failure_stage"] = "tile_selection"
+                            state.search_diagnostics["failure_stage"] = "tile_selection"
 
                         # [NEW] TRY ALTERNATIVE QUERIES: Automatically find available alternatives
                         logger.info(
                             "[SYNC] No results found - attempting to find alternatives with relaxed filters..."
                         )
                         logger.info(
-                            f"[SYNC] STAC query datetime: {stac_query.get('datetime')}, collections: {stac_query.get('collections')}, bbox: {stac_query.get('bbox')}"
+                            f"[SYNC] STAC query datetime: {state.stac_query.get('datetime')}, collections: {state.stac_query.get('collections')}, bbox: {state.stac_query.get('bbox')}"
                         )
                         try:
                             alternative_result = await try_alternative_queries(
-                                natural_query,
-                                stac_query,
-                                stac_params,
-                                translator,
-                                stac_endpoint,
+                                state.natural_query,
+                                state.stac_query,
+                                state.stac_params,
+                                state.translator,
+                                state.stac_endpoint,
                                 requested_bbox,
                             )
                             logger.info(
@@ -1968,27 +2010,29 @@ async def unified_query_processor(body: QueryRequest):
                             "features"
                         ):
                             # Successfully found alternatives!
-                            features = alternative_result["features"]
-                            search_diagnostics["final_count"] = len(features)
-                            search_diagnostics["alternative_used"] = True
-                            search_diagnostics["relaxation_applied"] = (
+                            state.features = alternative_result["features"]
+                            state.search_diagnostics["final_count"] = len(
+                                state.features
+                            )
+                            state.search_diagnostics["alternative_used"] = True
+                            state.search_diagnostics["relaxation_applied"] = (
                                 alternative_result.get("relaxation_applied")
                             )
-                            search_diagnostics["alternative_explanation"] = (
+                            state.search_diagnostics["alternative_explanation"] = (
                                 alternative_result.get("explanation")
                             )
-                            search_diagnostics["original_filters"] = (
+                            state.search_diagnostics["original_filters"] = (
                                 alternative_result.get("original_filters")
                             )
-                            search_diagnostics["alternative_filters"] = (
+                            state.search_diagnostics["alternative_filters"] = (
                                 alternative_result.get("alternative_filters")
                             )
 
                             # Update stac_response with alternative features
-                            stac_response["results"]["features"] = features
+                            state.stac_response["results"]["features"] = state.features
 
                             logger.info(
-                                f"[OK] Found {len(features)} alternative results: {alternative_result.get('explanation')}"
+                                f"[OK] Found {len(state.features)} alternative results: {alternative_result.get('explanation')}"
                             )
                         else:
                             logger.info(
@@ -1996,44 +2040,48 @@ async def unified_query_processor(body: QueryRequest):
                             )
                 else:
                     logger.error(
-                        f"[FAIL] STAC search failed: {stac_response.get('error', 'Unknown error')}"
+                        f"[FAIL] STAC search failed: {state.stac_response.get('error', 'Unknown error')}"
                     )
-                    search_diagnostics["failure_stage"] = "stac_error"
+                    state.search_diagnostics["failure_stage"] = "stac_error"
 
             except Exception as e:
                 logger.error(f"[FAIL] STAC search execution error: {e}")
-                stac_response = {
+                state.stac_response = {
                     "results": {"type": "FeatureCollection", "features": []}
                 }
-                search_diagnostics["failure_stage"] = "exception"
+                state.search_diagnostics["failure_stage"] = "exception"
 
         # PHASE 3: GENERATE RESPONSE MESSAGE
         # [SEARCH] DEBUG: Log state before response generation to diagnose "no matches" bug
         logger.info("[SEARCH] RESPONSE GENERATION DEBUG:")
-        logger.info(f"   - features count: {len(features) if features else 0}")
         logger.info(
-            f"   - stac_response features: {len(stac_response.get('results', {}).get('features', []))}"
+            f"   - features count: {len(state.features) if state.features else 0}"
+        )
+        logger.info(
+            f"   - stac_response features: {len(state.stac_response.get('results', {}).get('features', []))}"
         )
         logger.info(
             f"   - SEMANTIC_KERNEL_AVAILABLE: {app_state.SEMANTIC_KERNEL_AVAILABLE}"
         )
-        logger.info(f"   - translator: {translator is not None}")
-        logger.info(f"   - stac_query: {stac_query is not None}")
+        logger.info(f"   - translator: {state.translator is not None}")
+        logger.info(f"   - stac_query: {state.stac_query is not None}")
 
         # [TOOL] SAFETY NET: Ensure features variable is synchronized with stac_response
         # This fixes a bug where features could be empty but stac_response has data
-        stac_response_features = stac_response.get("results", {}).get("features", [])
-        if not features and stac_response_features:
+        stac_response_features = state.stac_response.get("results", {}).get(
+            "features", []
+        )
+        if not state.features and stac_response_features:
             logger.warning(
                 f"[WARN] MISMATCH DETECTED: features is empty but stac_response has {len(stac_response_features)} features!"
             )
             logger.warning(
                 "   Synchronizing features from stac_response to prevent 'no matches' bug"
             )
-            features = stac_response_features
-            search_diagnostics["final_count"] = len(features)
+            state.features = stac_response_features
+            state.search_diagnostics["final_count"] = len(state.features)
 
-        if app_state.SEMANTIC_KERNEL_AVAILABLE and translator and features:
+        if app_state.SEMANTIC_KERNEL_AVAILABLE and state.translator and state.features:
             try:
                 logger.info("[NOTE] Generating contextual response message...")
 
@@ -2044,12 +2092,12 @@ async def unified_query_processor(body: QueryRequest):
                 # now is the time to wait for it to complete before combining results
                 # ========================================================================
                 vision_result = None
-                if vision_task is not None:
+                if state.vision_task is not None:
                     try:
                         logger.info(
                             "[WAIT] Awaiting parallel vision analysis to complete..."
                         )
-                        vision_result = await vision_task
+                        vision_result = await state.vision_task
                         if vision_result and vision_result.get("analysis"):
                             early_contextual_response = vision_result["analysis"]
                             logger.info(
@@ -2064,36 +2112,34 @@ async def unified_query_processor(body: QueryRequest):
                         early_contextual_response = None
 
                 # Check if we're showing alternative results
-                if search_diagnostics.get("alternative_used"):
+                if state.search_diagnostics.get("alternative_used"):
                     # [NEW] Generate special message explaining what alternative was shown
                     logger.info("[INFO] Generating alternative result explanation...")
                     contextual_response = (
-                        await translator.generate_alternative_result_response(
-                            natural_query,
-                            classification or {},
-                            {"success": True, "results": {"features": features}},
-                            search_diagnostics.get("original_filters", {}),
-                            search_diagnostics.get("alternative_filters", {}),
-                            search_diagnostics.get("alternative_explanation", ""),
+                        await state.translator.generate_alternative_result_response(
+                            state.natural_query,
+                            state.classification or {},
+                            {"success": True, "results": {"features": state.features}},
+                            state.search_diagnostics.get("original_filters", {}),
+                            state.search_diagnostics.get("alternative_filters", {}),
+                            state.search_diagnostics.get("alternative_explanation", ""),
                             None,
                         )
                     )
-                    response_message = contextual_response.get(
-                        "message", f"Found {len(features)} alternative results."
+                    state.response_message = contextual_response.get(
+                        "message", f"Found {len(state.features)} alternative results."
                     )
                 else:
                     # Standard success response
-                    contextual_response = (
-                        await translator.generate_contextual_earth_science_response(
-                            natural_query,
-                            classification or {},
-                            {"success": True, "results": {"features": features}},
-                            None,
-                        )
+                    contextual_response = await state.translator.generate_contextual_earth_science_response(
+                        state.natural_query,
+                        state.classification or {},
+                        {"success": True, "results": {"features": state.features}},
+                        None,
                     )
-                    response_message = contextual_response.get(
+                    state.response_message = contextual_response.get(
                         "message",
-                        f"Found {len(features)} satellite data results for your query.",
+                        f"Found {len(state.features)} satellite data results for your query.",
                     )
 
                     # If we have vision analysis from hybrid query, prepend it
@@ -2101,39 +2147,41 @@ async def unified_query_processor(body: QueryRequest):
                         logger.info(
                             "[SHUFFLE] Combining vision analysis with STAC data response"
                         )
-                        response_message = f"""**Visual Analysis:**
+                        state.response_message = f"""**Visual Analysis:**
 {early_contextual_response}
 
 ---
 
 **Data Results:**
-{response_message}"""
+{state.response_message}"""
 
                 logger.info("[OK] Contextual response message generated successfully")
             except Exception as e:
                 logger.error(f"[FAIL] Response generation failed: {e}")
-                response_message = generate_fallback_response(
-                    natural_query,
-                    features,
-                    stac_query.get("collections", []) if stac_query else [],
+                state.response_message = generate_fallback_response(
+                    state.natural_query,
+                    state.features,
+                    state.stac_query.get("collections", []) if state.stac_query else [],
                 )
         elif (
-            not features
-            and stac_query
+            not state.features
+            and state.stac_query
             and app_state.SEMANTIC_KERNEL_AVAILABLE
-            and translator
+            and state.translator
         ):
             # [NEW] ENHANCED: Use GPT to generate context-aware response for empty results
             # GPT analyzes the specific failure point and provides intelligent, actionable suggestions
             try:
                 logger.info(
-                    f"[BOT] Generating GPT-powered empty result response (failure stage: {search_diagnostics.get('failure_stage')})"
+                    f"[BOT] Generating GPT-powered empty result response (failure stage: {state.search_diagnostics.get('failure_stage')})"
                 )
-                response_message = await translator.generate_empty_result_response(
-                    natural_query,
-                    stac_query,
-                    stac_query.get("collections", []),
-                    search_diagnostics,
+                state.response_message = (
+                    await state.translator.generate_empty_result_response(
+                        state.natural_query,
+                        state.stac_query,
+                        state.stac_query.get("collections", []),
+                        state.search_diagnostics,
+                    )
                 )
                 logger.info("[OK] GPT-generated empty result response created")
             except Exception as e:
@@ -2141,37 +2189,43 @@ async def unified_query_processor(body: QueryRequest):
                     f"[FAIL] GPT empty result generation failed, using rule-based fallback: {e}"
                 )
                 # Fall back to rule-based response if GPT fails
-                response_message = generate_contextual_empty_response(
-                    natural_query, stac_query.get("collections", []), search_diagnostics
+                state.response_message = generate_contextual_empty_response(
+                    state.natural_query,
+                    state.stac_query.get("collections", []),
+                    state.search_diagnostics,
                 )
-        elif not features and stac_query:
+        elif not state.features and state.stac_query:
             # Fallback: Use rule-based response if Semantic Kernel not available
             logger.info(
-                f"ℹ️ No features found - using rule-based diagnostic response (failure stage: {search_diagnostics.get('failure_stage')})"
+                f"ℹ️ No features found - using rule-based diagnostic response (failure stage: {state.search_diagnostics.get('failure_stage')})"
             )
-            response_message = generate_contextual_empty_response(
-                natural_query, stac_query.get("collections", []), search_diagnostics
+            state.response_message = generate_contextual_empty_response(
+                state.natural_query,
+                state.stac_query.get("collections", []),
+                state.search_diagnostics,
             )
         else:
             # Fallback for edge cases (no stac_query generated)
             logger.info("[WARN] No STAC query generated - using generic fallback")
-            response_message = "I can help you find Earth science data, but I need more specific information about the location, time period, or type of imagery you're looking for."
+            state.response_message = "I can help you find Earth science data, but I need more specific information about the location, time period, or type of imagery you're looking for."
 
         # [MAP] Generate optimized tile URLs for collections that need seamless multi-tile coverage
         # Multi-tile rendering is for: DEM, MODIS composites, global coverage collections
         # Single-tile rendering is for: Optical imagery (Sentinel-2, HLS, Landsat) where we want the BEST image
-        all_tile_urls = []
+        state.all_tile_urls = []
         all_bboxes = []  # [OK] Collect all bboxes for union calculation
-        mosaic_result = (
+        state.mosaic_result = (
             None  # [GLOBE] NEW: Mosaic tilejson result for seamless coverage
         )
-        collections = stac_query.get("collections", []) if stac_query else []
+        collections = (
+            state.stac_query.get("collections", []) if state.stac_query else []
+        )
         collection_id = collections[0].lower() if collections else ""
 
         # [SEARCH] DEBUG: Log what collections are in the features vs what was requested
-        if features:
+        if state.features:
             feature_collections = list(
-                set(f.get("collection", "unknown") for f in features)
+                set(f.get("collection", "unknown") for f in state.features)
             )
             logger.info(
                 f"[SEARCH] COLLECTION DEBUG: Requested={collections}, Features contain={feature_collections}"
@@ -2194,7 +2248,7 @@ async def unified_query_processor(body: QueryRequest):
         # ========================================================================
         needs_mosaic = needs_optical_mosaic(collection_id)
 
-        if needs_mosaic and stac_query and stac_query.get("bbox"):
+        if needs_mosaic and state.stac_query and state.stac_query.get("bbox"):
             logger.info(
                 f"[GLOBE] MOSAIC: Enabling mosaic for optical collection {collection_id}"
             )
@@ -2202,19 +2256,19 @@ async def unified_query_processor(body: QueryRequest):
                 # Import the mosaic function
                 from hybrid_rendering_system import get_mosaic_tilejson_url
 
-                mosaic_result = await get_mosaic_tilejson_url(
+                state.mosaic_result = await get_mosaic_tilejson_url(
                     collections=[collection_id],
-                    bbox=stac_query.get("bbox"),
-                    datetime_range=stac_query.get("datetime"),
+                    bbox=state.stac_query.get("bbox"),
+                    datetime_range=state.stac_query.get("datetime"),
                     query_filters=(
                         {"eo:cloud_cover": {"lt": 30}}
-                        if "cloud" not in natural_query.lower()
+                        if "cloud" not in state.natural_query.lower()
                         else None
                     ),
-                    query_context=natural_query,
+                    query_context=state.natural_query,
                 )
 
-                if mosaic_result:
+                if state.mosaic_result:
                     logger.info(
                         f"[OK] MOSAIC: Successfully registered mosaic for {collection_id}"
                     )
@@ -2224,9 +2278,9 @@ async def unified_query_processor(body: QueryRequest):
                     )
             except Exception as e:
                 logger.warning(f"[WARN] MOSAIC: Error registering mosaic: {e}")
-                mosaic_result = None
+                state.mosaic_result = None
         else:
-            mosaic_result = None
+            state.mosaic_result = None
             if not needs_mosaic:
                 logger.info(
                     f"[MAP] MOSAIC: Skipping mosaic for {collection_id} (not an optical collection)"
@@ -2236,11 +2290,11 @@ async def unified_query_processor(body: QueryRequest):
         # The STAC query already returns features that cover the query bbox
         # We generate tile URLs for all features (up to 20) to ensure full area coverage
         # [ART] OPTIMIZATION: Generate optimized URLs for all features
-        if features and len(features) > 0:
+        if state.features and len(state.features) > 0:
             # Process up to 20 features for full bbox coverage
-            top_features = features[:20]
+            top_features = state.features[:20]
             logger.info(
-                f"[MAP] Generating tile URLs for {len(top_features)} features (of {len(features)} total) for {collection_id}"
+                f"[MAP] Generating tile URLs for {len(top_features)} features (of {len(state.features)} total) for {collection_id}"
             )
 
             for feature in top_features:
@@ -2286,7 +2340,7 @@ async def unified_query_processor(body: QueryRequest):
                         logger.info(
                             f"[SHIELD] Keeping original STAC tilejson for expression-based collection {collection_id}"
                         )
-                        all_tile_urls.append(
+                        state.all_tile_urls.append(
                             {
                                 "item_id": feature.get("id"),
                                 "bbox": feature_bbox,
@@ -2298,7 +2352,9 @@ async def unified_query_processor(body: QueryRequest):
                         continue
 
                     # Build quality parameters for this collection
-                    quality_params = build_tile_url_params(collection_id, natural_query)
+                    quality_params = build_tile_url_params(
+                        collection_id, state.natural_query
+                    )
 
                     # Enhance the URL with quality parameters
                     if quality_params:
@@ -2315,7 +2371,7 @@ async def unified_query_processor(body: QueryRequest):
                             f"[WARN] No quality params generated for {feature.get('id')}"
                         )
 
-                    all_tile_urls.append(
+                    state.all_tile_urls.append(
                         {
                             "item_id": feature.get("id"),
                             "bbox": feature_bbox,
@@ -2328,25 +2384,25 @@ async def unified_query_processor(body: QueryRequest):
                         all_bboxes.append(feature_bbox)
 
             # Calculate skipped features (features with invalid bbox)
-            skipped_count = len(top_features) - len(all_tile_urls)
+            skipped_count = len(top_features) - len(state.all_tile_urls)
 
-            if all_tile_urls:
+            if state.all_tile_urls:
                 logger.info(
-                    f"[MAP] Generated {len(all_tile_urls)} tile URLs for bbox coverage (skipped {skipped_count} with invalid bbox)"
+                    f"[MAP] Generated {len(state.all_tile_urls)} tile URLs for bbox coverage (skipped {skipped_count} with invalid bbox)"
                 )
 
                 # [SEARCH] PIPELINE LOG: Tile URLs Output
                 log_pipeline_step(
-                    pipeline_session_id,
+                    state.pipeline_session_id,
                     "TILE_URLS",
                     "OUTPUT",
                     {
-                        "tile_count": len(all_tile_urls),
+                        "tile_count": len(state.all_tile_urls),
                         "skipped_invalid_bbox": skipped_count,
                         "tile_ids": [
-                            t.get("item_id") for t in all_tile_urls[:5]
+                            t.get("item_id") for t in state.all_tile_urls[:5]
                         ],  # First 5 for brevity
-                        "has_more": len(all_tile_urls) > 5,
+                        "has_more": len(state.all_tile_urls) > 5,
                     },
                 )
 
@@ -2360,7 +2416,7 @@ async def unified_query_processor(body: QueryRequest):
 
                     # [SEARCH] PIPELINE LOG: Union BBox
                     log_pipeline_step(
-                        pipeline_session_id,
+                        state.pipeline_session_id,
                         "UNION_BBOX",
                         "OUTPUT",
                         {
@@ -2371,8 +2427,8 @@ async def unified_query_processor(body: QueryRequest):
                     )
 
                     # [OK] Update stac_params with union bbox for response metadata
-                    if stac_params:
-                        stac_params["bbox"] = union_bbox
+                    if state.stac_params:
+                        state.stac_params["bbox"] = union_bbox
                         logger.info(
                             f"[OK] Updated stac_params bbox to union: {union_bbox}"
                         )
@@ -2381,18 +2437,18 @@ async def unified_query_processor(body: QueryRequest):
         # raw local STAC items without PC-style tile endpoints), retry against PC so
         # the user still gets renderable imagery.
         if (
-            not all_tile_urls
-            and not mosaic_result
-            and features
-            and stac_endpoint != "planetary_computer"
+            not state.all_tile_urls
+            and not state.mosaic_result
+            and state.features
+            and state.stac_endpoint != "planetary_computer"
         ):
             logger.info(
                 "[SIGNAL] Local STAC features have no tilejson assets — retrying against Planetary Computer"
             )
-            pc_collections = detect_collections(natural_query)
-            pc_stac_query = {**stac_query, "collections": pc_collections}
+            pc_collections = detect_collections(state.natural_query)
+            pc_stac_query = {**state.stac_query, "collections": pc_collections}
             pc_stac_response = await execute_direct_stac_search(
-                pc_stac_query, "planetary_computer", original_query=natural_query
+                pc_stac_query, "planetary_computer", original_query=state.natural_query
             )
             if pc_stac_response.get("success"):
                 pc_features = pc_stac_response.get("results", {}).get("features", [])
@@ -2400,10 +2456,10 @@ async def unified_query_processor(body: QueryRequest):
                     logger.info(
                         f"[OK] PC fallback returned {len(pc_features)} renderable features"
                     )
-                    features = pc_features
-                    stac_response = pc_stac_response
+                    state.features = pc_features
+                    state.stac_response = pc_stac_response
                     # Re-run tile URL generation for PC features
-                    all_tile_urls = []
+                    state.all_tile_urls = []
                     collection_id = pc_features[0].get(
                         "collection", collections[0] if collections else ""
                     )
@@ -2419,10 +2475,10 @@ async def unified_query_processor(body: QueryRequest):
                             optimized_url = optimize_tilejson_url(
                                 tilejson_asset["href"],
                                 build_tile_url_params(
-                                    feat_collection_id, natural_query
+                                    feat_collection_id, state.natural_query
                                 ),
                             )
-                            all_tile_urls.append(
+                            state.all_tile_urls.append(
                                 {
                                     "item_id": feature.get("id"),
                                     "bbox": feature_bbox,
@@ -2430,7 +2486,11 @@ async def unified_query_processor(body: QueryRequest):
                                 }
                             )
                     # Re-register mosaic for PC features
-                    if not mosaic_result and stac_query and stac_query.get("bbox"):
+                    if (
+                        not state.mosaic_result
+                        and state.stac_query
+                        and state.stac_query.get("bbox")
+                    ):
                         pc_collection_id = (
                             pc_features[0].get("collection", "") if pc_features else ""
                         )
@@ -2440,18 +2500,18 @@ async def unified_query_processor(body: QueryRequest):
                                     get_mosaic_tilejson_url,
                                 )
 
-                                mosaic_result = await get_mosaic_tilejson_url(
+                                state.mosaic_result = await get_mosaic_tilejson_url(
                                     collections=[pc_collection_id],
-                                    bbox=stac_query.get("bbox"),
-                                    datetime_range=stac_query.get("datetime"),
+                                    bbox=state.stac_query.get("bbox"),
+                                    datetime_range=state.stac_query.get("datetime"),
                                     query_filters=(
                                         {"eo:cloud_cover": {"lt": 30}}
-                                        if "cloud" not in natural_query.lower()
+                                        if "cloud" not in state.natural_query.lower()
                                         else None
                                     ),
-                                    query_context=natural_query,
+                                    query_context=state.natural_query,
                                 )
-                                if mosaic_result:
+                                if state.mosaic_result:
                                     logger.info(
                                         f"[OK] MOSAIC: PC fallback mosaic registered for {pc_collection_id}"
                                     )
@@ -2465,96 +2525,110 @@ async def unified_query_processor(body: QueryRequest):
                                 )
 
         # Clean up STAC results to remove problematic asset_bidx parameters
-        cleaned_stac_results = clean_tilejson_urls(stac_response.get("results", {}))
+        cleaned_stac_results = clean_tilejson_urls(
+            state.stac_response.get("results", {})
+        )
 
         # Prepare final response
         complete_response = {
             "success": True,
-            "response": response_message,
+            "response": state.response_message,
             "data": {
                 "stac_results": cleaned_stac_results,
                 "search_metadata": {
-                    "total_items": len(features),
+                    "total_items": len(state.features),
                     "collections_searched": (
-                        stac_query.get("collections", []) if stac_query else []
+                        state.stac_query.get("collections", [])
+                        if state.stac_query
+                        else []
                     ),
-                    "spatial_extent": stac_query.get("bbox") if stac_query else None,
+                    "spatial_extent": (
+                        state.stac_query.get("bbox") if state.stac_query else None
+                    ),
                     "temporal_range": (
-                        stac_query.get("datetime") if stac_query else None
+                        state.stac_query.get("datetime") if state.stac_query else None
                     ),
                     "search_timestamp": datetime.now(timezone.utc).isoformat(),
                 },
                 "query_classification": (
                     {
                         "intent_type": (
-                            classification.get("intent_type")
-                            if classification
+                            state.classification.get("intent_type")
+                            if state.classification
                             else "unknown"
                         ),
                         "needs_satellite_data": (
-                            classification.get("needs_satellite_data")
-                            if classification
+                            state.classification.get("needs_satellite_data")
+                            if state.classification
                             else True
                         ),
                         "needs_contextual_info": (
-                            classification.get("needs_contextual_info")
-                            if classification
+                            state.classification.get("needs_contextual_info")
+                            if state.classification
                             else False
                         ),
                         "confidence": (
-                            classification.get("confidence") if classification else 0
+                            state.classification.get("confidence")
+                            if state.classification
+                            else 0
                         ),
                     }
-                    if classification
+                    if state.classification
                     else None
                 ),
             },
             "translation_metadata": {
-                "original_query": natural_query,
-                "translated_params": stac_params,
-                "stac_query": stac_query,
+                "original_query": state.natural_query,
+                "translated_params": state.stac_params,
+                "stac_query": state.stac_query,
                 "translation_timestamp": datetime.now(timezone.utc).isoformat(),
                 "all_tile_urls": (
-                    all_tile_urls if all_tile_urls else None
+                    state.all_tile_urls if state.all_tile_urls else None
                 ),  # [+] Individual tile URLs for multi-tile rendering
                 # [GLOBE] NEW: Mosaic tilejson for seamless composited coverage
-                "mosaic_tilejson": mosaic_result if mosaic_result else None,
+                "mosaic_tilejson": state.mosaic_result if state.mosaic_result else None,
             },
             "debug": {
                 "semantic_translator": {
                     "available": app_state.SEMANTIC_KERNEL_AVAILABLE,
                     "selected_collections": (
-                        stac_query.get("collections", []) if stac_query else []
+                        state.stac_query.get("collections", [])
+                        if state.stac_query
+                        else []
                     ),
                     "location_info": {
-                        "bbox": stac_query.get("bbox") if stac_query else None,
-                        "location_name": natural_query,
+                        "bbox": (
+                            state.stac_query.get("bbox") if state.stac_query else None
+                        ),
+                        "location_name": state.natural_query,
                     },
                     "query_processing": {
-                        "original_query": natural_query,
-                        "stac_parameters": stac_params,
+                        "original_query": state.natural_query,
+                        "stac_parameters": state.stac_params,
                         "processing_timestamp": datetime.now(timezone.utc).isoformat(),
                     },
                 },
                 # [MICRO] INSTANT PIPELINE TRACE - Visible in browser console!
                 "pipeline_trace": {
-                    "session_id": pipeline_session_id,
-                    "steps": get_pipeline_trace(pipeline_session_id),
+                    "session_id": state.pipeline_session_id,
+                    "steps": get_pipeline_trace(state.pipeline_session_id),
                 },
             },
         }
 
         # [MICRO] TRACE: Final response summary
         log_pipeline_step(
-            pipeline_session_id,
+            state.pipeline_session_id,
             "RESPONSE",
             "OUTPUT",
             {
                 "success": True,
-                "total_tiles": len(all_tile_urls) if all_tile_urls else 0,
-                "total_features": len(features),
-                "has_mosaic": mosaic_result is not None,
-                "collections": stac_query.get("collections", []) if stac_query else [],
+                "total_tiles": len(state.all_tile_urls) if state.all_tile_urls else 0,
+                "total_features": len(state.features),
+                "has_mosaic": state.mosaic_result is not None,
+                "collections": (
+                    state.stac_query.get("collections", []) if state.stac_query else []
+                ),
             },
         )
 
@@ -2568,31 +2642,33 @@ async def unified_query_processor(body: QueryRequest):
         # ========================================================================
         if (
             app_state.router_agent
-            and session_id
-            and (all_tile_urls or mosaic_result or features)
+            and state.session_id
+            and (state.all_tile_urls or state.mosaic_result or state.features)
         ):
             # Prepare STAC items for vision agent (lightweight version with key fields)
             stac_items_for_vision = summarize_stac_items(
-                features or [], include_cloud_cover_alias=True
+                state.features or [], include_cloud_cover_alias=True
             )
 
             stac_render_context = {
                 "has_rendered_map": True,  # Map now has rendered imagery
-                "last_bbox": stac_query.get("bbox") if stac_query else None,
+                "last_bbox": state.stac_query.get("bbox") if state.stac_query else None,
                 "last_location": (
-                    stac_params.get("location_name") if stac_params else None
+                    state.stac_params.get("location_name")
+                    if state.stac_params
+                    else None
                 ),
                 "last_collections": (
-                    stac_query.get("collections", []) if stac_query else []
+                    state.stac_query.get("collections", []) if state.stac_query else []
                 ),
                 "last_stac_items": stac_items_for_vision,  # STAC items for vision agent raster analysis
                 "query_count": app_state.router_agent.tools.session_contexts.get(
-                    session_id, {}
+                    state.session_id, {}
                 ).get("query_count", 0)
                 + 1,
             }
             app_state.router_agent.update_session_context(
-                session_id, stac_render_context
+                state.session_id, stac_render_context
             )
             logger.info(
                 f"[MAP] Updated session context: has_rendered_map=True, collections={stac_render_context['last_collections']}, stac_items={len(stac_items_for_vision)}"
