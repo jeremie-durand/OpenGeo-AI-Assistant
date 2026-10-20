@@ -14,9 +14,7 @@ def test_lifespan_populates_app_state(monkeypatch: pytest.MonkeyPatch) -> None:
         "semantic_translator",
         "global_translator",
         "router_agent",
-        "geoint_executor",
         "SEMANTIC_KERNEL_AVAILABLE",
-        "GEOINT_AVAILABLE",
     ):
         monkeypatch.setattr(app_state, name, getattr(app_state, name))
 

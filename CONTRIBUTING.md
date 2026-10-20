@@ -127,6 +127,7 @@ opengeo-ai-assistant/
 │   ├── app_state.py           # Runtime components set at startup
 │   ├── routers/               # One APIRouter per endpoint family
 │   ├── services/              # Shared helpers (STAC search, tile URLs, tracing)
+│   │   └── query_pipeline/    # Stages of POST /api/query, sharing one QueryState
 │   ├── llm_client.py          # Provider-agnostic LLM client (use this for all LLM calls)
 │   ├── semantic_translator.py # Query → STAC search pipeline
 │   └── geoint/                # GEOINT agents (terrain, mobility, weather, etc.)
