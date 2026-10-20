@@ -35,14 +35,24 @@ EXPECTED_ROUTES = {
 }
 
 
+def _flatten(routes: list) -> list[APIRoute]:
+    """Expand included routers (lazy in recent FastAPI) into APIRoutes."""
+    flat: list[APIRoute] = []
+    for route in routes:
+        if isinstance(route, APIRoute):
+            flat.append(route)
+        elif hasattr(route, "original_router"):
+            flat.extend(_flatten(route.original_router.routes))
+    return flat
+
+
 def _route_keys() -> list[tuple[str, str]]:
     """Return (method, path) for every API route, duplicates included."""
     from fastapi_app import app
 
     return [
         (method, route.path)
-        for route in app.routes
-        if isinstance(route, APIRoute)
+        for route in _flatten(app.routes)
         for method in route.methods
     ]
 
@@ -67,3 +77,11 @@ def test_global_exception_handler_registered() -> None:
     from fastapi_app import app
 
     assert Exception in app.exception_handlers
+
+
+def test_rendering_config_served_from_moved_router() -> None:
+    from fastapi.testclient import TestClient
+    from fastapi_app import app
+
+    response = TestClient(app).get("/pc_rendering_config.json")
+    assert response.status_code == 200

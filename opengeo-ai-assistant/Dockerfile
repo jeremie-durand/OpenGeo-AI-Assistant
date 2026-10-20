@@ -30,6 +30,7 @@ COPY container-app/*.json ./
 COPY container-app/agents/ ./agents/
 COPY container-app/geoint/ ./geoint/
 COPY container-app/services/ ./services/
+COPY container-app/routers/ ./routers/
 
 RUN mkdir -p /app/uploads
 
