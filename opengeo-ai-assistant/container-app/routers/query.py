@@ -11,7 +11,6 @@ import aiohttp
 import app_state
 from fastapi import APIRouter, HTTPException
 from quickstart_cache import (
-    get_quickstart_classification,
     get_quickstart_location,
     is_quickstart_query,
 )
@@ -98,9 +97,6 @@ async def unified_query_processor(body: QueryRequest):
             pin_lat = pin.get("lat")
             pin_lng = pin.get("lng")
             logger.info(f"[PIN] Pin detected: ({pin_lat:.4f}, {pin_lng:.4f})")
-
-        has_satellite_data = body.has_satellite_data
-        query_lower = natural_query.lower().strip()
 
         # ================================================================
         # [FAST] QUICKSTART FAST PATH: Skip ALL GPT calls for demo queries
@@ -195,7 +191,6 @@ async def unified_query_processor(body: QueryRequest):
 
             # Build tile URLs (same logic as main path but inlined for speed)
             qs_tile_urls = []
-            qs_bboxes = []
             qs_collection_id = (
                 qs_location["collections"][0] if qs_location["collections"] else ""
             )
@@ -254,17 +249,6 @@ async def unified_query_processor(body: QueryRequest):
                             "tilejson_url": optimized_url,
                         }
                     )
-                    qs_bboxes.append(feat_bbox)
-
-            # Calculate union bbox
-            qs_union_bbox = None
-            if qs_bboxes:
-                qs_union_bbox = [
-                    min(b[0] for b in qs_bboxes),
-                    min(b[1] for b in qs_bboxes),
-                    max(b[2] for b in qs_bboxes),
-                    max(b[3] for b in qs_bboxes),
-                ]
 
             # Mosaic for optical collections
             qs_mosaic = None
@@ -864,28 +848,6 @@ async def unified_query_processor(body: QueryRequest):
                 translator = app_state.global_translator
 
                 # ========================================================================
-                # [LAUNCH] QUICK START QUERY OPTIMIZATION
-                # ========================================================================
-                # Skip expensive AI classification for pre-defined demo queries
-                # Provides ~3-5 second speedup for quick start button clicks
-                # ========================================================================
-                quickstart_classification = get_quickstart_classification(natural_query)
-                quickstart_location = get_quickstart_location(natural_query)
-
-                if quickstart_classification and quickstart_location:
-                    logger.info(
-                        f"[LAUNCH] QUICK START QUERY DETECTED: '{natural_query}'"
-                    )
-                    logger.info(
-                        f"   Pre-computed: collection={quickstart_location['collections']}, location={quickstart_location['location']}"
-                    )
-                    classification = quickstart_classification
-                    # Store location data for later use in STAC search
-                    quickstart_data = quickstart_location
-                else:
-                    quickstart_data = None
-
-                # ========================================================================
                 # [BRAIN] UNIFIED INTENT CLASSIFICATION - Single GPT-5 call
                 # ========================================================================
                 # Intent Types: vision | stac | hybrid | contextual
@@ -916,10 +878,6 @@ async def unified_query_processor(body: QueryRequest):
                         "reasoning": "Fallback: RouterAgent unavailable",
                         "modules": [],
                     }
-                elif classification.get("is_quickstart"):
-                    logger.info(
-                        "Skipping classification - Quick start query with pre-computed result"
-                    )
                 else:
                     logger.info("Using RouterAgent classification")
 
@@ -1593,59 +1551,10 @@ async def unified_query_processor(body: QueryRequest):
                         "[SYNC] Translating natural language to STAC parameters..."
                     )
 
-                    # ========================================================================
-                    # [LAUNCH] QUICK START OPTIMIZATION: Skip expensive translation for demo queries
-                    # ========================================================================
-                    # For the 22 quick start queries, we have pre-computed collections + bbox.
-                    # This saves ~3-5 seconds by skipping AI classification + geocoding.
-                    # ========================================================================
-                    if quickstart_data:
-                        logger.info(
-                            "[LAUNCH] Using pre-computed STAC params for quick start query"
-                        )
-
-                        # Convert temporal to STAC datetime range format
-                        temporal = quickstart_data.get("temporal")
-                        datetime_range = None
-                        if temporal:
-                            # Handle different temporal formats:
-                            # "2025-06" -> "2025-06-01/2025-06-30"
-                            # "2017" -> "2017-01-01/2017-12-31"
-                            # "2026-01-01" -> "2026-01-01/2026-01-01"
-                            if len(temporal) == 4:  # Year only: "2017"
-                                datetime_range = f"{temporal}-01-01/{temporal}-12-31"
-                            elif len(temporal) == 7:  # Year-Month: "2025-06"
-                                import calendar
-
-                                year, month = int(temporal[:4]), int(temporal[5:7])
-                                last_day = calendar.monthrange(year, month)[1]
-                                datetime_range = (
-                                    f"{temporal}-01/{temporal}-{last_day:02d}"
-                                )
-                            elif len(temporal) == 10:  # Full date: "2026-01-01"
-                                datetime_range = f"{temporal}/{temporal}"
-                            else:
-                                datetime_range = temporal  # Pass through as-is
-                            logger.info(
-                                f"[DATE] Converted temporal '{temporal}' to datetime range: {datetime_range}"
-                            )
-
-                        stac_params = {
-                            "collections": quickstart_data["collections"],
-                            "bbox": quickstart_data["bbox"],
-                            "datetime": datetime_range,
-                            "location_name": quickstart_data["location"],
-                            "is_quickstart": True,
-                        }
-                        logger.info(f"   Collections: {stac_params['collections']}")
-                        logger.info(f"   Bbox: {stac_params['bbox']}")
-                        if stac_params["datetime"]:
-                            logger.info(f"   Datetime: {stac_params['datetime']}")
-                    else:
-                        # Use the semantic translator's translate_query method with pin and session_bbox fallback
-                        stac_params = await translator.translate_query(
-                            natural_query, pin_location=pin, session_bbox=session_bbox
-                        )
+                    # Use the semantic translator's translate_query method with pin and session_bbox fallback
+                    stac_params = await translator.translate_query(
+                        natural_query, pin_location=pin, session_bbox=session_bbox
+                    )
 
                     # ========================================================================
                     # [ALERT] LOCATION VALIDATION: Check if location is required but missing
@@ -2009,7 +1918,6 @@ async def unified_query_processor(body: QueryRequest):
 
                         # Apply client-side cloud cover filtering with PROGRESSIVE RELAXATION
                         # If strict threshold returns 0, progressively relax to give users SOME results
-                        cloud_relaxation_applied = None
                         if cloud_cover_limit is not None:
                             original_cloud_limit = cloud_cover_limit
                             relaxation_thresholds = [
@@ -2038,7 +1946,6 @@ async def unified_query_processor(body: QueryRequest):
                                     )
 
                                     if threshold > original_cloud_limit:
-                                        cloud_relaxation_applied = threshold
                                         logger.info(
                                             f"[CLOUD] Cloud filter relaxed: {original_cloud_limit}% -> {threshold}% (found {len(filtered_features)} tiles)"
                                         )
@@ -2156,95 +2063,6 @@ async def unified_query_processor(body: QueryRequest):
                 }
                 search_diagnostics["failure_stage"] = "exception"
 
-        # ========================================================================
-        # PHASE 3.4: EXECUTE GEOINT ANALYSIS (Legacy - for backward compatibility)
-        # ========================================================================
-        geoint_results = None
-
-        if (
-            stac_params
-            and stac_params.get("geoint_processing")
-            and app_state.GEOINT_AVAILABLE
-            and app_state.geoint_executor
-            and features
-        ):
-            try:
-                logger.info(
-                    "[MICRO] Query requires GEOINT analysis - executing analytical processing..."
-                )
-                logger.info(
-                    f"[CHART] GEOINT intent detected: {stac_params.get('analysis_intent', {})}"
-                )
-
-                # Extract analysis parameters
-                analysis_intent = stac_params.get("analysis_intent", {})
-                analysis_type = analysis_intent.get("analysis_type", "terrain_analysis")
-                bbox = stac_query.get("bbox") if stac_query else None
-
-                # Execute GEOINT analysis (downloads COG rasters and performs calculations)
-                geoint_results = await app_state.geoint_executor.execute_analysis(
-                    analysis_type=analysis_type,
-                    stac_features=features,
-                    bbox=bbox,
-                    query=natural_query,
-                    **analysis_intent.get("parameters", {}),
-                )
-
-                if geoint_results and geoint_results.get("success"):
-                    logger.info("[OK] GEOINT analysis completed successfully")
-                    logger.info(
-                        f"[UP] Analysis results preview: {list(geoint_results.get('results', {}).keys())}"
-                    )
-
-                    # Log key metrics for debugging
-                    if analysis_type == "terrain_analysis":
-                        elevation_stats = geoint_results.get("results", {}).get(
-                            "elevation_statistics", {}
-                        )
-                        if elevation_stats:
-                            logger.info(
-                                f"[MTN] Elevation: min={elevation_stats.get('min_elevation'):.1f}m, "
-                                f"max={elevation_stats.get('max_elevation'):.1f}m, "
-                                f"mean={elevation_stats.get('mean_elevation'):.1f}m"
-                            )
-                            peak_loc = elevation_stats.get("peak_location", {})
-                            if peak_loc:
-                                logger.info(
-                                    f"[PIN] Peak location: ({peak_loc.get('latitude'):.4f}, "
-                                    f"{peak_loc.get('longitude'):.4f}) @ {peak_loc.get('elevation'):.1f}m"
-                                )
-
-                    elif analysis_type == "mobility_analysis":
-                        mobility_zones = geoint_results.get("results", {}).get(
-                            "mobility_zones", {}
-                        )
-                        if mobility_zones:
-                            go_pct = mobility_zones.get("go_zones", {}).get(
-                                "percentage", 0
-                            )
-                            logger.info(
-                                f"[CAR] Mobility: {go_pct:.1f}% accessible terrain"
-                            )
-                else:
-                    logger.warning(
-                        "[WARN] GEOINT analysis completed but returned no results or failed"
-                    )
-
-            except Exception as e:
-                logger.error(
-                    f"[FAIL] GEOINT analysis execution failed: {str(e)}", exc_info=True
-                )
-                geoint_results = None
-        elif stac_params and stac_params.get("geoint_processing"):
-            logger.warning(
-                "[WARN] GEOINT processing requested but prerequisites not met:"
-            )
-            logger.warning(f"   - GEOINT_AVAILABLE: {app_state.GEOINT_AVAILABLE}")
-            logger.warning(
-                f"   - geoint_executor: {app_state.geoint_executor is not None}"
-            )
-            logger.warning(f"   - features: {len(features) if features else 0}")
-
         # PHASE 3: GENERATE RESPONSE MESSAGE
         # [SEARCH] DEBUG: Log state before response generation to diagnose "no matches" bug
         logger.info("[SEARCH] RESPONSE GENERATION DEBUG:")
@@ -2282,7 +2100,7 @@ async def unified_query_processor(body: QueryRequest):
                 # now is the time to wait for it to complete before combining results
                 # ========================================================================
                 vision_result = None
-                if "vision_task" in locals() and vision_task is not None:
+                if vision_task is not None:
                     try:
                         logger.info(
                             "[WAIT] Awaiting parallel vision analysis to complete..."
@@ -2313,7 +2131,7 @@ async def unified_query_processor(body: QueryRequest):
                             search_diagnostics.get("original_filters", {}),
                             search_diagnostics.get("alternative_filters", {}),
                             search_diagnostics.get("alternative_explanation", ""),
-                            geoint_results,
+                            None,
                         )
                     )
                     response_message = contextual_response.get(
@@ -2326,7 +2144,7 @@ async def unified_query_processor(body: QueryRequest):
                             natural_query,
                             classification or {},
                             {"success": True, "results": {"features": features}},
-                            geoint_results,
+                            None,
                         )
                     )
                     response_message = contextual_response.get(
@@ -2693,7 +2511,6 @@ async def unified_query_processor(body: QueryRequest):
                     stac_response = pc_stac_response
                     # Re-run tile URL generation for PC features
                     all_tile_urls = []
-                    all_bboxes = []
                     collection_id = pc_features[0].get(
                         "collection", collections[0] if collections else ""
                     )
@@ -2753,7 +2570,6 @@ async def unified_query_processor(body: QueryRequest):
                                     "tilejson_url": optimized_url,
                                 }
                             )
-                            all_bboxes.append(feature_bbox)
                     # Re-register mosaic for PC features
                     if not mosaic_result and stac_query and stac_query.get("bbox"):
                         pc_collection_id = (

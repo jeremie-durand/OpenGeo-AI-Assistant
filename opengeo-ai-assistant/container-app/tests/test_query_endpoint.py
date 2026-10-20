@@ -74,7 +74,6 @@ WEATHER_ACTION = {
     "location": "miami",
     "original_query": "How hot will Miami get by 2050?",
 }
-SERVER_ERROR = {"http_error": 500, "detail": "Query processing failed"}
 
 
 def feature(
