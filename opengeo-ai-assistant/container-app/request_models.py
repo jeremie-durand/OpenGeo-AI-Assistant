@@ -1,4 +1,4 @@
-"""Pydantic request models for all POST endpoints in fastapi_app.py."""
+"""Pydantic request models for all POST endpoints in routers/."""
 
 from typing import Any, Dict, List, Optional
 

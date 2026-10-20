@@ -5,7 +5,7 @@ A drop-in replacement for SemanticQueryTranslator that works with any LLM
 provider configured via LLM_PROVIDER / LLM_API_KEY / LLM_MODEL environment
 variables (openai or anthropic).
 
-Exposes the same public interface used by fastapi_app.py:
+Exposes the same public interface used by the API routers:
   - translate_query(query, pin_location, session_bbox)
   - collection_mapping_agent(query)
   - build_stac_query_agent(query, collections)
