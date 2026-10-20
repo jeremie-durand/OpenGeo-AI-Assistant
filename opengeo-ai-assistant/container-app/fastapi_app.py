@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import aiohttp
-from cachetools import TTLCache
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -44,6 +43,11 @@ from request_models import (
     VisionChatRequest,
     VisionRequest,
 )
+from services.pipeline_trace import (
+    clear_pipeline_trace,
+    get_pipeline_trace,
+    log_pipeline_step,
+)
 
 # ============================================================================
 # � INSTANT PIPELINE TRACING - Collect steps for API response
@@ -51,62 +55,15 @@ from request_models import (
 # This allows instant troubleshooting by including trace in the response
 # No need to wait for Log Analytics - see exactly what each agent did
 # ============================================================================
-pipeline_traces: TTLCache = TTLCache(
-    maxsize=500, ttl=1800
-)  # 30-min TTL, max 500 sessions
 
 
-def get_pipeline_trace(session_id: str) -> List[Dict]:
-    """Get all trace entries for a session"""
-    return pipeline_traces.get(session_id, [])
 
 
-def clear_pipeline_trace(session_id: str):
-    """Clear trace for a session (call at start of new query)"""
-    pipeline_traces[session_id] = []
 
 
 # ============================================================================
 # �[SEARCH] PIPELINE LOGGING HELPER - Structured logging for debugging queries
 # ============================================================================
-def log_pipeline_step(
-    session_id: str, step_name: str, stage: str, data: dict, elapsed_ms: float = None
-):
-    """
-    Log a pipeline step with structured format for easy filtering and debugging.
-
-    Args:
-        session_id: Unique identifier for this query session
-        step_name: Name of the agent/step (e.g., "STAC_SEARCH", "TILE_URLS")
-        stage: Either "INPUT" or "OUTPUT"
-        data: Dictionary of relevant data to log
-        elapsed_ms: Optional elapsed time in milliseconds
-    """
-    prefix = f"[PIPELINE:{session_id}]"
-    timing = f" ({elapsed_ms:.0f}ms)" if elapsed_ms else ""
-
-    # Truncate large data for readability
-    data_str = json.dumps(data, default=str)
-    if len(data_str) > 500:
-        data_str = data_str[:500] + "..."
-
-    logging.info(f"{prefix} {step_name} {stage}: {data_str}{timing}")
-
-    # [MICRO] INSTANT TRACING: Also collect for API response
-    if session_id and session_id != "N/A":
-        if session_id not in pipeline_traces:
-            pipeline_traces[session_id] = []
-
-        trace_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "step": step_name,
-            "stage": stage,
-            "data": data,  # Keep full data for trace
-        }
-        if elapsed_ms:
-            trace_entry["elapsed_ms"] = round(elapsed_ms, 1)
-
-        pipeline_traces[session_id].append(trace_entry)
 
 
 # ========================================================================
