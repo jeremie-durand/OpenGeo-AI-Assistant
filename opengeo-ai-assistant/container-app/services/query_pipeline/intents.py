@@ -131,13 +131,7 @@ async def answer_contextual(state: QueryState) -> Optional[Dict[str, Any]]:
         "[MSG] CONTEXTUAL REQUEST: Skipping STAC search, generating educational response..."
     )
 
-    # ================================================================
-    # LOCATION CONTEXT INJECTION: Enrich query with session location
-    # ================================================================
-    # If the user asks "what is on the map" after navigating to Tokyo,
-    # the contextual handler has no idea where the user is looking.
-    # We inject the session location so the LLM generates a correct answer.
-    # ================================================================
+    # Inject the session location: the contextual handler can't see the map
     contextual_query = state.natural_query
     if app_state.router_agent and state.session_id:
         ctx = app_state.router_agent.tools.session_contexts.get(state.session_id, {})
@@ -201,9 +195,6 @@ async def run_early_intents(state: QueryState) -> Optional[Dict[str, Any]]:
         state.translator = app_state.global_translator
 
         resolve_classification(state)
-
-        # Note: GEOINT mode is now UI-driven via /api/geoint/mobility endpoint
-        # No query-based detection needed - all triggered by toggle + pin drop
 
         from agents import get_vision_agent  # EnhancedVisionAgent with 5 tools
 

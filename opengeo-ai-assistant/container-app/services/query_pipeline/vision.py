@@ -57,14 +57,7 @@ def collect_vision_inputs(state: QueryState, needs_vision: bool) -> VisionInputs
     # Initialize collections_list (will be populated from session context or current_collection)
     collections_list = []
 
-    # ================================================================
-    # ENHANCED CONTEXT: Include session history from router
-    # ================================================================
-    # The Vision Agent should have full context from the session:
-    # - Previous locations viewed
-    # - Collections previously loaded
-    # - Conversation history
-    # ================================================================
+    # Give the vision agent the session history: locations, collections, chat
     session_context = {}
     stac_items_from_session = []
     if app_state.router_agent and state.session_id:
@@ -87,18 +80,8 @@ def collect_vision_inputs(state: QueryState, needs_vision: bool) -> VisionInputs
                 f"[PKG] Retrieved {len(stac_items_from_session)} STAC items from session for vision agent"
             )
 
-        # ================================================================
-        # [PIN] SESSION BBOX OVERRIDE
-        # ================================================================
-        # Use session bbox in TWO cases:
-        # 1. Frontend sent no bounds at all (map_bounds is None)
-        # 2. User recently navigated (navigate_to set has_rendered_map=False)
-        #    but frontend bounds are STALE because the useEffect that
-        #    computes mapContext.bounds doesn't track camera position —
-        #    it only re-fires on satelliteData/visionMode changes.
-        #    After navigate_to, the camera moved but no dependency changed,
-        #    so frontend still sends the old US-center coordinates.
-        # ================================================================
+        # Prefer the session bbox when the frontend sent no bounds, or after
+        # navigate_to, when its bounds are stale (camera moves are not tracked)
         session_bbox = session_context.get("last_bbox")
         recently_navigated = session_bbox and not session_context.get(
             "has_rendered_map", True
@@ -181,9 +164,6 @@ async def answer_pure_vision(
         conversation_history=conversation_history,
     )
 
-    # ================================================================
-    # [SEARCH] DEBUG: Log vision_result to trace issues
-    # ================================================================
     logger.info(f"[SEARCH] Vision Agent returned: {type(vision_result)}")
     if vision_result:
         logger.info(f"   Keys: {list(vision_result.keys())}")
@@ -201,9 +181,6 @@ async def answer_pure_vision(
         logger.info("[OK] Vision Agent analysis completed")
         logger.info(f"   Cached: {vision_result.get('cached', False)}")
 
-        # ================================================================
-        # VISION AGENT TRACING: Log tool usage for debugging
-        # ================================================================
         tools_used = vision_result.get("tools_used", [])
         tool_calls = vision_result.get("tool_calls", [])
         logger.info(f"[TOOL] Vision Agent tools used: {tools_used}")
@@ -232,9 +209,7 @@ async def answer_pure_vision(
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     else:
-        # ================================================================
-        # [ALERT] VISION AGENT FAILED - Return error, DON'T fall through to STAC
-        # ================================================================
+        # Return the error; do not fall through to STAC
         logger.warning(
             f"[WARN] Vision Agent returned empty response. Result: {vision_result}"
         )
@@ -352,9 +327,6 @@ async def analyze_without_map_context(
         if response_text:
             logger.info("[OK] Vision Agent (LLM mode) completed")
 
-            # ================================================================
-            # VISION AGENT TRACING: Log tool usage for debugging
-            # ================================================================
             tools_used = vision_result.get("tools_used", [])
             tool_calls = vision_result.get("tool_calls", [])
             logger.info(f"[TOOL] Vision Agent (LLM mode) tools used: {tools_used}")
@@ -381,9 +353,7 @@ async def analyze_without_map_context(
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         else:
-            # ================================================================
-            # [ALERT] VISION AGENT LLM MODE FAILED - Return helpful message
-            # ================================================================
+            # Return a helpful message instead of falling through
             logger.warning(
                 f"[WARN] Vision Agent (LLM mode) returned empty. Result: {vision_result}"
             )

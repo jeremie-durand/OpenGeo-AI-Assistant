@@ -1,6 +1,8 @@
 """Quickstart fast path: demo queries answered from pre-computed cache data."""
 
+import calendar
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -25,9 +27,7 @@ async def run_quickstart_fast_path(state: QueryState) -> Dict[str, Any]:
     Skips the RouterAgent, translate_query and response-generation LLM calls,
     saving roughly 7-14 seconds per demo query.
     """
-    import time as _time
-
-    _qs_start = _time.perf_counter()
+    started = time.perf_counter()
 
     qs_location = get_quickstart_location(state.natural_query)
     logger.info(
@@ -70,7 +70,9 @@ async def run_quickstart_fast_path(state: QueryState) -> Dict[str, Any]:
     qs_collection_id = (
         qs_location["collections"][0] if qs_location["collections"] else ""
     )
-    qs_tile_urls = quickstart_tile_urls(state, qs_features, qs_collection_id)
+    qs_tile_urls = quickstart_tile_urls(
+        state.natural_query, qs_features, qs_collection_id
+    )
 
     # Mosaic for optical collections
     qs_mosaic = None
@@ -108,9 +110,9 @@ async def run_quickstart_fast_path(state: QueryState) -> Dict[str, Any]:
             },
         )
 
-    _qs_elapsed = (_time.perf_counter() - _qs_start) * 1000
+    elapsed_ms = (time.perf_counter() - started) * 1000
     logger.info(
-        f"[FAST] QUICKSTART FAST PATH completed in {_qs_elapsed:.0f}ms (skipped RouterAgent + translate_query + response GPT)"
+        f"[FAST] QUICKSTART FAST PATH completed in {elapsed_ms:.0f}ms (skipped RouterAgent + translate_query + response GPT)"
     )
 
     cleaned_qs_results = clean_tilejson_urls(qs_stac_response.get("results", {}))
@@ -152,7 +154,7 @@ async def run_quickstart_fast_path(state: QueryState) -> Dict[str, Any]:
                 },
             },
             "fast_path": True,
-            "fast_path_elapsed_ms": round(_qs_elapsed, 1),
+            "fast_path_elapsed_ms": round(elapsed_ms, 1),
         },
     }
 
@@ -164,11 +166,9 @@ def quickstart_datetime_range(temporal: Optional[str]) -> Optional[str]:
         if len(temporal) == 4:  # Year: "2017"
             datetime_range = f"{temporal}-01-01/{temporal}-12-31"
         elif len(temporal) == 7:  # Month: "2025-06"
-            import calendar as _cal
-
-            _y, _m = int(temporal[:4]), int(temporal[5:7])
-            _last = _cal.monthrange(_y, _m)[1]
-            datetime_range = f"{temporal}-01/{temporal}-{_last:02d}"
+            year, month = int(temporal[:4]), int(temporal[5:7])
+            last_day = calendar.monthrange(year, month)[1]
+            datetime_range = f"{temporal}-01/{temporal}-{last_day:02d}"
         else:
             datetime_range = temporal
     return datetime_range
@@ -210,7 +210,7 @@ def quickstart_message(
 
 
 def quickstart_tile_urls(
-    state: QueryState, qs_features: List[Dict[str, Any]], qs_collection_id: str
+    query: str, qs_features: List[Dict[str, Any]], qs_collection_id: str
 ) -> List[Dict[str, Any]]:
     """Optimized tilejson URLs for up to 20 quickstart items with a valid bbox."""
     qs_tile_urls = []
@@ -223,7 +223,7 @@ def quickstart_tile_urls(
 
             optimized_url = optimize_tilejson_url(
                 tj_asset["href"],
-                build_tile_url_params(qs_collection_id, state.natural_query),
+                build_tile_url_params(qs_collection_id, query),
             )
 
             qs_tile_urls.append(

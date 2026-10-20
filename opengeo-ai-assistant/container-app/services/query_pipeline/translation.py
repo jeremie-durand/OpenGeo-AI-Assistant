@@ -141,14 +141,8 @@ async def translate_with_agents(state: QueryState) -> Optional[Dict[str, Any]]:
             f"[BOT] Starting multi-agent pipeline — query='{state.natural_query}' pin={state.pin}"
         )
 
-        # ========================================================================
-        # [PIN] SESSION BBOX: Fallback location for queries without explicit location
-        # ========================================================================
-        # Always pass the session's last_bbox as a fallback. The translate_query
-        # method will use it if Agent 2 doesn't extract a location from the query.
-        # This makes location handling more deterministic and less reliant on the
-        # LLM correctly setting use_current_location=True.
-        # ========================================================================
+        # Always pass the session bbox: translate_query uses it as a fallback
+        # when Agent 2 extracts no location
         session_bbox = None
         session_location = None
 
@@ -182,9 +176,6 @@ async def translate_with_agents(state: QueryState) -> Optional[Dict[str, Any]]:
             session_bbox=session_bbox,
         )
 
-        # ========================================================================
-        # [ALERT] LOCATION VALIDATION: Check if location is required but missing
-        # ========================================================================
         if state.stac_params and state.stac_params.get("error") == "LOCATION_REQUIRED":
             logger.warning("[WARN] Location required but not found in query")
             return {
@@ -196,7 +187,6 @@ async def translate_with_agents(state: QueryState) -> Optional[Dict[str, Any]]:
                 "suggestions": state.stac_params.get("suggestions", []),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
-        # ========================================================================
 
         build_query_from_params(state)
 

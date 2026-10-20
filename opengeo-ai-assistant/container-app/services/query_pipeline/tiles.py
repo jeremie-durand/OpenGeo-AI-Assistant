@@ -42,7 +42,12 @@ def has_numeric_bbox(bbox: Optional[Sequence[Any]]) -> bool:
 
 
 def optimize_tilejson_url(original_url: str, quality_params: Optional[str]) -> str:
-    """Swap the URL's rendering params for the collection's quality params."""
+    """Swap the URL's rendering params for the collection's quality params.
+
+    Stripping nodata= avoids grey Sentinel-2 tiles; stripping the duplicated
+    assets=, asset_bidx=, color_formula= and expression= avoids 404s and SAR
+    conflicts.
+    """
     if not quality_params:
         return original_url
     if "?" not in original_url:

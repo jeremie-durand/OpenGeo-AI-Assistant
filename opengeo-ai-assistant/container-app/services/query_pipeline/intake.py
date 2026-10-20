@@ -64,8 +64,6 @@ def start_query(body: QueryRequest, state: QueryState) -> None:
         f"[TEXT] Query='{state.natural_query}' session={state.session_id} pin={pin_str}"
     )
 
-    # Normal STAC search routing (vision handled by /api/geoint/vision)
-
     # Check for pin parameter
     if state.pin:
         pin_lat = state.pin.get("lat")

@@ -17,7 +17,7 @@ class QueryState:
     router_action: Optional[Dict[str, Any]] = None
     classification: Optional[Dict[str, Any]] = None
     intent_type: Optional[str] = None
-    confidence: float = 0
+    confidence: float = 0.0
     translator: Optional[Any] = None
     vision_task: Optional["asyncio.Task[Any]"] = None
     stac_params: Optional[Dict[str, Any]] = None

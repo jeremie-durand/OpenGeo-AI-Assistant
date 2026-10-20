@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -24,13 +25,7 @@ def sync_router_session_context(state: QueryState) -> None:
     if app_state.global_translator:
         context = app_state.global_translator.get_conversation_context(state.session_id)
         context["has_screenshot"] = bool(state.req_body.get("imagery_base64"))
-        # ================================================================
-        # CRITICAL FIX: Preserve has_rendered_map from router's existing context
-        # The router agent may have set has_rendered_map=True from a previous
-        # STAC render, and we don't want to overwrite it with the translator's
-        # context (which may not have been updated). This ensures follow-up
-        # questions like "what is on the map" route to vision correctly.
-        # ================================================================
+        # The translator's context may be stale; keep the router's has_rendered_map.
         existing_router_context = app_state.router_agent.tools.session_contexts.get(
             state.session_id, {}
         )
@@ -94,12 +89,7 @@ async def handle_navigate_to(state: QueryState) -> Dict[str, Any]:
                 f"[OK] Location resolved: {location_display} -> ({center_lat:.4f}, {center_lng:.4f})"
             )
 
-            # ============================================================
-            # [PIN] UPDATE SESSION CONTEXT: Store bbox for follow-up queries
-            # ============================================================
-            # When user navigates to a location, we store the bbox so that
-            # follow-up queries like "show me Sentinel tiles" will use this location
-            # ============================================================
+            # Store the bbox so follow-ups like "show me Sentinel tiles" reuse it
             if app_state.router_agent and state.session_id:
                 navigate_context = {
                     "last_bbox": bbox,
@@ -161,7 +151,7 @@ async def handle_extreme_weather(state: QueryState) -> Optional[Dict[str, Any]]:
     """Answer a climate-projection query inline with the ExtremeWeatherAgent.
 
     Returns None to fall through to the STAC search when the coordinates are
-    unknown or the agent fails.
+    unknown or the agent fails. A timeout returns an error response instead.
     """
     location = state.router_action.get("location") or state.router_action.get(
         "original_query", ""
@@ -193,14 +183,12 @@ async def handle_extreme_weather(state: QueryState) -> Optional[Dict[str, Any]]:
             center_lat = center_lng = None
 
         if center_lat is not None and center_lng is not None:
-            import uuid as _uuid
-
             from geoint.extreme_weather_agent import (
                 get_extreme_weather_agent,
             )
 
             agent = get_extreme_weather_agent()
-            climate_session_id = state.session_id or str(_uuid.uuid4())
+            climate_session_id = state.session_id or str(uuid.uuid4())
             user_query = state.router_action.get(
                 "original_query", "Provide a climate overview."
             )
@@ -257,13 +245,13 @@ async def route_with_agent(state: QueryState) -> Optional[Dict[str, Any]]:
     navigate_to and extreme_weather are answered here; the other actions
     (stac_search, vision_analysis, contextual, hybrid, gis_feature_query)
     continue through the pipeline. A router failure leaves router_action None.
+    An extreme_weather fall-through leaves router_action set without a
+    derived classification.
     """
     if state.router_action is None and app_state.router_agent and state.session_id:
         try:
-            # Update session context for the router
             sync_router_session_context(state)
 
-            # Vision mode already checked above - just invoke RouterAgent
             logger.info("[ROUTE] Invoking RouterAgent for query classification...")
             state.router_action = await app_state.router_agent.route_query(
                 query=state.natural_query,

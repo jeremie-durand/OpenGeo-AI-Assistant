@@ -8,9 +8,7 @@ from datetime import datetime
 import aiohttp
 import app_state
 from fastapi import APIRouter, HTTPException
-from quickstart_cache import (
-    is_quickstart_query,
-)
+from quickstart_cache import is_quickstart_query
 from request_models import ComparisonQueryRequest, QueryRequest
 from services.query_pipeline.intake import (
     apply_session_bbox_override,
