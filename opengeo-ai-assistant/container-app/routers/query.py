@@ -22,11 +22,7 @@ from services.query_pipeline.intake import (
     apply_session_bbox_override,
     start_query,
 )
-from services.query_pipeline.intents import (
-    answer_contextual,
-    detect_vision_intent,
-    resolve_classification,
-)
+from services.query_pipeline.intents import run_early_intents
 from services.query_pipeline.quickstart import run_quickstart_fast_path
 from services.query_pipeline.response import summarize_stac_items
 from services.query_pipeline.routing import (
@@ -40,7 +36,6 @@ from services.query_pipeline.tiles import (
     optimize_tilejson_url,
     union_of_bboxes,
 )
-from services.query_pipeline.vision import run_vision
 from services.query_responses import (
     generate_contextual_empty_response,
     generate_fallback_response,
@@ -95,78 +90,9 @@ async def unified_query_processor(body: QueryRequest):
             f"[SEARCH] SEMANTIC_KERNEL_AVAILABLE: {app_state.SEMANTIC_KERNEL_AVAILABLE}"
         )
         if app_state.SEMANTIC_KERNEL_AVAILABLE and app_state.global_translator:
-            try:
-                state.translator = app_state.global_translator
-
-                # ========================================================================
-                # [BRAIN] UNIFIED INTENT CLASSIFICATION - Single GPT-5 call
-                # ========================================================================
-                # Intent Types: vision | stac | hybrid | contextual
-                # - vision: Analyze currently visible imagery (no new data loading)
-                # - stac: Load new satellite imagery only (no analysis)
-                # - hybrid: Load new imagery AND analyze it (sequential operation)
-                # - contextual: Information/education only (no map interaction)
-                # ========================================================================
-
-                # ========================================================================
-                # CLASSIFICATION SOURCE: RouterAgent is the SINGLE source of truth
-                # ========================================================================
-                # RouterAgent has already classified the query and set `classification`.
-                # No fallback to legacy Intent Classifier needed.
-                # If RouterAgent fails (router_action is None), default to STAC search.
-                # ========================================================================
-                resolve_classification(state)
-
-                # Note: GEOINT mode is now UI-driven via /api/geoint/mobility endpoint
-                # No query-based detection needed - all triggered by toggle + pin drop
-
-                # ========================================================================
-                # CHAT VISION ANALYSIS - Priority Detection
-                # ========================================================================
-                # RouterAgent classification is the SOURCE OF TRUTH for intent.
-                # The keyword detector is a FALLBACK only — it must NOT override
-                # the Router when the Router explicitly classified as stac_search.
-                #
-                # Bug this fixes: "Show me Sentinel-2 imagery here" after navigating
-                # to Canada. The keyword detector sees "show me" + "sentinel" in
-                # conversation history and flags it as vision. But the Router correctly
-                # classified it as stac_search (has_collection=true). The keyword
-                # detector was hijacking STAC queries into the Vision path, which
-                # then fails with "No STAC items available to sample" because no
-                # imagery has been loaded yet.
-                # ========================================================================
-
-                from agents import get_vision_agent  # EnhancedVisionAgent with 5 tools
-
-                vision_agent = get_vision_agent()
-                needs_vision = detect_vision_intent(state)
-
-                # ========================================================================
-                # [LAUNCH] PARALLEL PROCESSING: Vision + Data for Hybrid Queries
-                # ========================================================================
-                # For hybrid queries that need both vision analysis AND STAC data,
-                # we can run them in parallel to save ~5-8 seconds
-                # ========================================================================
-
-                if needs_vision:
-                    early_response = await run_vision(state, vision_agent, needs_vision)
-                    if early_response is not None:
-                        return early_response
-
-                # For contextual queries, skip STAC search and generate direct educational response
-                # intent_type = "contextual" for information/education queries (e.g., "How do hurricanes form?")
-                if (
-                    state.intent_type == "contextual"
-                    and state.confidence > 0.8
-                    and not state.classification.get("needs_satellite_data", False)
-                ):
-                    early_response = await answer_contextual(state)
-                    if early_response is not None:
-                        return early_response
-
-            except Exception as e:
-                logger.error(f"[FAIL] Early classification failed: {e}")
-                state.classification = None
+            early_response = await run_early_intents(state)
+            if early_response is not None:
+                return early_response
 
         # PHASE 1: SEMANTIC TRANSLATION TO STAC PARAMETERS
         # ========================================================================

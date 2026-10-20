@@ -412,7 +412,11 @@ async def analyze_without_map_context(
 async def run_vision(
     state: QueryState, vision_agent: Any, needs_vision: bool
 ) -> Optional[Dict[str, Any]]:
-    """Answer a question about the visible imagery, or start it for hybrids."""
+    """Answer a question about the visible imagery, or start it for hybrids.
+
+    Hybrid queries (vision and data) run the agent in parallel with the STAC
+    search, which saves several seconds.
+    """
     logger.info("[IMG] VISION QUERY DETECTED: User is asking about visible imagery")
     inputs = collect_vision_inputs(state, needs_vision)
     if inputs.map_bounds or inputs.imagery_url or inputs.imagery_base64:

@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 import app_state
 from services.pipeline_trace import log_pipeline_step
 from services.query_pipeline.state import QueryState
+from services.query_pipeline.vision import run_vision
 
 logger = logging.getLogger(__name__)
 
@@ -189,3 +190,42 @@ async def answer_contextual(state: QueryState) -> Optional[Dict[str, Any]]:
         logger.warning(
             f"[WARN] Contextual response generation failed: {e}, proceeding with STAC search..."
         )
+
+
+async def run_early_intents(state: QueryState) -> Optional[Dict[str, Any]]:
+    """Resolve the intent and answer vision and contextual queries up front.
+
+    Any failure clears the classification so the STAC flow runs with defaults.
+    """
+    try:
+        state.translator = app_state.global_translator
+
+        resolve_classification(state)
+
+        # Note: GEOINT mode is now UI-driven via /api/geoint/mobility endpoint
+        # No query-based detection needed - all triggered by toggle + pin drop
+
+        from agents import get_vision_agent  # EnhancedVisionAgent with 5 tools
+
+        vision_agent = get_vision_agent()
+        needs_vision = detect_vision_intent(state)
+
+        if needs_vision:
+            early_response = await run_vision(state, vision_agent, needs_vision)
+            if early_response is not None:
+                return early_response
+
+        # For contextual queries, skip STAC search and generate direct educational response
+        # intent_type = "contextual" for information/education queries (e.g., "How do hurricanes form?")
+        if (
+            state.intent_type == "contextual"
+            and state.confidence > 0.8
+            and not state.classification.get("needs_satellite_data", False)
+        ):
+            early_response = await answer_contextual(state)
+            if early_response is not None:
+                return early_response
+
+    except Exception as e:
+        logger.error(f"[FAIL] Early classification failed: {e}")
+        state.classification = None
