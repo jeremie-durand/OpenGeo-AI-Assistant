@@ -67,31 +67,10 @@ async def run_quickstart_fast_path(state: QueryState) -> Dict[str, Any]:
     # Generate template response (no GPT call needed)
     qs_response_msg = quickstart_message(qs_location, qs_features)
 
-    # Build tile URLs (same logic as main path but inlined for speed)
-    qs_tile_urls = []
     qs_collection_id = (
         qs_location["collections"][0] if qs_location["collections"] else ""
     )
-
-    for feat in qs_features[:20]:
-        tj_asset = feat.get("assets", {}).get("tilejson", {})
-        if tj_asset and "href" in tj_asset:
-            feat_bbox = feat.get("bbox")
-            if not has_numeric_bbox(feat_bbox):
-                continue
-
-            optimized_url = optimize_tilejson_url(
-                tj_asset["href"],
-                build_tile_url_params(qs_collection_id, state.natural_query),
-            )
-
-            qs_tile_urls.append(
-                {
-                    "item_id": feat.get("id"),
-                    "bbox": feat_bbox,
-                    "tilejson_url": optimized_url,
-                }
-            )
+    qs_tile_urls = quickstart_tile_urls(state, qs_features, qs_collection_id)
 
     # Mosaic for optical collections
     qs_mosaic = None
@@ -228,3 +207,30 @@ def quickstart_message(
             f"matching the current filters. Try adjusting the time range."
         )
     return qs_response_msg
+
+
+def quickstart_tile_urls(
+    state: QueryState, qs_features: List[Dict[str, Any]], qs_collection_id: str
+) -> List[Dict[str, Any]]:
+    """Optimized tilejson URLs for up to 20 quickstart items with a valid bbox."""
+    qs_tile_urls = []
+    for feat in qs_features[:20]:
+        tj_asset = feat.get("assets", {}).get("tilejson", {})
+        if tj_asset and "href" in tj_asset:
+            feat_bbox = feat.get("bbox")
+            if not has_numeric_bbox(feat_bbox):
+                continue
+
+            optimized_url = optimize_tilejson_url(
+                tj_asset["href"],
+                build_tile_url_params(qs_collection_id, state.natural_query),
+            )
+
+            qs_tile_urls.append(
+                {
+                    "item_id": feat.get("id"),
+                    "bbox": feat_bbox,
+                    "tilejson_url": optimized_url,
+                }
+            )
+    return qs_tile_urls
