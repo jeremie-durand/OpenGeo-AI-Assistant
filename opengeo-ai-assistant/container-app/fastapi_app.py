@@ -386,7 +386,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Initialize and tear down application components."""
     global semantic_translator, global_translator, SEMANTIC_KERNEL_AVAILABLE, router_agent
-    global terrain_analyzer, mobility_classifier, los_calculator, geoint_utils, GEOINT_AVAILABLE
+    global GEOINT_AVAILABLE
 
     logger.info("[LAUNCH] OpenGeo AI Assistant CONTAINER STARTING UP")
 
@@ -572,11 +572,6 @@ semantic_translator = None
 global_translator = None  # For session management
 router_agent = None  # RouterAgent for intelligent query classification
 
-# Initialize GEOINT processors
-terrain_analyzer = None
-mobility_classifier = None
-los_calculator = None
-geoint_utils = None
 geoint_executor = None
 
 # STAC endpoints configuration
@@ -1524,56 +1519,6 @@ def build_stac_query(stac_params: Dict[str, Any]) -> Dict[str, Any]:
         logger.info(f"[CLOUD] Adding cloud cover filter to STAC query: ≤{cloud_val}%")
 
     return query
-
-
-def calculate_center_from_bbox(bbox: List[float]) -> List[float]:
-    """
-    Calculate center coordinates from bounding box [west, south, east, north]
-    """
-    if not bbox or len(bbox) != 4:
-        return [0, 0]
-
-    west, south, east, north = bbox
-    center_lon = (west + east) / 2
-    center_lat = (south + north) / 2
-
-    return [center_lon, center_lat]
-
-
-def calculate_zoom_level(bbox: List[float]) -> int:
-    """
-    Calculate appropriate zoom level based on bounding box size
-    """
-    if not bbox or len(bbox) != 4:
-        return 10
-
-    west, south, east, north = bbox
-    lon_diff = abs(east - west)
-    lat_diff = abs(north - south)
-
-    # Use the larger dimension to determine zoom
-    max_diff = max(lon_diff, lat_diff)
-
-    if max_diff > 90:
-        return 2
-    elif max_diff > 45:
-        return 3
-    elif max_diff > 20:
-        return 4
-    elif max_diff > 10:
-        return 5
-    elif max_diff > 5:
-        return 6
-    elif max_diff > 2:
-        return 7
-    elif max_diff > 1:
-        return 8
-    elif max_diff > 0.5:
-        return 9
-    elif max_diff > 0.1:
-        return 10
-    else:
-        return 12
 
 
 def clean_tilejson_urls(stac_results: Dict[str, Any]) -> Dict[str, Any]:
