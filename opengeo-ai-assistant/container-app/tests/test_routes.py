@@ -85,3 +85,11 @@ def test_rendering_config_served_from_moved_router() -> None:
 
     response = TestClient(app).get("/pc_rendering_config.json")
     assert response.status_code == 200
+
+
+def test_all_endpoints_live_in_routers() -> None:
+    from fastapi_app import app
+
+    modules = {route.endpoint.__module__ for route in _flatten(app.routes)}
+    assert modules
+    assert all(module.startswith("routers.") for module in modules), modules

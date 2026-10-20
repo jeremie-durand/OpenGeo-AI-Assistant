@@ -1,5 +1,4 @@
-# FastAPI - Complete Implementation
-# Containerized version with full OpenGeo AI Assistant functionality
+"""FastAPI application: startup lifespan, middleware and router registration."""
 
 import logging
 import os
@@ -23,39 +22,6 @@ from routers import (
     static_files,
     system,
 )
-
-# ============================================================================
-# � INSTANT PIPELINE TRACING - Collect steps for API response
-# ============================================================================
-# This allows instant troubleshooting by including trace in the response
-# No need to wait for Log Analytics - see exactly what each agent did
-# ============================================================================
-
-
-# ============================================================================
-# �[SEARCH] PIPELINE LOGGING HELPER - Structured logging for debugging queries
-# ============================================================================
-
-
-# ========================================================================
-# [TARGET] SMART TILE DEDUPLICATION
-# ========================================================================
-# Prevents multiple tiles from different dates overlapping on the same location.
-# Only applies to optical imagery when no explicit temporal query is made.
-# ========================================================================
-
-# Collections that benefit from deduplication (optical imagery)
-
-# Keywords indicating user wants multiple dates (skip deduplication)
-
-# Collections to NEVER deduplicate (fire, disaster monitoring need temporal data)
-
-
-# ========================================================================
-
-
-# Wrapper for backward compatibility
-
 
 logging.info("[OK] GEOINT endpoints available (lazy import mode)")
 
@@ -185,51 +151,6 @@ app.include_router(geoint_analysis.router)
 app.include_router(query.router)
 
 
-# Serve PC rendering config (ALWAYS AVAILABLE - not dependent on static dir)
-
-
-# STAC endpoints configuration
-# STAC_API_URL env var sets the local/private STAC API — no hardcoded host/port
-
-
-# Helper functions ported from Router Function App
-
-
-# ============================================================================
-# [BOT] TEAMS BOT ENDPOINT — Receives activities from Bot Framework Connector
-# ============================================================================
-
-
-# ============================================================================
-# COLORMAP ENDPOINTS REMOVED
-# ============================================================================
-# The colormap service has been removed as it's redundant.
-# Colormap information comes directly from PC tasks rendering config.
-# Legend display uses hardcoded colormap gradients in the frontend.
-# ============================================================================
-
-
-# ============================================================================
-# [BRAIN] GEOINT MODULE-SPECIFIC ENDPOINTS
-# ============================================================================
-# Each GEOINT module has a dedicated endpoint for clear separation of concerns
-
-
-# Pydantic models for GEOINT requests
-
-
-# ============================================================================
-# GEOINT VISION ANALYSIS - Dedicated endpoint (matching terrain pattern)
-# ============================================================================
-
-
-# NOTE: Duplicate /api/geoint/mobility endpoint removed (was preventing terrain endpoint from registering)
-# The correct mobility endpoint is at line ~2266
-
-
-# Orchestrator endpoint for calling multiple GEOINT agents at once
-
-
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler"""
@@ -245,5 +166,5 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Note: Container startup uses Dockerfile CMD: uvicorn fastapi_app:app --host 0.0.0.0 --port 8080
+# Note: Container startup uses Dockerfile CMD: uvicorn fastapi_app:app --host 0.0.0.0 --port 8000
 # The if __name__ == "__main__" block has been removed to prevent port conflicts
