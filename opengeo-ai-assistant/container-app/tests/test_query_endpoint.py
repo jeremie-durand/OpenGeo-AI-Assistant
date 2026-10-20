@@ -786,3 +786,240 @@ def test_snapshot_has_no_orphans() -> None:
         and "check" in inspect.signature(obj).parameters
     }
     assert set(json.loads(SNAPSHOT_PATH.read_text())) == scenarios
+
+
+# --- vision -----------------------------------------------------------------
+
+VISION_ACTION = {"action_type": "vision_analysis"}
+CONTEXTUAL_ACTION = {"action_type": "contextual"}
+VISION_RESULT = {
+    "response": "I see the Seine.",
+    "tools_used": ["analyze_screenshot"],
+    "tool_calls": [{"tool": "analyze_screenshot"}],
+    "context": {"has_screenshot": True, "collections": ["sentinel-2-l2a"]},
+}
+RENDERED_SESSION = {
+    "has_rendered_map": True,
+    "last_bbox": PARIS_BBOX,
+    "last_location": "Paris",
+    "last_collections": ["sentinel-2-l2a"],
+    "last_stac_items": [{"id": "S2A_1"}],
+}
+
+
+def test_vision_with_map_context(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(action=VISION_ACTION, session=RENDERED_SESSION)
+    harness.vision_result = VISION_RESULT
+    result = harness.run(
+        query="What river is this?",
+        session_id=SESSION,
+        map_bounds=PARIS_BOUNDS,
+        imagery_base64="aGVsbG8=",
+        current_collection="landsat-c2-l2",
+        tile_urls=["https://tiles.test/1"],
+        has_satellite_data=True,
+        conversation_history=[{"role": "user", "content": "Show Paris"}],
+    )
+    assert result["response"]["processing_type"] == "vision_agent"
+    check(result)
+
+
+def test_vision_uses_session_bbox_after_navigation(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(
+        action=VISION_ACTION,
+        session={
+            "last_bbox": PARIS_BBOX,
+            "last_location": "Paris",
+            "has_rendered_map": False,
+        },
+    )
+    harness.vision_result = VISION_RESULT
+    stale = {"west": -100, "south": 30, "east": -90, "north": 40}
+    result = harness.run(query="What is here?", session_id=SESSION, map_bounds=stale)
+    (vision_call,) = calls_named(result, "vision.analyze")
+    assert vision_call["map_bounds"]["west"] == PARIS_BBOX[0]
+    check(result)
+
+
+def test_vision_empty_response_returns_error(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(action=VISION_ACTION, session=RENDERED_SESSION)
+    harness.vision_result = {"response": ""}
+    result = harness.run(
+        query="What river is this?", session_id=SESSION, map_bounds=PARIS_BOUNDS
+    )
+    assert result["response"]["processing_type"] == "vision_agent_error"
+    assert result["response"]["success"] is False
+    check(result)
+
+
+def test_vision_agent_exception_returns_error(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(action=VISION_ACTION, session=RENDERED_SESSION)
+    harness.vision_result = RuntimeError("vision down")
+    result = harness.run(
+        query="What river is this?", session_id=SESSION, map_bounds=PARIS_BOUNDS
+    )
+    assert result["response"]["error"] == "internal error"
+    check(result)
+
+
+def test_vision_without_map_context_uses_llm_mode(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(action=VISION_ACTION)
+    harness.vision_result = VISION_RESULT
+    result = harness.run(query="What is on the map?", session_id=SESSION)
+    assert result["response"]["processing_type"] == "vision_agent_llm"
+    check(result)
+
+
+def test_vision_without_map_context_empty_response(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(action=VISION_ACTION)
+    harness.vision_result = None
+    result = harness.run(query="What is on the map?", session_id=SESSION)
+    assert result["response"]["processing_type"] == "vision_agent_no_context"
+    check(result)
+
+
+def test_vision_without_map_context_exception(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(action=VISION_ACTION)
+    harness.vision_result = RuntimeError("vision down")
+    result = harness.run(query="What is on the map?", session_id=SESSION)
+    assert result["response"]["processing_type"] == "vision_agent_error"
+    assert result["response"]["success"] is True
+    check(result)
+
+
+def test_keyword_detector_routes_contextual_query_to_vision(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(action=CONTEXTUAL_ACTION, session=RENDERED_SESSION)
+    harness.keyword_vision = True
+    harness.vision_result = VISION_RESULT
+    result = harness.run(
+        query="Describe what you see", session_id=SESSION, map_bounds=PARIS_BOUNDS
+    )
+    detections = calls_named(result, "should_use_vision")
+    assert [d["query"] for d in detections] == ["Describe what you see"]
+    assert result["response"]["processing_type"] == "vision_agent"
+    check(result)
+
+
+# --- contextual and GIS -------------------------------------------------------
+
+
+def test_contextual_answer_with_session_location(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(action=CONTEXTUAL_ACTION, session={"last_location": "Tokyo"})
+    result = harness.run(query="How do typhoons form?", session_id=SESSION)
+    assert result["response"]["processing_type"] == "contextual_only"
+    (prompt,) = calls_named(result, "translator.generate_contextual")
+    assert "Tokyo" in prompt["query"]
+    check(result)
+
+
+def test_contextual_answer_with_map_bounds_hint(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(action=CONTEXTUAL_ACTION, session={"has_rendered_map": True})
+    result = harness.run(
+        query="What is this area known for?",
+        session_id=SESSION,
+        map_bounds=PARIS_BOUNDS,
+    )
+    (prompt,) = calls_named(result, "translator.generate_contextual")
+    assert "48.855" in prompt["query"]
+    check(result)
+
+
+def test_contextual_failure_gives_generic_message(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(action=CONTEXTUAL_ACTION, contextual_error=RuntimeError("llm down"))
+    result = harness.run(query="How do typhoons form?", session_id=SESSION)
+    assert calls_named(result, "stac_search") == []
+    check(result)
+
+
+def test_gis_feature_query_answers_contextually(
+    harness: Harness, check: Callable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aiohttp
+
+    harness.ai_mode(
+        action={
+            "action_type": "gis_feature_query",
+            "collection": "parcels",
+            "feature_id": "lot-7",
+        }
+    )
+    payloads = {
+        "feature": {"properties": {"owner": "City"}},
+        "collections": {"collections": [{"id": "parcels"}]},
+    }
+    monkeypatch.setattr(
+        aiohttp, "ClientSession", lambda: FakeHttpSession(harness.calls, payloads)
+    )
+    result = harness.run(query="Tell me about lot 7", session_id=SESSION)
+    assert result["response"]["processing_type"] == "contextual_only"
+    assert len(calls_named(result, "http.get")) == 2
+    check(result)
+
+
+def test_gis_feature_query_lookup_failure(
+    harness: Harness, check: Callable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aiohttp
+
+    def refuse() -> None:
+        raise aiohttp.ClientError("vector api down")
+
+    harness.ai_mode(
+        action={
+            "action_type": "gis_feature_query",
+            "collection": "parcels",
+            "feature_id": "lot-7",
+        }
+    )
+    monkeypatch.setattr(aiohttp, "ClientSession", refuse)
+    result = harness.run(query="Tell me about lot 7", session_id=SESSION)
+    assert result["response"]["processing_type"] == "contextual_only"
+    check(result)
+
+
+# --- hybrid and semantic-kernel-off ---------------------------------------------
+
+
+def test_hybrid_combines_vision_and_stac(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(
+        stac_params=SENTINEL_PARAMS,
+        action={"action_type": "hybrid"},
+        session=RENDERED_SESSION,
+    )
+    harness.vision_result = {"analysis": "Clouds cover the north.", "response": "x"}
+    harness.stac_responses = [results(feature("S2A_1"))]
+    result = harness.run(
+        query="Load Sentinel-2 and describe it",
+        session_id=SESSION,
+        map_bounds=PARIS_BOUNDS,
+    )
+    assert result["response"]["response"].startswith("**Visual Analysis:**")
+    check(result)
+
+
+def test_router_classification_without_semantic_kernel_returns_500(
+    harness: Harness, check: Callable
+) -> None:
+    """Current bug: intent_type is only bound inside the semantic-kernel block."""
+    harness.configure(router=FakeRouterAgent(harness.calls, action=STAC_ACTION))
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    assert result["response"] == SERVER_ERROR
+    check(result)

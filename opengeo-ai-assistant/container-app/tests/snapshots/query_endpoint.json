@@ -147,6 +147,317 @@
       }
     }
   },
+  "test_contextual_answer_with_map_bounds_hint": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_rendered_map": true,
+            "has_screenshot": false
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "What is this area known for?"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "What is this area known for?"
+        }
+      ],
+      [
+        "translator.generate_contextual",
+        {
+          "classification": {
+            "confidence": 0.95,
+            "intent_type": "contextual",
+            "needs_contextual_info": true,
+            "needs_satellite_data": false,
+            "needs_vision_analysis": false,
+            "reasoning": "RouterAgent routed to contextual/knowledge response",
+            "router_action": {
+              "action_type": "contextual"
+            }
+          },
+          "feature_ids": [],
+          "features": 0,
+          "geoint_results": null,
+          "intent": "contextual",
+          "query": "What is this area known for? [The user is currently viewing the map at: (48.855, 2.345)]"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "processing_type": "contextual_only",
+      "query_classification": {
+        "confidence": 0.95,
+        "intent_type": "contextual",
+        "needs_contextual_info": true,
+        "needs_satellite_data": false
+      },
+      "response": "contextual answer for 0 features",
+      "success": true,
+      "timestamp": "<volatile>"
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_rendered_map": true,
+        "has_screenshot": false
+      }
+    }
+  },
+  "test_contextual_answer_with_session_location": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_screenshot": false,
+            "last_location": "Tokyo"
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "How do typhoons form?"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "How do typhoons form?"
+        }
+      ],
+      [
+        "translator.generate_contextual",
+        {
+          "classification": {
+            "confidence": 0.95,
+            "intent_type": "contextual",
+            "needs_contextual_info": true,
+            "needs_satellite_data": false,
+            "needs_vision_analysis": false,
+            "reasoning": "RouterAgent routed to contextual/knowledge response",
+            "router_action": {
+              "action_type": "contextual"
+            }
+          },
+          "feature_ids": [],
+          "features": 0,
+          "geoint_results": null,
+          "intent": "contextual",
+          "query": "How do typhoons form? [The user is currently viewing the map at: Tokyo]"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "processing_type": "contextual_only",
+      "query_classification": {
+        "confidence": 0.95,
+        "intent_type": "contextual",
+        "needs_contextual_info": true,
+        "needs_satellite_data": false
+      },
+      "response": "contextual answer for 0 features",
+      "success": true,
+      "timestamp": "<volatile>"
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false,
+        "last_location": "Tokyo"
+      }
+    }
+  },
+  "test_contextual_failure_gives_generic_message": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_screenshot": false
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "How do typhoons form?"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "How do typhoons form?"
+        }
+      ],
+      [
+        "translator.generate_contextual",
+        {
+          "classification": {
+            "confidence": 0.95,
+            "intent_type": "contextual",
+            "needs_contextual_info": true,
+            "needs_satellite_data": false,
+            "needs_vision_analysis": false,
+            "reasoning": "RouterAgent routed to contextual/knowledge response",
+            "router_action": {
+              "action_type": "contextual"
+            }
+          },
+          "feature_ids": [],
+          "features": 0,
+          "geoint_results": null,
+          "intent": "contextual",
+          "query": "How do typhoons form?"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "data": {
+        "query_classification": {
+          "confidence": 0.95,
+          "intent_type": "contextual",
+          "needs_contextual_info": true,
+          "needs_satellite_data": false
+        },
+        "search_metadata": {
+          "collections_searched": [],
+          "search_timestamp": "<volatile>",
+          "spatial_extent": null,
+          "temporal_range": null,
+          "total_items": 0
+        },
+        "stac_results": {
+          "features": [],
+          "type": "FeatureCollection"
+        }
+      },
+      "debug": {
+        "pipeline_trace": {
+          "session_id": "<pipeline>",
+          "steps": [
+            {
+              "data": {
+                "has_pin": false,
+                "pin_coords": null,
+                "query": "How do typhoons form?",
+                "session_id": "session-1"
+              },
+              "stage": "INPUT",
+              "step": "QUERY_RECEIVED",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "action_type": "contextual",
+                "needs_stac": false,
+                "needs_vision": false
+              },
+              "stage": "OUTPUT",
+              "step": "ROUTER_AGENT",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "confidence": 0.95,
+                "intent_type": "contextual",
+                "modules": [],
+                "needs_satellite_data": false,
+                "needs_vision": false,
+                "reasoning": "RouterAgent routed to contextual/knowledge response"
+              },
+              "stage": "OUTPUT",
+              "step": "CLASSIFICATION",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "collections": [],
+                "has_mosaic": false,
+                "success": true,
+                "total_features": 0,
+                "total_tiles": 0
+              },
+              "stage": "OUTPUT",
+              "step": "RESPONSE",
+              "timestamp": "<volatile>"
+            }
+          ]
+        },
+        "semantic_translator": {
+          "available": true,
+          "location_info": {
+            "bbox": null,
+            "location_name": "How do typhoons form?"
+          },
+          "query_processing": {
+            "original_query": "How do typhoons form?",
+            "processing_timestamp": "<volatile>",
+            "stac_parameters": null
+          },
+          "selected_collections": []
+        }
+      },
+      "response": "I can help you find Earth science data, but I need more specific information about the location, time period, or type of imagery you're looking for.",
+      "success": true,
+      "translation_metadata": {
+        "all_tile_urls": null,
+        "mosaic_tilejson": null,
+        "original_query": "How do typhoons form?",
+        "stac_query": null,
+        "translated_params": null,
+        "translation_timestamp": "<volatile>"
+      }
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false
+      }
+    }
+  },
   "test_extreme_weather_answer": {
     "calls": [
       [
@@ -509,6 +820,821 @@
           48.9
         ],
         "last_location": "paris"
+      }
+    }
+  },
+  "test_gis_feature_query_answers_contextually": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_screenshot": false
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "Tell me about lot 7"
+        }
+      ],
+      [
+        "http.get",
+        "http://vector-api:8080/parquet/collections/parcels/items/lot-7"
+      ],
+      [
+        "http.get",
+        "http://localhost:8081/collections"
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "Tell me about lot 7"
+        }
+      ],
+      [
+        "translator.generate_contextual",
+        {
+          "classification": {
+            "confidence": 0.95,
+            "intent_type": "contextual",
+            "needs_contextual_info": true,
+            "needs_satellite_data": false,
+            "needs_vision_analysis": false,
+            "reasoning": "RouterAgent routed to GIS platform feature query",
+            "router_action": {
+              "action_type": "contextual",
+              "needs_stac_search": false,
+              "needs_vision_analysis": false,
+              "original_query": "Feature lot-7 from collection parcels. Attributes: {'owner': 'City'}. Platform STAC collections: parcels. Please analyse this feature."
+            }
+          },
+          "feature_ids": [],
+          "features": 0,
+          "geoint_results": null,
+          "intent": "contextual",
+          "query": "Tell me about lot 7"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "processing_type": "contextual_only",
+      "query_classification": {
+        "confidence": 0.95,
+        "intent_type": "contextual",
+        "needs_contextual_info": true,
+        "needs_satellite_data": false
+      },
+      "response": "contextual answer for 0 features",
+      "success": true,
+      "timestamp": "<volatile>"
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false
+      }
+    }
+  },
+  "test_gis_feature_query_lookup_failure": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_screenshot": false
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "Tell me about lot 7"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "Tell me about lot 7"
+        }
+      ],
+      [
+        "translator.generate_contextual",
+        {
+          "classification": {
+            "confidence": 0.95,
+            "intent_type": "contextual",
+            "needs_contextual_info": true,
+            "needs_satellite_data": false,
+            "needs_vision_analysis": false,
+            "reasoning": "RouterAgent routed to GIS platform feature query",
+            "router_action": {
+              "action_type": "gis_feature_query",
+              "collection": "parcels",
+              "feature_id": "lot-7"
+            }
+          },
+          "feature_ids": [],
+          "features": 0,
+          "geoint_results": null,
+          "intent": "contextual",
+          "query": "Tell me about lot 7"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "processing_type": "contextual_only",
+      "query_classification": {
+        "confidence": 0.95,
+        "intent_type": "contextual",
+        "needs_contextual_info": true,
+        "needs_satellite_data": false
+      },
+      "response": "contextual answer for 0 features",
+      "success": true,
+      "timestamp": "<volatile>"
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false
+      }
+    }
+  },
+  "test_hybrid_combines_vision_and_stac": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_rendered_map": true,
+            "has_screenshot": false,
+            "last_bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "last_collections": [
+              "sentinel-2-l2a"
+            ],
+            "last_location": "Paris"
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "Load Sentinel-2 and describe it"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "Load Sentinel-2 and describe it"
+        }
+      ],
+      [
+        "translator.translate_query",
+        {
+          "pin": null,
+          "query": "Load Sentinel-2 and describe it",
+          "session_bbox": [
+            2.22,
+            48.81,
+            2.47,
+            48.9
+          ]
+        }
+      ],
+      [
+        "translator.determine_stac_source",
+        {
+          "entities": {
+            "bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "collections": [
+              "sentinel-2-l2a"
+            ],
+            "datetime": "2024-06-01/2024-06-30",
+            "location_name": "Paris"
+          },
+          "query": "Load Sentinel-2 and describe it"
+        }
+      ],
+      [
+        "stac_search",
+        {
+          "endpoint": "planetary_computer",
+          "original_query": "Load Sentinel-2 and describe it",
+          "query": {
+            "bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "collections": [
+              "sentinel-2-l2a"
+            ],
+            "datetime": "2024-06-01/2024-06-30",
+            "limit": 50,
+            "sortby": [
+              {
+                "direction": "desc",
+                "field": "datetime"
+              }
+            ]
+          }
+        }
+      ],
+      [
+        "vision.analyze",
+        {
+          "collections": [
+            "sentinel-2-l2a"
+          ],
+          "conversation_history": [],
+          "imagery_base64": null,
+          "map_bounds": {
+            "center_lat": 48.855,
+            "center_lng": 2.345,
+            "east": 2.47,
+            "north": 48.9,
+            "south": 48.81,
+            "west": 2.22
+          },
+          "session_id": "session-1",
+          "stac_items": [
+            {
+              "id": "S2A_1"
+            }
+          ],
+          "tile_urls": [],
+          "user_query": "Load Sentinel-2 and describe it"
+        }
+      ],
+      [
+        "translator.generate_contextual",
+        {
+          "classification": {
+            "confidence": 0.95,
+            "intent_type": "hybrid",
+            "needs_contextual_info": false,
+            "needs_satellite_data": true,
+            "needs_vision_analysis": true,
+            "reasoning": "RouterAgent routed to hybrid (STAC + vision)",
+            "router_action": {
+              "action_type": "hybrid"
+            }
+          },
+          "feature_ids": [
+            "S2A_1"
+          ],
+          "features": 1,
+          "geoint_results": null,
+          "intent": "hybrid",
+          "query": "Load Sentinel-2 and describe it"
+        }
+      ],
+      [
+        "get_mosaic_tilejson_url",
+        {
+          "bbox": [
+            2.22,
+            48.81,
+            2.47,
+            48.9
+          ],
+          "collections": [
+            "sentinel-2-l2a"
+          ],
+          "datetime_range": "2024-06-01/2024-06-30",
+          "query_context": "Load Sentinel-2 and describe it",
+          "query_filters": {
+            "eo:cloud_cover": {
+              "lt": 30
+            }
+          }
+        }
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_rendered_map": true,
+            "last_bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "last_collections": [
+              "sentinel-2-l2a"
+            ],
+            "last_location": "Paris",
+            "last_stac_items": [
+              {
+                "assets": {
+                  "tilejson": {
+                    "href": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=sentinel-2-l2a&item=S2A_1&assets=visual&asset_bidx=visual%7C1%2C2%2C3&nodata=0",
+                    "type": "application/json"
+                  },
+                  "visual": {
+                    "href": "https://data.test/S2A_1.tif",
+                    "type": "image/tiff; application=geotiff"
+                  }
+                },
+                "bbox": [
+                  2.2,
+                  48.8,
+                  2.5,
+                  48.95
+                ],
+                "collection": "sentinel-2-l2a",
+                "id": "S2A_1",
+                "properties": {
+                  "cloud_cover": null,
+                  "datetime": "2024-06-01T10:00:00Z",
+                  "eo:cloud_cover": 5.0
+                }
+              }
+            ],
+            "query_count": 1
+          },
+          "session_id": "session-1"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "data": {
+        "query_classification": {
+          "confidence": 0.95,
+          "intent_type": "hybrid",
+          "needs_contextual_info": false,
+          "needs_satellite_data": true
+        },
+        "search_metadata": {
+          "collections_searched": [
+            "sentinel-2-l2a"
+          ],
+          "search_timestamp": "<volatile>",
+          "spatial_extent": [
+            2.22,
+            48.81,
+            2.47,
+            48.9
+          ],
+          "temporal_range": "2024-06-01/2024-06-30",
+          "total_items": 1
+        },
+        "stac_results": {
+          "features": [
+            {
+              "assets": {
+                "tilejson": {
+                  "href": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=sentinel-2-l2a&item=S2A_1&assets=B04&assets=B03&assets=B02&rescale=0,3000&color_formula=gamma+RGB+2.7%2C+saturation+1.5%2C+sigmoidal+RGB+15+0.55",
+                  "type": "application/json"
+                },
+                "visual": {
+                  "href": "https://data.test/S2A_1.tif",
+                  "type": "image/tiff; application=geotiff"
+                }
+              },
+              "bbox": [
+                2.2,
+                48.8,
+                2.5,
+                48.95
+              ],
+              "collection": "sentinel-2-l2a",
+              "id": "S2A_1",
+              "properties": {
+                "datetime": "2024-06-01T10:00:00Z",
+                "eo:cloud_cover": 5.0
+              },
+              "type": "Feature"
+            }
+          ],
+          "type": "FeatureCollection"
+        }
+      },
+      "debug": {
+        "pipeline_trace": {
+          "session_id": "<pipeline>",
+          "steps": [
+            {
+              "data": {
+                "has_pin": false,
+                "pin_coords": null,
+                "query": "Load Sentinel-2 and describe it",
+                "session_id": "session-1"
+              },
+              "stage": "INPUT",
+              "step": "QUERY_RECEIVED",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "action_type": "hybrid",
+                "needs_stac": false,
+                "needs_vision": false
+              },
+              "stage": "OUTPUT",
+              "step": "ROUTER_AGENT",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "confidence": 0.95,
+                "intent_type": "hybrid",
+                "modules": [],
+                "needs_satellite_data": true,
+                "needs_vision": true,
+                "reasoning": "RouterAgent routed to hybrid (STAC + vision)"
+              },
+              "stage": "OUTPUT",
+              "step": "CLASSIFICATION",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "bbox": [
+                  2.22,
+                  48.81,
+                  2.47,
+                  48.9
+                ],
+                "collections": [
+                  "sentinel-2-l2a"
+                ],
+                "datetime": "2024-06-01/2024-06-30",
+                "location_name": "Paris"
+              },
+              "stage": "OUTPUT",
+              "step": "SEMANTIC_TRANSLATION",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "bbox": [
+                  2.22,
+                  48.81,
+                  2.47,
+                  48.9
+                ],
+                "collections": [
+                  "sentinel-2-l2a"
+                ],
+                "datetime": "2024-06-01/2024-06-30",
+                "filter": null
+              },
+              "stage": "INPUT",
+              "step": "STAC_SEARCH",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "feature_count": 1,
+                "first_feature_bbox": [
+                  2.2,
+                  48.8,
+                  2.5,
+                  48.95
+                ],
+                "first_feature_id": "S2A_1"
+              },
+              "stage": "OUTPUT",
+              "step": "STAC_SEARCH",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "has_more": false,
+                "skipped_invalid_bbox": 0,
+                "tile_count": 1,
+                "tile_ids": [
+                  "S2A_1"
+                ]
+              },
+              "stage": "OUTPUT",
+              "step": "TILE_URLS",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "bbox": [
+                  2.2,
+                  48.8,
+                  2.5,
+                  48.95
+                ],
+                "height_deg": 0.15,
+                "width_deg": 0.3
+              },
+              "stage": "OUTPUT",
+              "step": "UNION_BBOX",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "collections": [
+                  "sentinel-2-l2a"
+                ],
+                "has_mosaic": false,
+                "success": true,
+                "total_features": 1,
+                "total_tiles": 1
+              },
+              "stage": "OUTPUT",
+              "step": "RESPONSE",
+              "timestamp": "<volatile>"
+            }
+          ]
+        },
+        "semantic_translator": {
+          "available": true,
+          "location_info": {
+            "bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "location_name": "Load Sentinel-2 and describe it"
+          },
+          "query_processing": {
+            "original_query": "Load Sentinel-2 and describe it",
+            "processing_timestamp": "<volatile>",
+            "stac_parameters": {
+              "bbox": [
+                2.2,
+                48.8,
+                2.5,
+                48.95
+              ],
+              "collections": [
+                "sentinel-2-l2a"
+              ],
+              "datetime": "2024-06-01/2024-06-30",
+              "location_name": "Paris"
+            }
+          },
+          "selected_collections": [
+            "sentinel-2-l2a"
+          ]
+        }
+      },
+      "response": "**Visual Analysis:**\nClouds cover the north.\n\n---\n\n**Data Results:**\ncontextual answer for 1 features",
+      "success": true,
+      "translation_metadata": {
+        "all_tile_urls": [
+          {
+            "bbox": [
+              2.2,
+              48.8,
+              2.5,
+              48.95
+            ],
+            "item_id": "S2A_1",
+            "tilejson_url": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=sentinel-2-l2a&item=S2A_1&assets=B04&assets=B03&assets=B02&rescale=0,3000&color_formula=gamma+RGB+2.7%2C+saturation+1.5%2C+sigmoidal+RGB+15+0.55"
+          }
+        ],
+        "mosaic_tilejson": null,
+        "original_query": "Load Sentinel-2 and describe it",
+        "stac_query": {
+          "bbox": [
+            2.22,
+            48.81,
+            2.47,
+            48.9
+          ],
+          "collections": [
+            "sentinel-2-l2a"
+          ],
+          "datetime": "2024-06-01/2024-06-30",
+          "limit": 50,
+          "sortby": [
+            {
+              "direction": "desc",
+              "field": "datetime"
+            }
+          ]
+        },
+        "translated_params": {
+          "bbox": [
+            2.2,
+            48.8,
+            2.5,
+            48.95
+          ],
+          "collections": [
+            "sentinel-2-l2a"
+          ],
+          "datetime": "2024-06-01/2024-06-30",
+          "location_name": "Paris"
+        },
+        "translation_timestamp": "<volatile>"
+      }
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_rendered_map": true,
+        "has_screenshot": false,
+        "last_bbox": [
+          2.22,
+          48.81,
+          2.47,
+          48.9
+        ],
+        "last_collections": [
+          "sentinel-2-l2a"
+        ],
+        "last_location": "Paris",
+        "last_stac_items": [
+          {
+            "assets": {
+              "tilejson": {
+                "href": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=sentinel-2-l2a&item=S2A_1&assets=visual&asset_bidx=visual%7C1%2C2%2C3&nodata=0",
+                "type": "application/json"
+              },
+              "visual": {
+                "href": "https://data.test/S2A_1.tif",
+                "type": "image/tiff; application=geotiff"
+              }
+            },
+            "bbox": [
+              2.2,
+              48.8,
+              2.5,
+              48.95
+            ],
+            "collection": "sentinel-2-l2a",
+            "id": "S2A_1",
+            "properties": {
+              "cloud_cover": null,
+              "datetime": "2024-06-01T10:00:00Z",
+              "eo:cloud_cover": 5.0
+            }
+          }
+        ],
+        "query_count": 1
+      }
+    }
+  },
+  "test_keyword_detector_routes_contextual_query_to_vision": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_rendered_map": true,
+            "has_screenshot": false,
+            "last_bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "last_collections": [
+              "sentinel-2-l2a"
+            ],
+            "last_location": "Paris"
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "Describe what you see"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "Describe what you see"
+        }
+      ],
+      [
+        "vision.analyze",
+        {
+          "collections": [
+            "sentinel-2-l2a"
+          ],
+          "conversation_history": [],
+          "imagery_base64": null,
+          "map_bounds": {
+            "center_lat": 48.855,
+            "center_lng": 2.345,
+            "east": 2.47,
+            "north": 48.9,
+            "south": 48.81,
+            "west": 2.22
+          },
+          "session_id": "session-1",
+          "stac_items": [
+            {
+              "id": "S2A_1"
+            }
+          ],
+          "tile_urls": [],
+          "user_query": "Describe what you see"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "processing_type": "vision_agent",
+      "response": "I see the Seine.",
+      "success": true,
+      "timestamp": "<volatile>",
+      "vision_analysis": {
+        "context": {
+          "collections": [
+            "sentinel-2-l2a"
+          ],
+          "has_screenshot": true
+        },
+        "response": "I see the Seine.",
+        "tool_calls": [
+          {
+            "tool": "analyze_screenshot"
+          }
+        ],
+        "tools_used": [
+          "analyze_screenshot"
+        ]
+      }
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_rendered_map": true,
+        "has_screenshot": false,
+        "last_bbox": [
+          2.22,
+          48.81,
+          2.47,
+          48.9
+        ],
+        "last_collections": [
+          "sentinel-2-l2a"
+        ],
+        "last_location": "Paris",
+        "last_stac_items": [
+          {
+            "id": "S2A_1"
+          }
+        ]
       }
     }
   },
@@ -1969,6 +3095,26 @@
     },
     "session_contexts": {}
   },
+  "test_router_classification_without_semantic_kernel_returns_500": {
+    "calls": [
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "Show Sentinel-2 imagery of Paris"
+        }
+      ]
+    ],
+    "errors": [
+      "[FAIL] Unified query processor error: cannot access local variable 'intent_type' where it is not associated with a value",
+      "Traceback (most recent call last):"
+    ],
+    "response": {
+      "detail": "Query processing failed",
+      "http_error": 500
+    },
+    "session_contexts": {}
+  },
   "test_router_error_defaults_to_stac": {
     "calls": [
       [
@@ -2442,6 +3588,633 @@
           }
         ],
         "query_count": 1
+      }
+    }
+  },
+  "test_vision_agent_exception_returns_error": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_rendered_map": true,
+            "has_screenshot": false,
+            "last_bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "last_collections": [
+              "sentinel-2-l2a"
+            ],
+            "last_location": "Paris"
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "What river is this?"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "What river is this?"
+        }
+      ],
+      [
+        "vision.analyze",
+        {
+          "collections": [
+            "sentinel-2-l2a"
+          ],
+          "conversation_history": [],
+          "imagery_base64": null,
+          "map_bounds": {
+            "center_lat": 48.855,
+            "center_lng": 2.345,
+            "east": 2.47,
+            "north": 48.9,
+            "south": 48.81,
+            "west": 2.22
+          },
+          "session_id": "session-1",
+          "stac_items": [
+            {
+              "id": "S2A_1"
+            }
+          ],
+          "tile_urls": [],
+          "user_query": "What river is this?"
+        }
+      ]
+    ],
+    "errors": [
+      "Traceback (most recent call last):"
+    ],
+    "response": {
+      "error": "internal error",
+      "processing_type": "vision_agent_error",
+      "response": "I encountered an error analyzing the imagery.",
+      "success": false,
+      "timestamp": "<volatile>"
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_rendered_map": true,
+        "has_screenshot": false,
+        "last_bbox": [
+          2.22,
+          48.81,
+          2.47,
+          48.9
+        ],
+        "last_collections": [
+          "sentinel-2-l2a"
+        ],
+        "last_location": "Paris",
+        "last_stac_items": [
+          {
+            "id": "S2A_1"
+          }
+        ]
+      }
+    }
+  },
+  "test_vision_empty_response_returns_error": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_rendered_map": true,
+            "has_screenshot": false,
+            "last_bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "last_collections": [
+              "sentinel-2-l2a"
+            ],
+            "last_location": "Paris"
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "What river is this?"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "What river is this?"
+        }
+      ],
+      [
+        "vision.analyze",
+        {
+          "collections": [
+            "sentinel-2-l2a"
+          ],
+          "conversation_history": [],
+          "imagery_base64": null,
+          "map_bounds": {
+            "center_lat": 48.855,
+            "center_lng": 2.345,
+            "east": 2.47,
+            "north": 48.9,
+            "south": 48.81,
+            "west": 2.22
+          },
+          "session_id": "session-1",
+          "stac_items": [
+            {
+              "id": "S2A_1"
+            }
+          ],
+          "tile_urls": [],
+          "user_query": "What river is this?"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "error": "Vision Agent returned empty response",
+      "processing_type": "vision_agent_error",
+      "response": "I tried to analyze the map but couldn't generate a response. Please try asking your question again.",
+      "success": false,
+      "timestamp": "<volatile>"
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_rendered_map": true,
+        "has_screenshot": false,
+        "last_bbox": [
+          2.22,
+          48.81,
+          2.47,
+          48.9
+        ],
+        "last_collections": [
+          "sentinel-2-l2a"
+        ],
+        "last_location": "Paris",
+        "last_stac_items": [
+          {
+            "id": "S2A_1"
+          }
+        ]
+      }
+    }
+  },
+  "test_vision_uses_session_bbox_after_navigation": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_screenshot": false,
+            "last_bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "last_location": "Paris"
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "What is here?"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "What is here?"
+        }
+      ],
+      [
+        "vision.analyze",
+        {
+          "collections": [],
+          "conversation_history": [],
+          "imagery_base64": null,
+          "map_bounds": {
+            "center_lat": 48.855000000000004,
+            "center_lng": 2.345,
+            "east": 2.47,
+            "north": 48.9,
+            "south": 48.81,
+            "west": 2.22
+          },
+          "session_id": "session-1",
+          "stac_items": [],
+          "tile_urls": [],
+          "user_query": "What is here?"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "processing_type": "vision_agent",
+      "response": "I see the Seine.",
+      "success": true,
+      "timestamp": "<volatile>",
+      "vision_analysis": {
+        "context": {
+          "collections": [
+            "sentinel-2-l2a"
+          ],
+          "has_screenshot": true
+        },
+        "response": "I see the Seine.",
+        "tool_calls": [
+          {
+            "tool": "analyze_screenshot"
+          }
+        ],
+        "tools_used": [
+          "analyze_screenshot"
+        ]
+      }
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_rendered_map": false,
+        "has_screenshot": false,
+        "last_bbox": [
+          2.22,
+          48.81,
+          2.47,
+          48.9
+        ],
+        "last_location": "Paris"
+      }
+    }
+  },
+  "test_vision_with_map_context": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_rendered_map": true,
+            "has_screenshot": true,
+            "last_bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "last_collections": [
+              "sentinel-2-l2a"
+            ],
+            "last_location": "Paris"
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": true,
+          "query": "What river is this?"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [
+            {
+              "content": "Show Paris",
+              "role": "user"
+            }
+          ],
+          "query": "What river is this?"
+        }
+      ],
+      [
+        "vision.analyze",
+        {
+          "collections": [
+            "landsat-c2-l2",
+            "sentinel-2-l2a"
+          ],
+          "conversation_history": [
+            {
+              "content": "Show Paris",
+              "role": "user"
+            }
+          ],
+          "imagery_base64": "aGVsbG8=",
+          "map_bounds": {
+            "center_lat": 48.855,
+            "center_lng": 2.345,
+            "east": 2.47,
+            "north": 48.9,
+            "south": 48.81,
+            "west": 2.22
+          },
+          "session_id": "session-1",
+          "stac_items": [
+            {
+              "id": "S2A_1"
+            }
+          ],
+          "tile_urls": [
+            "https://tiles.test/1"
+          ],
+          "user_query": "What river is this?"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "processing_type": "vision_agent",
+      "response": "I see the Seine.",
+      "success": true,
+      "timestamp": "<volatile>",
+      "vision_analysis": {
+        "context": {
+          "collections": [
+            "sentinel-2-l2a"
+          ],
+          "has_screenshot": true
+        },
+        "response": "I see the Seine.",
+        "tool_calls": [
+          {
+            "tool": "analyze_screenshot"
+          }
+        ],
+        "tools_used": [
+          "analyze_screenshot"
+        ]
+      }
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_rendered_map": true,
+        "has_screenshot": true,
+        "last_bbox": [
+          2.22,
+          48.81,
+          2.47,
+          48.9
+        ],
+        "last_collections": [
+          "sentinel-2-l2a"
+        ],
+        "last_location": "Paris",
+        "last_stac_items": [
+          {
+            "id": "S2A_1"
+          }
+        ]
+      }
+    }
+  },
+  "test_vision_without_map_context_empty_response": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_screenshot": false
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "What is on the map?"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "What is on the map?"
+        }
+      ],
+      [
+        "vision.analyze",
+        {
+          "collections": [],
+          "conversation_history": [],
+          "imagery_base64": null,
+          "map_bounds": {},
+          "session_id": "session-1",
+          "user_query": "What is on the map?"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "processing_type": "vision_agent_no_context",
+      "response": "I can see you're asking about what's on the map. I can see satellite imagery is displayed. Could you ask a more specific question about what you'd like to know, such as 'What city is shown?' or 'What features can you identify?'",
+      "success": true,
+      "timestamp": "<volatile>"
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false
+      }
+    }
+  },
+  "test_vision_without_map_context_exception": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_screenshot": false
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "What is on the map?"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "What is on the map?"
+        }
+      ],
+      [
+        "vision.analyze",
+        {
+          "collections": [],
+          "conversation_history": [],
+          "imagery_base64": null,
+          "map_bounds": {},
+          "session_id": "session-1",
+          "user_query": "What is on the map?"
+        }
+      ]
+    ],
+    "errors": [
+      "Traceback (most recent call last):"
+    ],
+    "response": {
+      "error": "internal error",
+      "processing_type": "vision_agent_error",
+      "response": "I can see satellite imagery on the map but couldn't analyze it in detail. Please try asking a specific question about the location or features you see.",
+      "success": true,
+      "timestamp": "<volatile>"
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false
+      }
+    }
+  },
+  "test_vision_without_map_context_uses_llm_mode": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_screenshot": false
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "What is on the map?"
+        }
+      ],
+      [
+        "should_use_vision",
+        {
+          "conversation_history": [],
+          "query": "What is on the map?"
+        }
+      ],
+      [
+        "vision.analyze",
+        {
+          "collections": [],
+          "conversation_history": [],
+          "imagery_base64": null,
+          "map_bounds": {},
+          "session_id": "session-1",
+          "user_query": "What is on the map?"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "processing_type": "vision_agent_llm",
+      "response": "I see the Seine.",
+      "success": true,
+      "timestamp": "<volatile>",
+      "vision_analysis": {
+        "context": {
+          "collections": [
+            "sentinel-2-l2a"
+          ],
+          "has_screenshot": true
+        },
+        "response": "I see the Seine.",
+        "tool_calls": [
+          {
+            "tool": "analyze_screenshot"
+          }
+        ],
+        "tools_used": [
+          "analyze_screenshot"
+        ]
+      }
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_screenshot": false
       }
     }
   }
