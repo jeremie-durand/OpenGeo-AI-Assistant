@@ -17,9 +17,12 @@ from quickstart_cache import (
 from request_models import ComparisonQueryRequest, QueryRequest
 from services.collection_detection import detect_collections
 from services.pipeline_trace import (
-    clear_pipeline_trace,
     get_pipeline_trace,
     log_pipeline_step,
+)
+from services.query_pipeline.intake import (
+    apply_session_bbox_override,
+    start_query,
 )
 from services.query_pipeline.response import summarize_stac_items
 from services.query_pipeline.state import QueryState
@@ -53,65 +56,7 @@ async def unified_query_processor(body: QueryRequest):
     """
     try:
         state = QueryState()
-        state.natural_query = body.query or body.user_query or "No query provided"
-        state.session_id = body.session_id
-        state.pin = body.pin
-        selected_model = body.model
-
-        # Mutable dict alias so all downstream req_body.get() calls keep working
-        state.req_body = body.model_dump()
-
-        logger.info(f"[BOT] Selected Model: {selected_model}")
-
-        # Set the active model on the semantic translator before processing
-        if app_state.semantic_translator:
-            app_state.semantic_translator.set_model(selected_model)
-        else:
-            logger.warning(
-                "[WARN] semantic_translator is None - using keyword-based fallback for collection detection."
-            )
-
-        # [MICRO] Generate unique pipeline session ID for tracing
-        import uuid
-
-        state.pipeline_session_id = str(uuid.uuid4())[:8]
-
-        # [MICRO] Clear any stale trace and start fresh
-        clear_pipeline_trace(state.pipeline_session_id)
-
-        # [MICRO] TRACE: Initial query received
-        log_pipeline_step(
-            state.pipeline_session_id,
-            "QUERY_RECEIVED",
-            "INPUT",
-            {
-                "query": state.natural_query,
-                "session_id": state.session_id,
-                "has_pin": bool(state.pin),
-                "pin_coords": (
-                    f"({state.pin.get('lat'):.4f}, {state.pin.get('lng'):.4f})"
-                    if state.pin
-                    else None
-                ),
-            },
-        )
-
-        pin_str = (
-            f"({state.pin.get('lat'):.4f},{state.pin.get('lng'):.4f})"
-            if state.pin
-            else "none"
-        )
-        logger.info(
-            f"[TEXT] Query='{state.natural_query}' session={state.session_id} pin={pin_str}"
-        )
-
-        # Normal STAC search routing (vision handled by /api/geoint/vision)
-
-        # Check for pin parameter
-        if state.pin:
-            pin_lat = state.pin.get("lat")
-            pin_lng = state.pin.get("lng")
-            logger.info(f"[PIN] Pin detected: ({pin_lat:.4f}, {pin_lng:.4f})")
+        start_query(body, state)
 
         # ================================================================
         # [FAST] QUICKSTART FAST PATH: Skip ALL GPT calls for demo queries
@@ -322,44 +267,7 @@ async def unified_query_processor(body: QueryRequest):
                 },
             }
 
-        # ================================================================
-        # [PIN] EARLY SESSION BBOX OVERRIDE: Fix stale frontend coordinates
-        # ================================================================
-        # After navigate_to, the frontend's map bounds may still be stale
-        # (the useEffect doesn't always re-fire immediately). We override
-        # map_bounds with the session bbox here so that ALL downstream
-        # handlers (vision, contextual, STAC) get the correct coordinates.
-        # ================================================================
-        frontend_map_bounds = state.req_body.get("map_bounds")
-        if app_state.router_agent and state.session_id:
-            session_ctx = app_state.router_agent.tools.session_contexts.get(
-                state.session_id, {}
-            )
-            session_bbox_early = session_ctx.get("last_bbox")
-            recently_navigated_early = session_bbox_early and not session_ctx.get(
-                "has_rendered_map", True
-            )
-
-            if session_bbox_early and (
-                not frontend_map_bounds or recently_navigated_early
-            ):
-                override_reason_early = (
-                    "no frontend bounds"
-                    if not frontend_map_bounds
-                    else "post-navigate_to (frontend bounds stale)"
-                )
-                corrected_bounds = {
-                    "west": session_bbox_early[0],
-                    "south": session_bbox_early[1],
-                    "east": session_bbox_early[2],
-                    "north": session_bbox_early[3],
-                    "center_lat": (session_bbox_early[1] + session_bbox_early[3]) / 2,
-                    "center_lng": (session_bbox_early[0] + session_bbox_early[2]) / 2,
-                }
-                state.req_body["map_bounds"] = corrected_bounds
-                logger.info(
-                    f"[PIN] EARLY BBOX OVERRIDE ({override_reason_early}): Using session bbox for {session_ctx.get('last_location')}: center=({corrected_bounds['center_lat']:.4f}, {corrected_bounds['center_lng']:.4f})"
-                )
+        apply_session_bbox_override(state)
 
         # Continue with regular STAC search flow
         state.router_action = None
