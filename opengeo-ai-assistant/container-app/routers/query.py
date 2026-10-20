@@ -21,6 +21,13 @@ from services.pipeline_trace import (
     get_pipeline_trace,
     log_pipeline_step,
 )
+from services.query_pipeline.response import summarize_stac_items
+from services.query_pipeline.tiles import (
+    has_numeric_bbox,
+    needs_optical_mosaic,
+    optimize_tilejson_url,
+    union_of_bboxes,
+)
 from services.query_responses import (
     generate_contextual_empty_response,
     generate_fallback_response,
@@ -199,48 +206,13 @@ async def unified_query_processor(body: QueryRequest):
                 tj_asset = feat.get("assets", {}).get("tilejson", {})
                 if tj_asset and "href" in tj_asset:
                     feat_bbox = feat.get("bbox")
-                    if not feat_bbox or len(feat_bbox) != 4:
-                        continue
-                    if any(
-                        v is None or not isinstance(v, (int, float)) for v in feat_bbox
-                    ):
+                    if not has_numeric_bbox(feat_bbox):
                         continue
 
-                    original_url = tj_asset["href"]
-                    quality_params = build_tile_url_params(
-                        qs_collection_id, natural_query
+                    optimized_url = optimize_tilejson_url(
+                        tj_asset["href"],
+                        build_tile_url_params(qs_collection_id, natural_query),
                     )
-                    if quality_params and "?" in original_url:
-                        base_url, existing_params = original_url.split("?", 1)
-                        param_list = [
-                            p
-                            for p in existing_params.split("&")
-                            if not any(
-                                p.startswith(k)
-                                for k in [
-                                    "assets=",
-                                    "asset_bidx=",
-                                    "colormap_name=",
-                                    "rescale=",
-                                    "resampling=",
-                                    "bidx=",
-                                    "format=",
-                                    "nodata=",
-                                    "color_formula=",
-                                    "expression=",
-                                    "asset_as_band=",
-                                ]
-                            )
-                        ]
-                        optimized_url = (
-                            f"{base_url}?{'&'.join(param_list)}&{quality_params}"
-                            if param_list
-                            else f"{base_url}?{quality_params}"
-                        )
-                    elif quality_params:
-                        optimized_url = f"{original_url}?{quality_params}"
-                    else:
-                        optimized_url = original_url
 
                     qs_tile_urls.append(
                         {
@@ -252,19 +224,7 @@ async def unified_query_processor(body: QueryRequest):
 
             # Mosaic for optical collections
             qs_mosaic = None
-            optical_qs = [
-                "sentinel-2-l2a",
-                "landsat-c2-l2",
-                "landsat-8-c2-l2",
-                "landsat-9-c2-l2",
-                "hls",
-                "hls2-l30",
-                "hls2-s30",
-            ]
-            if any(
-                qs_collection_id.startswith(oc) or qs_collection_id == oc
-                for oc in optical_qs
-            ):
+            if needs_optical_mosaic(qs_collection_id):
                 try:
                     from hybrid_rendering_system import get_mosaic_tilejson_url
 
@@ -280,25 +240,9 @@ async def unified_query_processor(body: QueryRequest):
 
             # Update session context
             if app_state.router_agent and session_id and (qs_tile_urls or qs_features):
-                stac_items_for_session = []
-                for f in qs_features[:10]:
-                    stac_items_for_session.append(
-                        {
-                            "id": f.get("id"),
-                            "collection": f.get("collection"),
-                            "bbox": f.get("bbox"),
-                            "properties": {
-                                "datetime": f.get("properties", {}).get("datetime"),
-                                "eo:cloud_cover": f.get("properties", {}).get(
-                                    "eo:cloud_cover"
-                                ),
-                            },
-                            "assets": {
-                                k: {"href": v.get("href"), "type": v.get("type")}
-                                for k, v in (f.get("assets") or {}).items()
-                            },
-                        }
-                    )
+                stac_items_for_session = summarize_stac_items(
+                    qs_features, include_cloud_cover_alias=False
+                )
                 app_state.router_agent.update_session_context(
                     session_id,
                     {
@@ -2248,21 +2192,7 @@ async def unified_query_processor(body: QueryRequest):
         # These have large granule footprints where users often zoom to areas
         # that fall between granule coverage.
         # ========================================================================
-        optical_collections_needing_mosaic = [
-            "sentinel-2-l2a",
-            "landsat-c2-l2",
-            "landsat-8-c2-l2",
-            "landsat-9-c2-l2",
-            "hls",
-            "hls2-l30",
-            "hls2-s30",
-        ]
-
-        # Check if this query is for an optical collection that benefits from mosaic
-        needs_mosaic = any(
-            collection_id.startswith(oc) or collection_id == oc
-            for oc in optical_collections_needing_mosaic
-        )
+        needs_mosaic = needs_optical_mosaic(collection_id)
 
         if needs_mosaic and stac_query and stac_query.get("bbox"):
             logger.info(
@@ -2372,41 +2302,9 @@ async def unified_query_processor(body: QueryRequest):
 
                     # Enhance the URL with quality parameters
                     if quality_params:
-                        # Parse URL to replace/append quality parameters
-                        if "?" in original_url:
-                            base_url, existing_params = original_url.split("?", 1)
-                            # Remove existing quality params to replace with optimized ones
-                            # CRITICAL: Also remove "assets=" and "asset_bidx=" to prevent duplication and 404s
-                            # CRITICAL: Also remove "nodata=" which causes gray/blurry Sentinel-2 images (treats 0 values as missing data)
-                            # CRITICAL: Also remove "color_formula=" to prevent duplicate color_formula parameters
-                            # CRITICAL: Also remove "expression=" and "asset_as_band=" to prevent conflicts with SAR single-asset rendering
-                            param_list = [
-                                p
-                                for p in existing_params.split("&")
-                                if not any(
-                                    p.startswith(k)
-                                    for k in [
-                                        "assets=",
-                                        "asset_bidx=",
-                                        "colormap_name=",
-                                        "rescale=",
-                                        "resampling=",
-                                        "bidx=",
-                                        "format=",
-                                        "nodata=",
-                                        "color_formula=",
-                                        "expression=",
-                                        "asset_as_band=",
-                                    ]
-                                )
-                            ]
-                            # Rebuild URL with optimized quality params
-                            if param_list:
-                                optimized_url = f"{base_url}?{'&'.join(param_list)}&{quality_params}"
-                            else:
-                                optimized_url = f"{base_url}?{quality_params}"
-                        else:
-                            optimized_url = f"{original_url}?{quality_params}"
+                        optimized_url = optimize_tilejson_url(
+                            original_url, quality_params
+                        )
 
                         logger.info(
                             f"[ART] Optimized tile URL for {feature.get('id')}: {quality_params}"
@@ -2454,12 +2352,7 @@ async def unified_query_processor(body: QueryRequest):
 
                 # [OK] Calculate union bbox covering ALL tiles
                 if all_bboxes:
-                    union_bbox = [
-                        min(bbox[0] for bbox in all_bboxes),  # min lon (west)
-                        min(bbox[1] for bbox in all_bboxes),  # min lat (south)
-                        max(bbox[2] for bbox in all_bboxes),  # max lon (east)
-                        max(bbox[3] for bbox in all_bboxes),  # max lat (north)
-                    ]
+                    union_bbox = union_of_bboxes(all_bboxes)
                     logger.info(f"[MAP] Union bbox calculated: {union_bbox}")
                     logger.info(
                         f"   Coverage: {union_bbox[2] - union_bbox[0]:.2f}° × {union_bbox[3] - union_bbox[1]:.2f}°"
@@ -2518,51 +2411,17 @@ async def unified_query_processor(body: QueryRequest):
                         tilejson_asset = feature.get("assets", {}).get("tilejson", {})
                         if tilejson_asset and "href" in tilejson_asset:
                             feature_bbox = feature.get("bbox")
-                            if not feature_bbox or len(feature_bbox) != 4:
-                                continue
-                            if any(
-                                v is None or not isinstance(v, (int, float))
-                                for v in feature_bbox
-                            ):
+                            if not has_numeric_bbox(feature_bbox):
                                 continue
                             feat_collection_id = feature.get(
                                 "collection", collection_id
                             )
-                            original_url = tilejson_asset["href"]
-                            quality_params = build_tile_url_params(
-                                feat_collection_id, natural_query
+                            optimized_url = optimize_tilejson_url(
+                                tilejson_asset["href"],
+                                build_tile_url_params(
+                                    feat_collection_id, natural_query
+                                ),
                             )
-                            if quality_params and "?" in original_url:
-                                base_url, existing_params = original_url.split("?", 1)
-                                param_list = [
-                                    p
-                                    for p in existing_params.split("&")
-                                    if not any(
-                                        p.startswith(k)
-                                        for k in [
-                                            "assets=",
-                                            "asset_bidx=",
-                                            "colormap_name=",
-                                            "rescale=",
-                                            "resampling=",
-                                            "bidx=",
-                                            "format=",
-                                            "nodata=",
-                                            "color_formula=",
-                                            "expression=",
-                                            "asset_as_band=",
-                                        ]
-                                    )
-                                ]
-                                optimized_url = (
-                                    f"{base_url}?{'&'.join(param_list)}&{quality_params}"
-                                    if param_list
-                                    else f"{base_url}?{quality_params}"
-                                )
-                            elif quality_params:
-                                optimized_url = f"{original_url}?{quality_params}"
-                            else:
-                                optimized_url = original_url
                             all_tile_urls.append(
                                 {
                                     "item_id": feature.get("id"),
@@ -2575,19 +2434,7 @@ async def unified_query_processor(body: QueryRequest):
                         pc_collection_id = (
                             pc_features[0].get("collection", "") if pc_features else ""
                         )
-                        optical_collections_needing_mosaic = [
-                            "sentinel-2-l2a",
-                            "landsat-c2-l2",
-                            "landsat-8-c2-l2",
-                            "landsat-9-c2-l2",
-                            "hls",
-                            "hls2-l30",
-                            "hls2-s30",
-                        ]
-                        if any(
-                            pc_collection_id.startswith(oc) or pc_collection_id == oc
-                            for oc in optical_collections_needing_mosaic
-                        ):
+                        if needs_optical_mosaic(pc_collection_id):
                             try:
                                 from hybrid_rendering_system import (
                                     get_mosaic_tilejson_url,
@@ -2725,29 +2572,9 @@ async def unified_query_processor(body: QueryRequest):
             and (all_tile_urls or mosaic_result or features)
         ):
             # Prepare STAC items for vision agent (lightweight version with key fields)
-            stac_items_for_vision = []
-            for f in (features or [])[
-                :10
-            ]:  # Limit to 10 items to keep context manageable
-                stac_items_for_vision.append(
-                    {
-                        "id": f.get("id"),
-                        "collection": f.get("collection"),
-                        "bbox": f.get("bbox"),
-                        "properties": {
-                            "datetime": f.get("properties", {}).get("datetime"),
-                            "eo:cloud_cover": f.get("properties", {}).get(
-                                "eo:cloud_cover"
-                            ),
-                            "cloud_cover": f.get("properties", {}).get("cloud_cover"),
-                        },
-                        # IMPORTANT: Preserve asset 'type' and 'href' for COG sampling
-                        "assets": {
-                            k: {"href": v.get("href"), "type": v.get("type")}
-                            for k, v in (f.get("assets") or {}).items()
-                        },
-                    }
-                )
+            stac_items_for_vision = summarize_stac_items(
+                features or [], include_cloud_cover_alias=True
+            )
 
             stac_render_context = {
                 "has_rendered_map": True,  # Map now has rendered imagery
