@@ -22,6 +22,10 @@ from services.query_pipeline.intake import (
     start_query,
 )
 from services.query_pipeline.intents import run_early_intents
+from services.query_pipeline.messages import (
+    build_response_message,
+    log_and_sync_features,
+)
 from services.query_pipeline.quickstart import run_quickstart_fast_path
 from services.query_pipeline.response import summarize_stac_items
 from services.query_pipeline.routing import (
@@ -37,10 +41,6 @@ from services.query_pipeline.tiles import (
     union_of_bboxes,
 )
 from services.query_pipeline.translation import translate_to_stac
-from services.query_responses import (
-    generate_contextual_empty_response,
-    generate_fallback_response,
-)
 from services.stac_search import (
     execute_direct_stac_search,
 )
@@ -74,7 +74,6 @@ async def unified_query_processor(body: QueryRequest):
 
         # PHASE 0: EARLY QUERY INTENT CLASSIFICATION
         state.classification = None
-        early_contextual_response = None
         state.translator = None
         state.vision_task = None  # For parallel processing of hybrid queries
 
@@ -102,162 +101,9 @@ async def unified_query_processor(body: QueryRequest):
         await run_stac_search(state)
 
         # PHASE 3: GENERATE RESPONSE MESSAGE
-        # [SEARCH] DEBUG: Log state before response generation to diagnose "no matches" bug
-        logger.info("[SEARCH] RESPONSE GENERATION DEBUG:")
-        logger.info(
-            f"   - features count: {len(state.features) if state.features else 0}"
-        )
-        logger.info(
-            f"   - stac_response features: {len(state.stac_response.get('results', {}).get('features', []))}"
-        )
-        logger.info(
-            f"   - SEMANTIC_KERNEL_AVAILABLE: {app_state.SEMANTIC_KERNEL_AVAILABLE}"
-        )
-        logger.info(f"   - translator: {state.translator is not None}")
-        logger.info(f"   - stac_query: {state.stac_query is not None}")
+        log_and_sync_features(state)
 
-        # [TOOL] SAFETY NET: Ensure features variable is synchronized with stac_response
-        # This fixes a bug where features could be empty but stac_response has data
-        stac_response_features = state.stac_response.get("results", {}).get(
-            "features", []
-        )
-        if not state.features and stac_response_features:
-            logger.warning(
-                f"[WARN] MISMATCH DETECTED: features is empty but stac_response has {len(stac_response_features)} features!"
-            )
-            logger.warning(
-                "   Synchronizing features from stac_response to prevent 'no matches' bug"
-            )
-            state.features = stac_response_features
-            state.search_diagnostics["final_count"] = len(state.features)
-
-        if app_state.SEMANTIC_KERNEL_AVAILABLE and state.translator and state.features:
-            try:
-                logger.info("[NOTE] Generating contextual response message...")
-
-                # ========================================================================
-                # [LAUNCH] AWAIT PARALLEL VISION TASK (if hybrid query)
-                # ========================================================================
-                # If we started a vision task in parallel with STAC search,
-                # now is the time to wait for it to complete before combining results
-                # ========================================================================
-                vision_result = None
-                if state.vision_task is not None:
-                    try:
-                        logger.info(
-                            "[WAIT] Awaiting parallel vision analysis to complete..."
-                        )
-                        vision_result = await state.vision_task
-                        if vision_result and vision_result.get("analysis"):
-                            early_contextual_response = vision_result["analysis"]
-                            logger.info(
-                                "[OK] Parallel vision analysis completed and ready for combination"
-                            )
-                        else:
-                            logger.warning(
-                                "[WARN] Vision task completed but no analysis returned"
-                            )
-                    except Exception as e:
-                        logger.error(f"[FAIL] Parallel vision task failed: {e}")
-                        early_contextual_response = None
-
-                # Check if we're showing alternative results
-                if state.search_diagnostics.get("alternative_used"):
-                    # [NEW] Generate special message explaining what alternative was shown
-                    logger.info("[INFO] Generating alternative result explanation...")
-                    contextual_response = (
-                        await state.translator.generate_alternative_result_response(
-                            state.natural_query,
-                            state.classification or {},
-                            {"success": True, "results": {"features": state.features}},
-                            state.search_diagnostics.get("original_filters", {}),
-                            state.search_diagnostics.get("alternative_filters", {}),
-                            state.search_diagnostics.get("alternative_explanation", ""),
-                            None,
-                        )
-                    )
-                    state.response_message = contextual_response.get(
-                        "message", f"Found {len(state.features)} alternative results."
-                    )
-                else:
-                    # Standard success response
-                    contextual_response = await state.translator.generate_contextual_earth_science_response(
-                        state.natural_query,
-                        state.classification or {},
-                        {"success": True, "results": {"features": state.features}},
-                        None,
-                    )
-                    state.response_message = contextual_response.get(
-                        "message",
-                        f"Found {len(state.features)} satellite data results for your query.",
-                    )
-
-                    # If we have vision analysis from hybrid query, prepend it
-                    if early_contextual_response:
-                        logger.info(
-                            "[SHUFFLE] Combining vision analysis with STAC data response"
-                        )
-                        state.response_message = f"""**Visual Analysis:**
-{early_contextual_response}
-
----
-
-**Data Results:**
-{state.response_message}"""
-
-                logger.info("[OK] Contextual response message generated successfully")
-            except Exception as e:
-                logger.error(f"[FAIL] Response generation failed: {e}")
-                state.response_message = generate_fallback_response(
-                    state.natural_query,
-                    state.features,
-                    state.stac_query.get("collections", []) if state.stac_query else [],
-                )
-        elif (
-            not state.features
-            and state.stac_query
-            and app_state.SEMANTIC_KERNEL_AVAILABLE
-            and state.translator
-        ):
-            # [NEW] ENHANCED: Use GPT to generate context-aware response for empty results
-            # GPT analyzes the specific failure point and provides intelligent, actionable suggestions
-            try:
-                logger.info(
-                    f"[BOT] Generating GPT-powered empty result response (failure stage: {state.search_diagnostics.get('failure_stage')})"
-                )
-                state.response_message = (
-                    await state.translator.generate_empty_result_response(
-                        state.natural_query,
-                        state.stac_query,
-                        state.stac_query.get("collections", []),
-                        state.search_diagnostics,
-                    )
-                )
-                logger.info("[OK] GPT-generated empty result response created")
-            except Exception as e:
-                logger.error(
-                    f"[FAIL] GPT empty result generation failed, using rule-based fallback: {e}"
-                )
-                # Fall back to rule-based response if GPT fails
-                state.response_message = generate_contextual_empty_response(
-                    state.natural_query,
-                    state.stac_query.get("collections", []),
-                    state.search_diagnostics,
-                )
-        elif not state.features and state.stac_query:
-            # Fallback: Use rule-based response if Semantic Kernel not available
-            logger.info(
-                f"ℹ️ No features found - using rule-based diagnostic response (failure stage: {state.search_diagnostics.get('failure_stage')})"
-            )
-            state.response_message = generate_contextual_empty_response(
-                state.natural_query,
-                state.stac_query.get("collections", []),
-                state.search_diagnostics,
-            )
-        else:
-            # Fallback for edge cases (no stac_query generated)
-            logger.info("[WARN] No STAC query generated - using generic fallback")
-            state.response_message = "I can help you find Earth science data, but I need more specific information about the location, time period, or type of imagery you're looking for."
+        await build_response_message(state)
 
         # [MAP] Generate optimized tile URLs for collections that need seamless multi-tile coverage
         # Multi-tile rendering is for: DEM, MODIS composites, global coverage collections
