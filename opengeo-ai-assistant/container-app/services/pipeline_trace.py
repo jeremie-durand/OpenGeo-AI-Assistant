@@ -7,7 +7,6 @@ from typing import Dict, List
 
 from cachetools import TTLCache
 
-
 pipeline_traces: TTLCache = TTLCache(
     maxsize=500, ttl=1800
 )  # 30-min TTL, max 500 sessions
@@ -61,4 +60,3 @@ def log_pipeline_step(
             trace_entry["elapsed_ms"] = round(elapsed_ms, 1)
 
         pipeline_traces[session_id].append(trace_entry)
-
