@@ -853,6 +853,9 @@ async def unified_query_processor(body: QueryRequest):
                     "router_action": router_action,
                 }
 
+        intent_type = (
+            classification.get("intent_type", "stac") if classification else None
+        )
         logger.info(
             f"[SEARCH] SEMANTIC_KERNEL_AVAILABLE: {app_state.SEMANTIC_KERNEL_AVAILABLE}"
         )

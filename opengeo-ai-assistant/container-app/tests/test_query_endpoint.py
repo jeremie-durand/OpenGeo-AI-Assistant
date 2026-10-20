@@ -1030,13 +1030,14 @@ def test_hybrid_combines_vision_and_stac(harness: Harness, check: Callable) -> N
     check(result)
 
 
-def test_router_classification_without_semantic_kernel_returns_500(
+def test_router_classification_without_semantic_kernel(
     harness: Harness, check: Callable
 ) -> None:
-    """Current bug: intent_type is only bound inside the semantic-kernel block."""
     harness.configure(router=FakeRouterAgent(harness.calls, action=STAC_ACTION))
+    harness.stac_responses = [results(feature("S2A_1"))]
     result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
-    assert result["response"] == SERVER_ERROR
+    assert result["response"]["success"] is True
+    assert result["response"]["data"]["query_classification"]["intent_type"] == "stac"
     check(result)
 
 
