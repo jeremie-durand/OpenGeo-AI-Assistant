@@ -176,12 +176,14 @@ class FakeTranslator:
         translate_error: Optional[Exception] = None,
         endpoint: str = "planetary_computer",
         contextual_error: Optional[Exception] = None,
+        empty_error: Optional[Exception] = None,
     ) -> None:
         self.calls = calls
         self.stac_params = stac_params
         self.translate_error = translate_error
         self.endpoint = endpoint
         self.contextual_error = contextual_error
+        self.empty_error = empty_error
 
     def _record(self, name: str, payload: Any = None) -> None:
         self.calls.append([f"translator.{name}", copy.deepcopy(payload)])
@@ -252,6 +254,8 @@ class FakeTranslator:
                 "diagnostics": diagnostics,
             },
         )
+        if self.empty_error:
+            raise self.empty_error
         return f"no results ({stage})"
 
     async def generate_alternative_result_response(
@@ -367,6 +371,7 @@ class Harness:
         self.weather_result: Any = {"response": "Climate summary for the location."}
         self.vision_result: Any = {"response": "Vision answer."}
         self.keyword_vision = False
+        self.mosaic_error: Optional[Exception] = None
         self._install_fakes()
         self.configure()
 
@@ -456,7 +461,7 @@ class Harness:
         """Replace module.attr and every module-level alias of the same object."""
         original = ORIGINALS[(module_name, attr)]
         for module in list(sys.modules.values()):
-            if not isinstance(module, ModuleType):
+            if not issubclass(type(module), ModuleType):
                 continue
             for name, value in list(vars(module).items()):
                 if value is original:
@@ -479,7 +484,10 @@ class Harness:
             ]
         )
         if self.stac_responses:
-            return copy.deepcopy(self.stac_responses.pop(0))
+            response = self.stac_responses.pop(0)
+            if isinstance(response, BaseException):
+                raise response
+            return copy.deepcopy(response)
         return results()
 
     async def _alternatives(
@@ -507,6 +515,8 @@ class Harness:
 
     async def _mosaic(self, **kwargs: Any) -> Optional[Dict[str, Any]]:
         self.calls.append(["get_mosaic_tilejson_url", copy.deepcopy(kwargs)])
+        if self.mosaic_error:
+            raise self.mosaic_error
         return copy.deepcopy(self.mosaic_result)
 
     async def _resolve(self, location: str) -> Any:
@@ -574,9 +584,11 @@ def snapshots() -> Iterator[SnapshotBook]:
 
 def defined_here(value: Any) -> bool:
     """True for a function, lambda or instance defined by this test module."""
-    if isinstance(value, MethodType):
+    if type(value) is MethodType:
         value = value.__func__
-    if isinstance(value, FunctionType):
+    if type(value) is FunctionType:
+        return value.__module__ == __name__
+    if type(value) is type:
         return value.__module__ == __name__
     return type(value).__module__ == __name__
 
@@ -585,7 +597,7 @@ def leaked_fakes() -> Set[str]:
     """Names of module attributes that still hold an object made by this module."""
     leaks = set()
     for module in list(sys.modules.values()):
-        if not isinstance(module, ModuleType) or module.__name__ == __name__:
+        if not issubclass(type(module), ModuleType) or module.__name__ == __name__:
             continue
         for name, value in list(vars(module).items()):
             if defined_here(value):
@@ -785,7 +797,8 @@ def test_snapshot_has_no_orphans() -> None:
         and callable(obj)
         and "check" in inspect.signature(obj).parameters
     }
-    assert set(json.loads(SNAPSHOT_PATH.read_text())) == scenarios
+    recorded = {key.split("[")[0] for key in json.loads(SNAPSHOT_PATH.read_text())}
+    assert recorded == scenarios
 
 
 # --- vision -----------------------------------------------------------------
@@ -1230,4 +1243,244 @@ def test_response_generation_error_uses_rule_based_message(
     harness.stac_responses = [results(feature("S2A_1"))]
     result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
     assert "contextual answer" not in result["response"]["response"]
+    check(result)
+
+
+# --- remaining branches --------------------------------------------------------
+
+LOCAL_PARAMS = {**SENTINEL_PARAMS, "collections": ["local-sentinel"]}
+
+
+def test_untiled_local_features_register_pc_mosaic(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(stac_params=LOCAL_PARAMS, action=STAC_ACTION, endpoint="local_stac")
+    harness.mosaic_result = {"tilejson_url": "https://mosaic.test/pc.json"}
+    harness.stac_responses = [
+        results(feature("LOCAL_1", "local-sentinel", tilejson=False)),
+        results(feature("S2A_1")),
+    ]
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    metadata = result["response"]["translation_metadata"]
+    assert metadata["mosaic_tilejson"] == harness.mosaic_result
+    check(result)
+
+
+def test_pc_retry_skips_bad_bboxes_and_bare_urls(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(stac_params=LOCAL_PARAMS, action=STAC_ACTION, endpoint="local_stac")
+    bare = feature("S2A_1")
+    bare["assets"]["tilejson"]["href"] = "https://tiles.test/S2A_1/tilejson.json"
+    harness.stac_responses = [
+        results(feature("LOCAL_1", "local-sentinel", tilejson=False)),
+        results(
+            bare,
+            feature("S2A_2", bbox=[2.2, 48.8, 2.5]),
+            feature("S2A_3", bbox=[2.2, None, 2.5, 48.9]),
+        ),
+    ]
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    tiles = result["response"]["translation_metadata"]["all_tile_urls"]
+    assert [t["item_id"] for t in tiles] == ["S2A_1"]
+    check(result)
+
+
+def test_pc_retry_without_results(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(stac_params=LOCAL_PARAMS, action=STAC_ACTION, endpoint="local_stac")
+    harness.stac_responses = [
+        results(feature("LOCAL_1", "local-sentinel", tilejson=False)),
+        {"success": False, "error": "pc down"},
+    ]
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    endpoints = [c["endpoint"] for c in calls_named(result, "stac_search")]
+    assert endpoints == ["local_stac", "planetary_computer"]
+    check(result)
+
+
+def test_main_tile_url_variants(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(stac_params=SENTINEL_PARAMS, action=STAC_ACTION)
+    bare = feature("S2A_1")
+    bare["assets"]["tilejson"]["href"] = "https://tiles.test/S2A_1/tilejson.json"
+    stripped = feature("S2A_2")
+    stripped["assets"]["tilejson"][
+        "href"
+    ] = "https://tiles.test/S2A_2/tilejson.json?assets=visual&nodata=0"
+    harness.stac_responses = [
+        results(bare, stripped, feature("S2A_3", bbox=[2.2, 48.8, 2.5]))
+    ]
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    tiles = result["response"]["translation_metadata"]["all_tile_urls"]
+    assert [t["item_id"] for t in tiles] == ["S2A_1", "S2A_2"]
+    check(result)
+
+
+def test_main_tile_url_without_quality_params(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(
+        stac_params={**SENTINEL_PARAMS, "collections": ["local-dem"]},
+        action=STAC_ACTION,
+    )
+    harness.stac_responses = [results(feature("DEM_1", "local-dem", cloud=None))]
+    result = harness.run(query="Show the local DEM for Paris", session_id=SESSION)
+    tiles = result["response"]["translation_metadata"]["all_tile_urls"]
+    href = feature("DEM_1", "local-dem")["assets"]["tilejson"]["href"]
+    assert tiles[0]["tilejson_url"] == href
+    check(result)
+
+
+def test_quickstart_year_undated_bare_url(harness: Harness, check: Callable) -> None:
+    harness.ai_mode()
+    undated = feature("MTBS_1", "mtbs", [-124.0, 33.0, -115.0, 41.0], cloud=None)
+    undated["properties"] = {}
+    undated["assets"]["tilejson"]["href"] = "https://tiles.test/MTBS_1/tilejson.json"
+    harness.stac_responses = [
+        results(undated, feature("MTBS_2", "mtbs", [-124.0, 33.0, -115.0]))
+    ]
+    result = harness.run(
+        query="show mtbs burn severity for california in 2017", session_id=SESSION
+    )
+    assert stac_query_sent(result)["datetime"] == "2017-01-01/2017-12-31"
+    assert "Most recent tile" not in result["response"]["response"]
+    check(result)
+
+
+def test_quickstart_stac_timeout_returns_504(harness: Harness, check: Callable) -> None:
+    harness.ai_mode()
+    harness.stac_responses = [asyncio.TimeoutError()]
+    result = harness.run(query="show sentinel 1 rtc for baltimore", session_id=SESSION)
+    assert result["response"]["http_error"] == 504
+    check(result)
+
+
+def test_quickstart_network_error_returns_502(
+    harness: Harness, check: Callable
+) -> None:
+    import aiohttp
+
+    harness.ai_mode()
+    harness.stac_responses = [aiohttp.ClientError("pc down")]
+    result = harness.run(query="show sentinel 1 rtc for baltimore", session_id=SESSION)
+    assert result["response"]["http_error"] == 502
+    check(result)
+
+
+def test_cloud_limit_from_query_filter(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(
+        stac_params={**SENTINEL_PARAMS, "query": {"eo:cloud_cover": {"lt": 20}}},
+        action=STAC_ACTION,
+    )
+    harness.stac_responses = [
+        results(feature("S2A_1", cloud=10), feature("S2A_2", cloud=40))
+    ]
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    tiles = result["response"]["translation_metadata"]["all_tile_urls"]
+    assert [t["item_id"] for t in tiles] == ["S2A_1"]
+    check(result)
+
+
+def test_extreme_weather_without_coordinates_falls_through(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(action=WEATHER_ACTION)
+    result = harness.run(query="How hot will Miami get by 2050?", session_id=SESSION)
+    assert calls_named(result, "extreme_weather.chat") == []
+    check(result)
+
+
+def test_regex_month_without_preposition(harness: Harness, check: Callable) -> None:
+    params = {k: v for k, v in SENTINEL_PARAMS.items() if k != "datetime"}
+    harness.ai_mode(stac_params=params, action=STAC_ACTION)
+    result = harness.run(
+        query="Show Sentinel-2 imagery of Paris December 2018", session_id=SESSION
+    )
+    assert stac_query_sent(result)["datetime"] == "2018-12-01/2018-12-31"
+    check(result)
+
+
+def test_regex_without_date(harness: Harness, check: Callable) -> None:
+    params = {k: v for k, v in SENTINEL_PARAMS.items() if k != "datetime"}
+    harness.ai_mode(stac_params=params, action=STAC_ACTION)
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    assert "datetime" not in stac_query_sent(result)
+    check(result)
+
+
+def test_router_context_sync_with_satellite_flag(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(stac_params=SENTINEL_PARAMS, action=STAC_ACTION)
+    harness.stac_responses = [results(feature("S2A_1"))]
+    result = harness.run(
+        query="Show Sentinel-2 imagery of Paris",
+        session_id=SESSION,
+        has_satellite_data=True,
+    )
+    contexts = calls_named(result, "router.update_session_context")
+    assert contexts[0]["context"]["has_rendered_map"] is True
+    check(result)
+
+
+def test_modis_all_outside_bbox_resyncs_features(
+    harness: Harness, check: Callable
+) -> None:
+    """Current behavior: the features/stac_response safety net re-adds the MODIS tile the bbox filter dropped."""
+    harness.ai_mode(
+        stac_params={**SENTINEL_PARAMS, "collections": ["modis-13Q1-061"]},
+        action=STAC_ACTION,
+    )
+    harness.stac_responses = [
+        results(feature("MOD_OUT", "modis-13Q1-061", [10, 10, 11, 11], cloud=None))
+    ]
+    result = harness.run(query="Show MODIS vegetation for Paris", session_id=SESSION)
+    features = result["response"]["data"]["stac_results"]["features"]
+    assert [f["id"] for f in features] == ["MOD_OUT"]
+    check(result)
+
+
+@pytest.mark.parametrize(
+    "vision", [{"response": "only a response"}, RuntimeError("vision down")]
+)
+def test_hybrid_vision_without_analysis(
+    harness: Harness, check: Callable, vision: Any
+) -> None:
+    harness.ai_mode(
+        stac_params=SENTINEL_PARAMS,
+        action={"action_type": "hybrid"},
+        session=RENDERED_SESSION,
+    )
+    harness.vision_result = vision
+    harness.stac_responses = [results(feature("S2A_1"))]
+    result = harness.run(
+        query="Load Sentinel-2 and describe it",
+        session_id=SESSION,
+        map_bounds=PARIS_BOUNDS,
+    )
+    assert len(calls_named(result, "vision.analyze")) == 1
+    assert not result["response"]["response"].startswith("**Visual Analysis:**")
+    check(result)
+
+
+def test_mosaic_registration_error(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(stac_params=SENTINEL_PARAMS, action=STAC_ACTION)
+    harness.mosaic_error = RuntimeError("mosaic down")
+    harness.stac_responses = [results(feature("S2A_1"))]
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    assert len(calls_named(result, "get_mosaic_tilejson_url")) == 1
+    assert result["response"]["translation_metadata"]["all_tile_urls"]
+    check(result)
+
+
+def test_empty_result_message_error_uses_rule_based_message(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(
+        stac_params=SENTINEL_PARAMS,
+        action=STAC_ACTION,
+        empty_error=RuntimeError("llm down"),
+    )
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    assert len(calls_named(result, "translator.generate_empty")) == 1
+    assert "no results" not in result["response"]["response"]
     check(result)
