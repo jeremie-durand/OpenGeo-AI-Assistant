@@ -403,7 +403,7 @@ Example: ["sentinel-2-l2a", "landsat-c2-l2"]"""
             logger.error(f"[GQT] collection_mapping_agent failed: {exc}")
 
         # Keyword fallback — always returns PC collection IDs.
-        from fastapi_app import detect_collections
+        from services.collection_detection import detect_collections
 
         return detect_collections(query)
 

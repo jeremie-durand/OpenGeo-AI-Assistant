@@ -8,10 +8,10 @@ Covers:
   - build_stac_query_agent requests JSON mode and anchors the result
 """
 
+import sys
 from unittest.mock import AsyncMock
 
 import pytest
-
 from generic_query_translator import (
     _KNOWN_BBOXES,
     _anchor_bbox,
@@ -136,3 +136,22 @@ class TestBuildStacQueryAgent:
         )
         result = await translator.build_stac_query_agent("Sherbrooke", ["sentinel-2"])
         assert result["bbox"] == _KNOWN_BBOXES["sherbrooke"]
+
+
+# ===========================================================================
+# collection_mapping_agent — keyword fallback must not import fastapi_app
+# ===========================================================================
+
+
+class TestCollectionMappingFallback:
+    @pytest.mark.asyncio
+    async def test_fallback_works_without_fastapi_app(self, monkeypatch) -> None:
+        """The keyword fallback must not depend on the web app module."""
+        from generic_query_translator import GenericQueryTranslator
+
+        monkeypatch.setitem(sys.modules, "fastapi_app", None)
+        translator = GenericQueryTranslator()
+        translator._llm = _fake_client("not json")
+        translator._discover_stac_collections = AsyncMock(return_value=[])
+        result = await translator.collection_mapping_agent("wildfire near Sherbrooke")
+        assert result == ["landsat-c2-l2", "sentinel-2-l2a", "modis-14A1-061"]
