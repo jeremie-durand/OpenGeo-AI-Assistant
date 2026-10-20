@@ -15,7 +15,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
+from types import FunctionType, MethodType, ModuleType, SimpleNamespace
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 import pytest
@@ -34,7 +34,6 @@ VOLATILE_KEYS = frozenset(
     }
 )
 VOLATILE = "<volatile>"
-APP_DIR = str(Path(__file__).resolve().parent.parent)
 PATCH_TARGETS = [
     ("services.stac_search", "execute_direct_stac_search"),
     ("services.stac_search", "try_alternative_queries"),
@@ -573,17 +572,23 @@ def snapshots() -> Iterator[SnapshotBook]:
         book.save()
 
 
+def defined_here(value: Any) -> bool:
+    """True for a function, lambda or instance defined by this test module."""
+    if isinstance(value, MethodType):
+        value = value.__func__
+    if isinstance(value, FunctionType):
+        return value.__module__ == __name__
+    return type(value).__module__ == __name__
+
+
 def leaked_fakes() -> Set[str]:
-    """Names of module attributes that still hold a Harness fake."""
+    """Names of module attributes that still hold an object made by this module."""
     leaks = set()
     for module in list(sys.modules.values()):
-        path = getattr(module, "__file__", None)
-        if not isinstance(module, ModuleType) or not str(path).startswith(APP_DIR):
+        if not isinstance(module, ModuleType) or module.__name__ == __name__:
             continue
         for name, value in list(vars(module).items()):
-            func = getattr(value, "__func__", value)
-            qualname = getattr(func, "__qualname__", None)
-            if isinstance(qualname, str) and qualname.startswith("Harness."):
+            if defined_here(value):
                 leaks.add(f"{module.__name__}.{name}")
     return leaks
 
