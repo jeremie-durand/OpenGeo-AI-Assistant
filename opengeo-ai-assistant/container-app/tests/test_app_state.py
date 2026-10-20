@@ -2,9 +2,23 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 
-def test_lifespan_populates_app_state() -> None:
+
+def test_lifespan_populates_app_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Lifespan fills app_state; monkeypatch restores the prior state after."""
+    import app_state
     from fastapi.testclient import TestClient
+
+    for name in (
+        "semantic_translator",
+        "global_translator",
+        "router_agent",
+        "geoint_executor",
+        "SEMANTIC_KERNEL_AVAILABLE",
+        "GEOINT_AVAILABLE",
+    ):
+        monkeypatch.setattr(app_state, name, getattr(app_state, name))
 
     translator, agent = MagicMock(), MagicMock()
     with (
@@ -14,7 +28,6 @@ def test_lifespan_populates_app_state() -> None:
         ),
         patch("geoint.router_agent.get_router_agent", return_value=agent),
     ):
-        import app_state
         from fastapi_app import app
 
         with TestClient(app):
