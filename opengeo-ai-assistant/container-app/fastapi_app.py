@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import aiohttp
+import app_state
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -94,8 +95,6 @@ from services.tile_urls import build_tile_url_params, clean_tilejson_urls
 # Wrapper for backward compatibility
 
 
-# Import GEOINT functionality - endpoints use lazy imports per request
-GEOINT_AVAILABLE = True  # Always available - imports happen at endpoint level
 logging.info("[OK] GEOINT endpoints available (lazy import mode)")
 
 # Set up logging
@@ -106,17 +105,15 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and tear down application components."""
-    global semantic_translator, global_translator, SEMANTIC_KERNEL_AVAILABLE, router_agent
-    global GEOINT_AVAILABLE
 
     logger.info("[LAUNCH] OpenGeo AI Assistant CONTAINER STARTING UP")
 
     # ----------------------------------------------------------------
     # Initialise provider-agnostic GenericQueryTranslator
     # ----------------------------------------------------------------
-    semantic_translator = None
-    global_translator = None
-    SEMANTIC_KERNEL_AVAILABLE = False
+    app_state.semantic_translator = None
+    app_state.global_translator = None
+    app_state.SEMANTIC_KERNEL_AVAILABLE = False
 
     try:
         from llm_client import get_llm_client
@@ -129,9 +126,9 @@ async def lifespan(app: FastAPI):
         from generic_query_translator import GenericQueryTranslator
 
         _translator = GenericQueryTranslator()
-        semantic_translator = _translator
-        global_translator = _translator
-        SEMANTIC_KERNEL_AVAILABLE = True
+        app_state.semantic_translator = _translator
+        app_state.global_translator = _translator
+        app_state.SEMANTIC_KERNEL_AVAILABLE = True
         logger.info(
             "[OK] GenericQueryTranslator initialised — AI query translation ENABLED"
         )
@@ -149,13 +146,13 @@ async def lifespan(app: FastAPI):
     try:
         from geoint.router_agent import get_router_agent
 
-        router_agent = get_router_agent()
+        app_state.router_agent = get_router_agent()
         logger.info("[OK] RouterAgent initialised for intelligent query routing")
     except Exception as e:
         logger.warning(
             f"[WARN] RouterAgent initialisation failed: {e} - will use fallback classification"
         )
-        router_agent = None
+        app_state.router_agent = None
 
     # Log quick start cache status
     qs_stats = get_quickstart_stats()
@@ -164,7 +161,7 @@ async def lifespan(app: FastAPI):
     )
 
     logger.info(
-        f"[OK] OpenGeo AI Assistant CONTAINER READY (AI={'ENABLED' if SEMANTIC_KERNEL_AVAILABLE else 'DISABLED — keyword fallback'})"
+        f"[OK] OpenGeo AI Assistant CONTAINER READY (AI={'ENABLED' if app_state.SEMANTIC_KERNEL_AVAILABLE else 'DISABLED — keyword fallback'})"
     )
 
     yield
@@ -288,18 +285,8 @@ async def serve_pc_rendering_config():
     raise HTTPException(status_code=404, detail="PC rendering config not found")
 
 
-# Global variables for components
-semantic_translator = None
-global_translator = None  # For session management
-router_agent = None  # RouterAgent for intelligent query classification
-
-geoint_executor = None
-
 # STAC endpoints configuration
 # STAC_API_URL env var sets the local/private STAC API — no hardcoded host/port
-
-# Feature availability flags
-SEMANTIC_KERNEL_AVAILABLE = True  # Will be updated in startup
 
 
 # Helper functions ported from Router Function App
@@ -460,8 +447,8 @@ async def unified_query_processor(body: QueryRequest):
         logger.info(f"[BOT] Selected Model: {selected_model}")
 
         # Set the active model on the semantic translator before processing
-        if semantic_translator:
-            semantic_translator.set_model(selected_model)
+        if app_state.semantic_translator:
+            app_state.semantic_translator.set_model(selected_model)
         else:
             logger.warning(
                 "[WARN] semantic_translator is None - using keyword-based fallback for collection detection."
@@ -551,7 +538,7 @@ async def unified_query_processor(body: QueryRequest):
             qs_stac_query = build_stac_query(qs_stac_params)
 
             # Execute STAC search — route to local STAC if configured, else Planetary Computer
-            qs_stac_endpoint = global_translator.determine_stac_source(
+            qs_stac_endpoint = app_state.global_translator.determine_stac_source(
                 natural_query, qs_stac_params
             )
             qs_stac_response = await execute_direct_stac_search(
@@ -695,7 +682,7 @@ async def unified_query_processor(body: QueryRequest):
                     pass
 
             # Update session context
-            if router_agent and session_id and (qs_tile_urls or qs_features):
+            if app_state.router_agent and session_id and (qs_tile_urls or qs_features):
                 stac_items_for_session = []
                 for f in qs_features[:10]:
                     stac_items_for_session.append(
@@ -715,7 +702,7 @@ async def unified_query_processor(body: QueryRequest):
                             },
                         }
                     )
-                router_agent.update_session_context(
+                app_state.router_agent.update_session_context(
                     session_id,
                     {
                         "has_rendered_map": True,
@@ -723,9 +710,11 @@ async def unified_query_processor(body: QueryRequest):
                         "last_location": qs_location["location"],
                         "last_collections": qs_location["collections"],
                         "last_stac_items": stac_items_for_session,
-                        "query_count": router_agent.tools.session_contexts.get(
+                        "query_count": app_state.router_agent.tools.session_contexts.get(
                             session_id, {}
-                        ).get("query_count", 0)
+                        ).get(
+                            "query_count", 0
+                        )
                         + 1,
                     },
                 )
@@ -789,8 +778,10 @@ async def unified_query_processor(body: QueryRequest):
         # handlers (vision, contextual, STAC) get the correct coordinates.
         # ================================================================
         frontend_map_bounds = req_body.get("map_bounds")
-        if router_agent and session_id:
-            session_ctx = router_agent.tools.session_contexts.get(session_id, {})
+        if app_state.router_agent and session_id:
+            session_ctx = app_state.router_agent.tools.session_contexts.get(
+                session_id, {}
+            )
             session_bbox_early = session_ctx.get("last_bbox")
             recently_navigated_early = session_bbox_early and not session_ctx.get(
                 "has_rendered_map", True
@@ -834,11 +825,13 @@ async def unified_query_processor(body: QueryRequest):
         # route directly to the Vision Agent.
         # ========================================================================
 
-        if router_action is None and router_agent and session_id:
+        if router_action is None and app_state.router_agent and session_id:
             try:
                 # Update session context for the router
-                if global_translator:
-                    context = global_translator.get_conversation_context(session_id)
+                if app_state.global_translator:
+                    context = app_state.global_translator.get_conversation_context(
+                        session_id
+                    )
                     context["has_screenshot"] = bool(req_body.get("imagery_base64"))
                     # ================================================================
                     # CRITICAL FIX: Preserve has_rendered_map from router's existing context
@@ -847,8 +840,10 @@ async def unified_query_processor(body: QueryRequest):
                     # context (which may not have been updated). This ensures follow-up
                     # questions like "what is on the map" route to vision correctly.
                     # ================================================================
-                    existing_router_context = router_agent.tools.session_contexts.get(
-                        session_id, {}
+                    existing_router_context = (
+                        app_state.router_agent.tools.session_contexts.get(
+                            session_id, {}
+                        )
                     )
 
                     # Preserve has_rendered_map if already True in router context
@@ -876,11 +871,11 @@ async def unified_query_processor(body: QueryRequest):
                             "last_collections"
                         )
 
-                    router_agent.update_session_context(session_id, context)
+                    app_state.router_agent.update_session_context(session_id, context)
 
                 # Vision mode already checked above - just invoke RouterAgent
                 logger.info("[ROUTE] Invoking RouterAgent for query classification...")
-                router_action = await router_agent.route_query(
+                router_action = await app_state.router_agent.route_query(
                     query=natural_query,
                     session_id=session_id,
                     has_screenshot=bool(req_body.get("imagery_base64")),
@@ -941,19 +936,19 @@ async def unified_query_processor(body: QueryRequest):
                             # When user navigates to a location, we store the bbox so that
                             # follow-up queries like "show me Sentinel tiles" will use this location
                             # ============================================================
-                            if router_agent and session_id:
+                            if app_state.router_agent and session_id:
                                 navigate_context = {
                                     "last_bbox": bbox,
                                     "last_location": location_display,
                                     "has_rendered_map": False,  # No imagery yet, just navigation
-                                    "query_count": router_agent.tools.session_contexts.get(
+                                    "query_count": app_state.router_agent.tools.session_contexts.get(
                                         session_id, {}
                                     ).get(
                                         "query_count", 0
                                     )
                                     + 1,
                                 }
-                                router_agent.update_session_context(
+                                app_state.router_agent.update_session_context(
                                     session_id, navigate_context
                                 )
                                 logger.info(
@@ -1027,8 +1022,8 @@ async def unified_query_processor(body: QueryRequest):
                         )
 
                         # Use session context bbox as fallback
-                        if not bbox and router_agent and session_id:
-                            ctx = router_agent.tools.session_contexts.get(
+                        if not bbox and app_state.router_agent and session_id:
+                            ctx = app_state.router_agent.tools.session_contexts.get(
                                 session_id, {}
                             )
                             bbox = ctx.get("last_bbox")
@@ -1245,10 +1240,12 @@ async def unified_query_processor(body: QueryRequest):
                     "router_action": router_action,
                 }
 
-        logger.info(f"[SEARCH] SEMANTIC_KERNEL_AVAILABLE: {SEMANTIC_KERNEL_AVAILABLE}")
-        if SEMANTIC_KERNEL_AVAILABLE and global_translator:
+        logger.info(
+            f"[SEARCH] SEMANTIC_KERNEL_AVAILABLE: {app_state.SEMANTIC_KERNEL_AVAILABLE}"
+        )
+        if app_state.SEMANTIC_KERNEL_AVAILABLE and app_state.global_translator:
             try:
-                translator = global_translator
+                translator = app_state.global_translator
 
                 # ========================================================================
                 # [LAUNCH] QUICK START QUERY OPTIMIZATION
@@ -1460,9 +1457,11 @@ async def unified_query_processor(body: QueryRequest):
                     # ================================================================
                     session_context = {}
                     stac_items_from_session = []
-                    if router_agent and session_id:
-                        session_context = router_agent.tools.session_contexts.get(
-                            session_id, {}
+                    if app_state.router_agent and session_id:
+                        session_context = (
+                            app_state.router_agent.tools.session_contexts.get(
+                                session_id, {}
+                            )
                         )
                         logger.info(
                             f"[LIST] Session context for Vision Agent: {list(session_context.keys())}"
@@ -1830,8 +1829,10 @@ async def unified_query_processor(body: QueryRequest):
                     # We inject the session location so the LLM generates a correct answer.
                     # ================================================================
                     contextual_query = natural_query
-                    if router_agent and session_id:
-                        ctx = router_agent.tools.session_contexts.get(session_id, {})
+                    if app_state.router_agent and session_id:
+                        ctx = app_state.router_agent.tools.session_contexts.get(
+                            session_id, {}
+                        )
                         session_location = ctx.get("last_location")
                         session_bbox = ctx.get("last_bbox")
                         current_map_bounds = req_body.get("map_bounds")
@@ -1913,7 +1914,7 @@ async def unified_query_processor(body: QueryRequest):
                 )
 
         if not skip_collection_mapping:
-            if not SEMANTIC_KERNEL_AVAILABLE:
+            if not app_state.SEMANTIC_KERNEL_AVAILABLE:
                 logger.warning(
                     "[WARN] Semantic Kernel not available, using fallback processing"
                 )
@@ -1932,7 +1933,7 @@ async def unified_query_processor(body: QueryRequest):
                         f"[TOOL] Built fallback STAC query: {json.dumps(stac_query, indent=2)}"
                     )
 
-            elif SEMANTIC_KERNEL_AVAILABLE and translator:
+            elif app_state.SEMANTIC_KERNEL_AVAILABLE and translator:
                 try:
                     logger.info(
                         f"[BOT] Starting multi-agent pipeline — query='{natural_query}' pin={pin}"
@@ -1950,10 +1951,12 @@ async def unified_query_processor(body: QueryRequest):
                     session_location = None
 
                     # Get session context from router_agent (session_contexts is on router_agent.tools)
-                    if router_agent and session_id:
+                    if app_state.router_agent and session_id:
                         try:
-                            session_context = router_agent.tools.session_contexts.get(
-                                session_id, {}
+                            session_context = (
+                                app_state.router_agent.tools.session_contexts.get(
+                                    session_id, {}
+                                )
                             )
                             session_bbox = session_context.get("last_bbox")
                             session_location = session_context.get("last_location")
@@ -2309,7 +2312,7 @@ async def unified_query_processor(body: QueryRequest):
                     # 3. Using context-aware tile limits (5-50 based on AOI size)
                     # Pre-filtering with geometric overlap could remove tiles Agent 3 needs for seamless coverage
                     if (
-                        SEMANTIC_KERNEL_AVAILABLE
+                        app_state.SEMANTIC_KERNEL_AVAILABLE
                         and translator
                         and raw_features
                         and stac_query.get("bbox")
@@ -2543,8 +2546,8 @@ async def unified_query_processor(body: QueryRequest):
         if (
             stac_params
             and stac_params.get("geoint_processing")
-            and GEOINT_AVAILABLE
-            and geoint_executor
+            and app_state.GEOINT_AVAILABLE
+            and app_state.geoint_executor
             and features
         ):
             try:
@@ -2561,7 +2564,7 @@ async def unified_query_processor(body: QueryRequest):
                 bbox = stac_query.get("bbox") if stac_query else None
 
                 # Execute GEOINT analysis (downloads COG rasters and performs calculations)
-                geoint_results = await geoint_executor.execute_analysis(
+                geoint_results = await app_state.geoint_executor.execute_analysis(
                     analysis_type=analysis_type,
                     stac_features=features,
                     bbox=bbox,
@@ -2618,8 +2621,10 @@ async def unified_query_processor(body: QueryRequest):
             logger.warning(
                 "[WARN] GEOINT processing requested but prerequisites not met:"
             )
-            logger.warning(f"   - GEOINT_AVAILABLE: {GEOINT_AVAILABLE}")
-            logger.warning(f"   - geoint_executor: {geoint_executor is not None}")
+            logger.warning(f"   - GEOINT_AVAILABLE: {app_state.GEOINT_AVAILABLE}")
+            logger.warning(
+                f"   - geoint_executor: {app_state.geoint_executor is not None}"
+            )
             logger.warning(f"   - features: {len(features) if features else 0}")
 
         # PHASE 3: GENERATE RESPONSE MESSAGE
@@ -2629,7 +2634,9 @@ async def unified_query_processor(body: QueryRequest):
         logger.info(
             f"   - stac_response features: {len(stac_response.get('results', {}).get('features', []))}"
         )
-        logger.info(f"   - SEMANTIC_KERNEL_AVAILABLE: {SEMANTIC_KERNEL_AVAILABLE}")
+        logger.info(
+            f"   - SEMANTIC_KERNEL_AVAILABLE: {app_state.SEMANTIC_KERNEL_AVAILABLE}"
+        )
         logger.info(f"   - translator: {translator is not None}")
         logger.info(f"   - stac_query: {stac_query is not None}")
 
@@ -2646,7 +2653,7 @@ async def unified_query_processor(body: QueryRequest):
             features = stac_response_features
             search_diagnostics["final_count"] = len(features)
 
-        if SEMANTIC_KERNEL_AVAILABLE and translator and features:
+        if app_state.SEMANTIC_KERNEL_AVAILABLE and translator and features:
             try:
                 logger.info("[NOTE] Generating contextual response message...")
 
@@ -2730,7 +2737,12 @@ async def unified_query_processor(body: QueryRequest):
                     features,
                     stac_query.get("collections", []) if stac_query else [],
                 )
-        elif not features and stac_query and SEMANTIC_KERNEL_AVAILABLE and translator:
+        elif (
+            not features
+            and stac_query
+            and app_state.SEMANTIC_KERNEL_AVAILABLE
+            and translator
+        ):
             # [NEW] ENHANCED: Use GPT to generate context-aware response for empty results
             # GPT analyzes the specific failure point and provides intelligent, actionable suggestions
             try:
@@ -3229,7 +3241,7 @@ async def unified_query_processor(body: QueryRequest):
             },
             "debug": {
                 "semantic_translator": {
-                    "available": SEMANTIC_KERNEL_AVAILABLE,
+                    "available": app_state.SEMANTIC_KERNEL_AVAILABLE,
                     "selected_collections": (
                         stac_query.get("collections", []) if stac_query else []
                     ),
@@ -3273,7 +3285,11 @@ async def unified_query_processor(body: QueryRequest):
         # CRITICAL: This enables the router to default to VISION for follow-up questions
         # like "What city is on the map?" instead of trying another STAC search
         # ========================================================================
-        if router_agent and session_id and (all_tile_urls or mosaic_result or features):
+        if (
+            app_state.router_agent
+            and session_id
+            and (all_tile_urls or mosaic_result or features)
+        ):
             # Prepare STAC items for vision agent (lightweight version with key fields)
             stac_items_for_vision = []
             for f in (features or [])[
@@ -3309,12 +3325,14 @@ async def unified_query_processor(body: QueryRequest):
                     stac_query.get("collections", []) if stac_query else []
                 ),
                 "last_stac_items": stac_items_for_vision,  # STAC items for vision agent raster analysis
-                "query_count": router_agent.tools.session_contexts.get(
+                "query_count": app_state.router_agent.tools.session_contexts.get(
                     session_id, {}
                 ).get("query_count", 0)
                 + 1,
             }
-            router_agent.update_session_context(session_id, stac_render_context)
+            app_state.router_agent.update_session_context(
+                session_id, stac_render_context
+            )
             logger.info(
                 f"[MAP] Updated session context: has_rendered_map=True, collections={stac_render_context['last_collections']}, stac_items={len(stac_items_for_vision)}"
             )
@@ -3454,7 +3472,7 @@ async def structured_search(body: StructuredSearchRequest):
             )
 
         # Ensure semantic translator is initialized
-        if not global_translator:
+        if not app_state.global_translator:
             logger.error("[FAIL] Semantic translator not initialized")
             raise HTTPException(
                 status_code=500,
@@ -3489,7 +3507,7 @@ async def structured_search(body: StructuredSearchRequest):
 
         # Use the semantic translator's translate_query method (FULL AGENT PIPELINE)
         logger.info("[SYNC] Running full multi-agent translation pipeline...")
-        stac_params = await global_translator.translate_query(
+        stac_params = await app_state.global_translator.translate_query(
             natural_query, pin_location=None
         )
 
@@ -3598,8 +3616,8 @@ async def session_reset(body: SessionResetRequest, request: Request):
             )
 
         # Reset conversation context if translator is available
-        if SEMANTIC_KERNEL_AVAILABLE and global_translator:
-            global_translator.reset_conversation_context(conversation_id)
+        if app_state.SEMANTIC_KERNEL_AVAILABLE and app_state.global_translator:
+            app_state.global_translator.reset_conversation_context(conversation_id)
             message = f"Session {conversation_id} reset successfully"
         else:
             message = f"Session reset requested for {conversation_id} (semantic translator not available)"
@@ -3654,21 +3672,22 @@ async def process_comparison_query(body: ComparisonQueryRequest):
 
         logger.info(f"[CHART] [COMPARISON] query='{user_query}'")
 
-        global semantic_translator
-        if not semantic_translator:
+        if not app_state.semantic_translator:
             raise HTTPException(
                 status_code=500, detail="Semantic translator not initialized"
             )
 
         # Step 1: Collection Selection
-        collections = await semantic_translator.collection_mapping_agent(user_query)
+        collections = await app_state.semantic_translator.collection_mapping_agent(
+            user_query
+        )
         logger.info(f"[CHART] [COMPARISON] Step 1 collections={collections}")
 
         if not collections:
             logger.warning("[CHART] [COMPARISON] No collections returned")
 
         # Step 2: Location Resolution
-        stac_query = await semantic_translator.build_stac_query_agent(
+        stac_query = await app_state.semantic_translator.build_stac_query_agent(
             user_query, collections
         )
         bbox = stac_query.get("bbox")
@@ -3688,8 +3707,10 @@ async def process_comparison_query(body: ComparisonQueryRequest):
         )
 
         # Step 3: Dual-Date Extraction
-        datetime_result = await semantic_translator.datetime_translation_agent(
-            query=user_query, collections=collections, mode="comparison"
+        datetime_result = (
+            await app_state.semantic_translator.datetime_translation_agent(
+                query=user_query, collections=collections, mode="comparison"
+            )
         )
 
         if not datetime_result:
@@ -4409,9 +4430,11 @@ async def geoint_vision_analysis(body: VisionRequest):
             logger.info(
                 f"[EYE] [{request_id}] Using {len(stac_items_from_request)} STAC items from request (with assets for NDVI)"
             )
-        elif router_agent and session_id:
+        elif app_state.router_agent and session_id:
             # Fallback: Try to get STAC items from session context
-            session_context = router_agent.tools.session_contexts.get(session_id, {})
+            session_context = app_state.router_agent.tools.session_contexts.get(
+                session_id, {}
+            )
             if not collections_list:
                 collections_list = session_context.get("last_collections", [])
             stac_items_from_session = session_context.get("last_stac_items", [])
@@ -4569,8 +4592,10 @@ async def geoint_vision_chat(body: VisionChatRequest):
             collections_list = [collection_from_request]
 
         # Fallback to session context if no data from request
-        if router_agent and session_id and not tile_urls_for_agent:
-            session_context = router_agent.tools.session_contexts.get(session_id, {})
+        if app_state.router_agent and session_id and not tile_urls_for_agent:
+            session_context = app_state.router_agent.tools.session_contexts.get(
+                session_id, {}
+            )
             if not collections_list:
                 collections_list = session_context.get("last_collections", [])
             stac_items_from_session = session_context.get("last_stac_items", [])
@@ -5816,14 +5841,18 @@ async def geoint_comparison_analysis(body: ComparisonRequest):
                         "[SEARCH] FALLBACK: Using direct STAC comparison approach"
                     )
                     # Step 1: Parse query with existing agents
-                    if not semantic_translator:
+                    if not app_state.semantic_translator:
                         raise RuntimeError("Semantic translator not initialized")
 
-                    collections = await semantic_translator.collection_mapping_agent(
-                        user_query
+                    collections = (
+                        await app_state.semantic_translator.collection_mapping_agent(
+                            user_query
+                        )
                     )
-                    stac_query = await semantic_translator.build_stac_query_agent(
-                        user_query, collections or []
+                    stac_query = (
+                        await app_state.semantic_translator.build_stac_query_agent(
+                            user_query, collections or []
+                        )
                     )
                     bbox = stac_query.get("bbox")
                     location_name = stac_query.get("location_name", "Unknown location")
@@ -5834,7 +5863,7 @@ async def geoint_comparison_analysis(body: ComparisonRequest):
                         )
 
                     datetime_result = (
-                        await semantic_translator.datetime_translation_agent(
+                        await app_state.semantic_translator.datetime_translation_agent(
                             query=user_query,
                             collections=collections or [],
                             mode="comparison",
