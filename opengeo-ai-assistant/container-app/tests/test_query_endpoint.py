@@ -1023,3 +1023,211 @@ def test_router_classification_without_semantic_kernel_returns_500(
     result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
     assert result["response"] == SERVER_ERROR
     check(result)
+
+
+# --- translation ----------------------------------------------------------------
+
+
+def stac_query_sent(result: Dict[str, Any], index: int = 0) -> Dict[str, Any]:
+    """The STAC query of the index-th stac_search call."""
+    return calls_named(result, "stac_search")[index]["query"]
+
+
+def test_stac_search_full_path(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(stac_params=SENTINEL_PARAMS, action=STAC_ACTION)
+    harness.mosaic_result = {"tilejson_url": "https://mosaic.test/tilejson.json"}
+    harness.stac_responses = [
+        results(feature("S2A_1"), feature("S2A_2", bbox=[2.3, 48.7, 2.6, 48.9]))
+    ]
+    result = harness.run(
+        query="Show Sentinel-2 imagery of Paris",
+        session_id=SESSION,
+        pin={"lat": 48.85, "lng": 2.35},
+    )
+    assert len(result["response"]["translation_metadata"]["all_tile_urls"]) == 2
+    check(result)
+
+
+def test_location_required(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(
+        stac_params={
+            "error": "LOCATION_REQUIRED",
+            "message": "Where should I look?",
+            "suggestions": ["Paris"],
+        },
+        action=STAC_ACTION,
+    )
+    result = harness.run(query="Show Sentinel-2 imagery", session_id=SESSION)
+    assert result["response"]["error"] == "LOCATION_REQUIRED"
+    check(result)
+
+
+def test_translation_exception_gives_generic_message(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(action=STAC_ACTION, translate_error=RuntimeError("llm down"))
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    assert calls_named(result, "stac_search") == []
+    check(result)
+
+
+def test_translation_without_collections(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(stac_params={"collections": []}, action=STAC_ACTION)
+    result = harness.run(query="Show me something nice", session_id=SESSION)
+    assert calls_named(result, "stac_search") == []
+    check(result)
+
+
+def test_regex_month_datetime_fallback(harness: Harness, check: Callable) -> None:
+    params = {k: v for k, v in SENTINEL_PARAMS.items() if k != "datetime"}
+    harness.ai_mode(stac_params=params, action=STAC_ACTION)
+    result = harness.run(
+        query="Show Sentinel-2 imagery of Paris from December 2018",
+        session_id=SESSION,
+    )
+    assert stac_query_sent(result)["datetime"] == "2018-12-01/2018-12-31"
+    check(result)
+
+
+def test_regex_year_datetime_fallback(harness: Harness, check: Callable) -> None:
+    params = {k: v for k, v in SENTINEL_PARAMS.items() if k != "datetime"}
+    harness.ai_mode(stac_params=params, action=STAC_ACTION)
+    result = harness.run(
+        query="Show Sentinel-2 imagery of Paris in 2019", session_id=SESSION
+    )
+    assert stac_query_sent(result)["datetime"] == "2019-01-01/2019-12-31"
+    check(result)
+
+
+# --- search -----------------------------------------------------------------------
+
+
+def test_cloud_cover_relaxation(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(
+        stac_params={**SENTINEL_PARAMS, "cloud_cover": 10}, action=STAC_ACTION
+    )
+    harness.stac_responses = [
+        results(feature("S2A_1", cloud=60), feature("S2A_2", cloud=80))
+    ]
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    assert len(result["response"]["translation_metadata"]["all_tile_urls"]) == 1
+    check(result)
+
+
+def test_low_cloud_keyword_fallback(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(stac_params=SENTINEL_PARAMS, action=STAC_ACTION)
+    harness.stac_responses = [
+        results(feature("S2A_1", cloud=20), feature("S2A_2", cloud=40))
+    ]
+    result = harness.run(
+        query="Show clear Sentinel-2 imagery of Paris", session_id=SESSION
+    )
+    assert len(result["response"]["translation_metadata"]["all_tile_urls"]) == 1
+    check(result)
+
+
+def test_modis_tiles_outside_bbox_are_dropped(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(
+        stac_params={**SENTINEL_PARAMS, "collections": ["modis-13Q1-061"]},
+        action=STAC_ACTION,
+    )
+    harness.stac_responses = [
+        results(
+            feature("MOD_IN", "modis-13Q1-061", cloud=None),
+            feature("MOD_OUT", "modis-13Q1-061", [10, 10, 11, 11], cloud=None),
+        )
+    ]
+    result = harness.run(query="Show MODIS vegetation for Paris", session_id=SESSION)
+    features = result["response"]["data"]["stac_results"]["features"]
+    assert [f["id"] for f in features] == ["MOD_IN"]
+    check(result)
+
+
+def test_alternatives_used_when_search_empty(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(stac_params=SENTINEL_PARAMS, action=STAC_ACTION)
+    harness.alternative_result = {
+        "success": True,
+        "features": [feature("S2A_9")],
+        "explanation": "Widened the date range",
+        "relaxation_applied": "datetime",
+        "original_filters": {"datetime": "2024-06"},
+        "alternative_filters": {"datetime": "2024"},
+    }
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    assert result["response"]["response"] == "alternative: Widened the date range"
+    check(result)
+
+
+def test_empty_results_ai_message(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(stac_params=SENTINEL_PARAMS, action=STAC_ACTION)
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    assert result["response"]["response"] == "no results (stac_api)"
+    check(result)
+
+
+def test_stac_error_ai_message(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(stac_params=SENTINEL_PARAMS, action=STAC_ACTION)
+    harness.stac_responses = [{"success": False, "error": "boom"}]
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    assert result["response"]["response"] == "no results (stac_error)"
+    check(result)
+
+
+def test_empty_local_stac_falls_back_to_pc(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(
+        stac_params=SENTINEL_PARAMS, action=STAC_ACTION, endpoint="local_stac"
+    )
+    harness.stac_responses = [results(), results(feature("S2A_1"))]
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    endpoints = [c["endpoint"] for c in calls_named(result, "stac_search")]
+    assert endpoints == ["local_stac", "planetary_computer"]
+    check(result)
+
+
+# --- rendering and messages --------------------------------------------------------
+
+
+def test_untiled_local_features_retry_on_pc(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(
+        stac_params=SENTINEL_PARAMS, action=STAC_ACTION, endpoint="local_stac"
+    )
+    harness.stac_responses = [
+        results(feature("LOCAL_1", tilejson=False)),
+        results(feature("S2A_1")),
+    ]
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    tiles = result["response"]["translation_metadata"]["all_tile_urls"]
+    assert [t["item_id"] for t in tiles] == ["S2A_1"]
+    check(result)
+
+
+def test_expression_collection_keeps_original_tilejson(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(
+        stac_params={**SENTINEL_PARAMS, "collections": ["sentinel-1-rtc"]},
+        action=STAC_ACTION,
+    )
+    sar = feature("S1_1", "sentinel-1-rtc", cloud=None, expression=True)
+    broken = feature("S1_2", "sentinel-1-rtc", [2.2, None, 2.5, 48.9], cloud=None)
+    harness.stac_responses = [results(sar, broken)]
+    result = harness.run(query="Show Sentinel-1 RTC for Paris", session_id=SESSION)
+    tiles = result["response"]["translation_metadata"]["all_tile_urls"]
+    assert [t["tilejson_url"] for t in tiles] == [sar["assets"]["tilejson"]["href"]]
+    check(result)
+
+
+def test_response_generation_error_uses_rule_based_message(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(
+        stac_params=SENTINEL_PARAMS,
+        action=STAC_ACTION,
+        contextual_error=RuntimeError("llm down"),
+    )
+    harness.stac_responses = [results(feature("S2A_1"))]
+    result = harness.run(query="Show Sentinel-2 imagery of Paris", session_id=SESSION)
+    assert "contextual answer" not in result["response"]["response"]
+    check(result)
