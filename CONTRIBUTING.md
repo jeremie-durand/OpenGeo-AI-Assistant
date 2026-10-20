@@ -123,7 +123,10 @@ docker compose logs -f backend   # or frontend
 ```
 opengeo-ai-assistant/
 ├── container-app/     # Python FastAPI backend
-│   ├── fastapi_app.py         # Main app and all routes
+│   ├── fastapi_app.py         # App factory: lifespan, middleware, routers
+│   ├── app_state.py           # Runtime components set at startup
+│   ├── routers/               # One APIRouter per endpoint family
+│   ├── services/              # Shared helpers (STAC search, tile URLs, tracing)
 │   ├── llm_client.py          # Provider-agnostic LLM client (use this for all LLM calls)
 │   ├── semantic_translator.py # Query → STAC search pipeline
 │   └── geoint/                # GEOINT agents (terrain, mobility, weather, etc.)

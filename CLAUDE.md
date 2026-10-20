@@ -85,7 +85,10 @@ docker-compose.yml     # Two services: backend (port 8000) + frontend (port 3000
 
 **Request Flow:**
 
-1. `fastapi_app.py` — Main FastAPI app, all routes defined here (large file ~323KB)
+1. `fastapi_app.py` — App factory: lifespan, middleware, router registration
+   - `routers/` — one `APIRouter` per endpoint family (query, search, system, geoint_*)
+   - `services/` — shared helpers (STAC search, tile URLs/dedup, pipeline trace)
+   - `app_state.py` — runtime components set at startup (translator, router agent)
 2. `POST /api/query` → `semantic_translator.py` / `generic_query_translator.py` → `location_resolver.py` → `collection_name_mapper.py` → tile selection/rendering
 3. GEOINT requests (`/api/geoint/*`) → `geoint/router_agent.py` → specialized agent
 

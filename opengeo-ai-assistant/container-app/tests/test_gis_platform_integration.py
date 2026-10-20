@@ -5,7 +5,7 @@ Fixes covered:
   Fix 1 — Generic structured-feature pre-check in RouterAgent.route_query()
   Fix 2 — query_gis_feature kernel tool in RouterAgentTools
   Fix 3 — GIS_FEATURE_QUERY rule in ROUTER_AGENT_INSTRUCTIONS
-  Fix 4 — gis_feature_query action handler in fastapi_app.py
+  Fix 4 — gis_feature_query action handler in routers/query.py
 """
 
 import json

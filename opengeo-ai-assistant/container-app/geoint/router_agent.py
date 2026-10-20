@@ -247,7 +247,7 @@ class RouterAgentTools:
         self.vision_agent = agent
 
     def update_session_context(self, session_id: str, context: Dict[str, Any]):
-        """Update session context (called from fastapi_app). Merges with existing context."""
+        """Update session context (called from routers.query). Merges with existing context."""
         existing = self.session_contexts.get(session_id, {})
         # Merge: preserve existing values, update with new values
         existing.update(context)

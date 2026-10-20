@@ -5,7 +5,7 @@ A drop-in replacement for SemanticQueryTranslator that works with any LLM
 provider configured via LLM_PROVIDER / LLM_API_KEY / LLM_MODEL environment
 variables (openai or anthropic).
 
-Exposes the same public interface used by fastapi_app.py:
+Exposes the same public interface used by the API routers:
   - translate_query(query, pin_location, session_bbox)
   - collection_mapping_agent(query)
   - build_stac_query_agent(query, collections)
@@ -403,7 +403,7 @@ Example: ["sentinel-2-l2a", "landsat-c2-l2"]"""
             logger.error(f"[GQT] collection_mapping_agent failed: {exc}")
 
         # Keyword fallback — always returns PC collection IDs.
-        from fastapi_app import detect_collections
+        from services.collection_detection import detect_collections
 
         return detect_collections(query)
 
