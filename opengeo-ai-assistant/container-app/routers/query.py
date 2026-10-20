@@ -4,6 +4,7 @@ import asyncio
 import logging
 import traceback
 from datetime import datetime
+from typing import Any, Dict
 
 import aiohttp
 import app_state
@@ -38,10 +39,11 @@ router = APIRouter()
 
 
 @router.post("/api/query")
-async def unified_query_processor(body: QueryRequest):
-    """
-    Unified query processor that combines Router Function logic with direct STAC search
-    This implements the complete OpenGeo AI Assistant query processing pipeline
+async def unified_query_processor(body: QueryRequest) -> Dict[str, Any]:
+    """Answer a natural-language query by running the services.query_pipeline stages.
+
+    Order: intake, quickstart fast path, RouterAgent, early intents (vision,
+    contextual), translation, STAC search, message, tile rendering, response.
     """
     try:
         state = QueryState()

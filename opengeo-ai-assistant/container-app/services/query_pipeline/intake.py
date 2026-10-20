@@ -1,6 +1,7 @@
 """Request intake: read the body, open the pipeline trace, fix stale bounds."""
 
 import logging
+import uuid
 
 import app_state
 from request_models import QueryRequest
@@ -31,8 +32,6 @@ def start_query(body: QueryRequest, state: QueryState) -> None:
         )
 
     # [MICRO] Generate unique pipeline session ID for tracing
-    import uuid
-
     state.pipeline_session_id = str(uuid.uuid4())[:8]
 
     # [MICRO] Clear any stale trace and start fresh

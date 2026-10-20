@@ -2,8 +2,11 @@
 
 Each scenario runs ``unified_query_processor`` against fake collaborators and
 compares the normalized response, plus the ordered collaborator calls, with
-``snapshots/query_endpoint.json``. Re-record with ``.refactor/record-snapshots``
-and review the JSON diff before committing.
+``snapshots/query_endpoint.json``.
+
+Refactor commits must leave the snapshot unchanged. When behavior changes on
+purpose, re-record by running this file with ``UPDATE_QUERY_SNAPSHOTS=1`` and a
+writable tests mount (see "Testing" in CLAUDE.md), then review the JSON diff.
 """
 
 import asyncio

@@ -154,7 +154,7 @@ def build_item_tile_urls(
                     )
                     continue
 
-                collection_id = feature.get(
+                feat_collection_id = feature.get(
                     "collection", collections[0] if collections else "unknown"
                 )
 
@@ -171,11 +171,11 @@ def build_item_tile_urls(
                     "sentinel-1-rtc",
                 ]
                 if (
-                    collection_id in expression_collections
+                    feat_collection_id in expression_collections
                     and "expression=" in original_url
                 ):
                     logger.info(
-                        f"[SHIELD] Keeping original STAC tilejson for expression-based collection {collection_id}"
+                        f"[SHIELD] Keeping original STAC tilejson for expression-based collection {feat_collection_id}"
                     )
                     state.all_tile_urls.append(
                         {
@@ -190,7 +190,7 @@ def build_item_tile_urls(
 
                 # Build quality parameters for this collection
                 quality_params = build_tile_url_params(
-                    collection_id, state.natural_query
+                    feat_collection_id, state.natural_query
                 )
 
                 # Enhance the URL with quality parameters
@@ -319,9 +319,7 @@ async def render_tiles(state: QueryState) -> None:
     optical imagery (Sentinel-2, HLS, Landsat) uses the mosaic and best tiles.
     """
     state.all_tile_urls = []
-    state.mosaic_result = (
-        None  # [GLOBE] NEW: Mosaic tilejson result for seamless coverage
-    )
+    state.mosaic_result = None
     collections = state.stac_query.get("collections", []) if state.stac_query else []
     collection_id = collections[0].lower() if collections else ""
 

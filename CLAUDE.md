@@ -56,6 +56,16 @@ docker compose run --rm -u root \
 ```
 
 ```bash
+# Re-record /api/query snapshots after an intended behavior change (from repo root).
+# Refactors must not change tests/snapshots/query_endpoint.json; review its diff.
+
+docker compose run --rm -u root -e UPDATE_QUERY_SNAPSHOTS=1 \
+  -v "$(pwd)/opengeo-ai-assistant/container-app/tests:/app/tests" \
+  backend \
+  sh -c "pip install --no-cache-dir pytest pytest-asyncio && pytest tests/test_query_endpoint.py -p no:cacheprovider"
+```
+
+```bash
 #Run frontend tests (from repo root)
 
 cd opengeo-ai-assistant/web-ui && npm run test:run

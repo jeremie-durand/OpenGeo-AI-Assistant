@@ -1,7 +1,9 @@
 """Translate the natural-language query into STAC search parameters."""
 
+import calendar as cal_mod
 import json
 import logging
+import re
 import traceback
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -21,9 +23,6 @@ def apply_regex_datetime_fallback(state: QueryState) -> None:
     A deterministic safety net for when the LLM datetime agent found nothing.
     """
     if not state.stac_query.get("datetime") and state.natural_query:
-        import calendar as cal_mod
-        import re
-
         query_lower = state.natural_query.lower()
         month_names = {
             "january": 1,

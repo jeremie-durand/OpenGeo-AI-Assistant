@@ -346,23 +346,23 @@ async def classify_router_action(state: QueryState) -> None:
                 "router_action": state.router_action,
             }
         elif action_type == "gis_feature_query":
-            _vector_base = os.getenv("VECTOR_API_URL", "http://vector-api:8080").rstrip(
+            vector_base = os.getenv("VECTOR_API_URL", "http://vector-api:8080").rstrip(
                 "/"
             )
             collection = state.router_action.get("collection", "")
             feature_id = state.router_action.get("feature_id", "")
             try:
-                async with aiohttp.ClientSession() as _sess:
-                    async with _sess.get(
-                        f"{_vector_base}/parquet/collections/{collection}/items/{feature_id}",
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        f"{vector_base}/parquet/collections/{collection}/items/{feature_id}",
                         headers={"Accept": "application/geo+json"},
-                    ) as _fr:
-                        feature = await _fr.json()
-                    async with _sess.get(
+                    ) as feature_resp:
+                        feature = await feature_resp.json()
+                    async with session.get(
                         f"{_stac_base}/collections",
                         headers={"Accept": "application/json"},
-                    ) as _sr:
-                        stac = await _sr.json()
+                    ) as stac_resp:
+                        stac = await stac_resp.json()
                 props = feature.get("properties", {})
                 cols = [c["id"] for c in stac.get("collections", [])]
                 synthesised_query = (
@@ -377,8 +377,8 @@ async def classify_router_action(state: QueryState) -> None:
                     "needs_stac_search": False,
                     "needs_vision_analysis": False,
                 }
-            except Exception as _e:
-                logger.warning(f"GIS feature query failed: {_e}")
+            except Exception as error:
+                logger.warning(f"GIS feature query failed: {error}")
             state.classification = {
                 "intent_type": "contextual",
                 "confidence": 0.95,
