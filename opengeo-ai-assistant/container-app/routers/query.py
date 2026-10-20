@@ -147,8 +147,12 @@ async def unified_query_processor(body: QueryRequest):
             qs_stac_query = build_stac_query(qs_stac_params)
 
             # Execute STAC search — route to local STAC if configured, else Planetary Computer
-            qs_stac_endpoint = app_state.global_translator.determine_stac_source(
-                natural_query, qs_stac_params
+            qs_stac_endpoint = (
+                app_state.global_translator.determine_stac_source(
+                    natural_query, qs_stac_params
+                )
+                if app_state.global_translator
+                else "planetary_computer"
             )
             qs_stac_response = await execute_direct_stac_search(
                 qs_stac_query, qs_stac_endpoint, original_query=natural_query
@@ -1814,8 +1818,10 @@ async def unified_query_processor(body: QueryRequest):
                 )
 
                 # Determine which STAC endpoint to use (intelligent routing from Router Function App)
-                stac_endpoint = translator.determine_stac_source(
-                    natural_query, stac_params
+                stac_endpoint = (
+                    translator.determine_stac_source(natural_query, stac_params)
+                    if translator
+                    else "planetary_computer"
                 )
                 logger.info(f"[SIGNAL] STAC source determined: {stac_endpoint}")
 

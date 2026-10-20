@@ -6299,23 +6299,185 @@
       }
     }
   },
-  "test_keyword_mode_quickstart_query_returns_500": {
-    "calls": [],
-    "errors": [
-      "[FAIL] Unified query processor error: 'NoneType' object has no attribute 'determine_stac_source'",
-      "Traceback (most recent call last):"
+  "test_keyword_mode_quickstart_fast_path": {
+    "calls": [
+      [
+        "stac_search",
+        {
+          "endpoint": "planetary_computer",
+          "original_query": "show sentinel 1 rtc for baltimore",
+          "query": {
+            "bbox": [
+              -76.71,
+              39.2,
+              -76.53,
+              39.37
+            ],
+            "collections": [
+              "sentinel-1-rtc"
+            ],
+            "limit": 50,
+            "sortby": [
+              {
+                "direction": "desc",
+                "field": "datetime"
+              }
+            ]
+          }
+        }
+      ]
     ],
+    "errors": [],
     "response": {
-      "detail": "Query processing failed",
-      "http_error": 500
+      "data": {
+        "query_classification": {
+          "confidence": 1.0,
+          "intent_type": "stac",
+          "needs_contextual_info": false,
+          "needs_satellite_data": true
+        },
+        "search_metadata": {
+          "collections_searched": [
+            "sentinel-1-rtc"
+          ],
+          "search_timestamp": "<volatile>",
+          "spatial_extent": [
+            -76.71,
+            39.2,
+            -76.53,
+            39.37
+          ],
+          "temporal_range": null,
+          "total_items": 1
+        },
+        "stac_results": {
+          "features": [
+            {
+              "assets": {
+                "tilejson": {
+                  "href": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=sentinel-1-rtc&item=S1_1&assets=vv&colormap_name=greys&rescale=-25,0",
+                  "type": "application/json"
+                },
+                "visual": {
+                  "href": "https://data.test/S1_1.tif",
+                  "type": "image/tiff; application=geotiff"
+                }
+              },
+              "bbox": [
+                -76.7,
+                39.2,
+                -76.5,
+                39.4
+              ],
+              "collection": "sentinel-1-rtc",
+              "id": "S1_1",
+              "properties": {
+                "datetime": "2024-06-01T10:00:00Z",
+                "eo:cloud_cover": 5.0
+              },
+              "type": "Feature"
+            }
+          ],
+          "type": "FeatureCollection"
+        }
+      },
+      "debug": {
+        "fast_path": true,
+        "fast_path_elapsed_ms": "<volatile>",
+        "semantic_translator": {
+          "available": true,
+          "location_info": {
+            "bbox": [
+              -76.71,
+              39.2,
+              -76.53,
+              39.37
+            ],
+            "location_name": "Baltimore"
+          },
+          "selected_collections": [
+            "sentinel-1-rtc"
+          ]
+        }
+      },
+      "response": "Loaded 1 Sentinel-1 RTC tiles for Baltimore. 10m Sentinel-1 Radiometrically Terrain Corrected SAR. Most recent tile: 2024-06-01.",
+      "success": true,
+      "translation_metadata": {
+        "all_tile_urls": [
+          {
+            "bbox": [
+              -76.7,
+              39.2,
+              -76.5,
+              39.4
+            ],
+            "item_id": "S1_1",
+            "tilejson_url": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=sentinel-1-rtc&item=S1_1&assets=vv&colormap_name=greys&rescale=-25,0"
+          }
+        ],
+        "mosaic_tilejson": null,
+        "original_query": "show sentinel 1 rtc for baltimore",
+        "stac_query": {
+          "bbox": [
+            -76.71,
+            39.2,
+            -76.53,
+            39.37
+          ],
+          "collections": [
+            "sentinel-1-rtc"
+          ],
+          "limit": 50,
+          "sortby": [
+            {
+              "direction": "desc",
+              "field": "datetime"
+            }
+          ]
+        },
+        "translated_params": {
+          "bbox": [
+            -76.71,
+            39.2,
+            -76.53,
+            39.37
+          ],
+          "collections": [
+            "sentinel-1-rtc"
+          ],
+          "datetime": null,
+          "is_quickstart": true,
+          "location_name": "Baltimore"
+        },
+        "translation_timestamp": "<volatile>"
+      }
     },
     "session_contexts": null
   },
-  "test_keyword_mode_without_translator": {
-    "calls": [],
-    "errors": [
-      "[FAIL] STAC search execution error: 'NoneType' object has no attribute 'determine_stac_source'"
+  "test_keyword_mode_searches_planetary_computer": {
+    "calls": [
+      [
+        "stac_search",
+        {
+          "endpoint": "planetary_computer",
+          "original_query": "Show Sentinel-2 imagery of Paris",
+          "query": {
+            "collections": [
+              "sentinel-2-l2a",
+              "landsat-c2-l2"
+            ],
+            "limit": 20,
+            "sortby": [
+              {
+                "direction": "desc",
+                "field": "datetime"
+              }
+            ]
+          }
+        }
+      ]
     ],
+    "errors": [],
     "response": {
       "data": {
         "query_classification": null,
@@ -6327,10 +6489,36 @@
           "search_timestamp": "<volatile>",
           "spatial_extent": null,
           "temporal_range": null,
-          "total_items": 0
+          "total_items": 1
         },
         "stac_results": {
-          "features": [],
+          "features": [
+            {
+              "assets": {
+                "tilejson": {
+                  "href": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=sentinel-2-l2a&item=S2A_1&assets=B04&assets=B03&assets=B02&rescale=0,3000&color_formula=gamma+RGB+2.7%2C+saturation+1.5%2C+sigmoidal+RGB+15+0.55",
+                  "type": "application/json"
+                },
+                "visual": {
+                  "href": "https://data.test/S2A_1.tif",
+                  "type": "image/tiff; application=geotiff"
+                }
+              },
+              "bbox": [
+                2.2,
+                48.8,
+                2.5,
+                48.95
+              ],
+              "collection": "sentinel-2-l2a",
+              "id": "S2A_1",
+              "properties": {
+                "datetime": "2024-06-01T10:00:00Z",
+                "eo:cloud_cover": 5.0
+              },
+              "type": "Feature"
+            }
+          ],
           "type": "FeatureCollection"
         }
       },
@@ -6365,14 +6553,57 @@
             },
             {
               "data": {
+                "feature_count": 1,
+                "first_feature_bbox": [
+                  2.2,
+                  48.8,
+                  2.5,
+                  48.95
+                ],
+                "first_feature_id": "S2A_1"
+              },
+              "stage": "OUTPUT",
+              "step": "STAC_SEARCH",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "has_more": false,
+                "skipped_invalid_bbox": 0,
+                "tile_count": 1,
+                "tile_ids": [
+                  "S2A_1"
+                ]
+              },
+              "stage": "OUTPUT",
+              "step": "TILE_URLS",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "bbox": [
+                  2.2,
+                  48.8,
+                  2.5,
+                  48.95
+                ],
+                "height_deg": 0.15,
+                "width_deg": 0.3
+              },
+              "stage": "OUTPUT",
+              "step": "UNION_BBOX",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
                 "collections": [
                   "sentinel-2-l2a",
                   "landsat-c2-l2"
                 ],
                 "has_mosaic": false,
                 "success": true,
-                "total_features": 0,
-                "total_tiles": 0
+                "total_features": 1,
+                "total_tiles": 1
               },
               "stage": "OUTPUT",
               "step": "RESPONSE",
@@ -6390,6 +6621,12 @@
             "original_query": "Show Sentinel-2 imagery of Paris",
             "processing_timestamp": "<volatile>",
             "stac_parameters": {
+              "bbox": [
+                2.2,
+                48.8,
+                2.5,
+                48.95
+              ],
               "collections": [
                 "sentinel-2-l2a",
                 "landsat-c2-l2"
@@ -6404,10 +6641,21 @@
           ]
         }
       },
-      "response": "I searched for satellite data related to 'Show Sentinel-2 imagery of Paris', but didn't find any available imagery matching your criteria. \n**Suggestions to find results:** - **Verify data availability**: Searched sentinel-2-l2a, landsat-c2-l2 - confirm this data exists for your location and time period.",
+      "response": "I can help you find Earth science data, but I need more specific information about the location, time period, or type of imagery you're looking for.",
       "success": true,
       "translation_metadata": {
-        "all_tile_urls": null,
+        "all_tile_urls": [
+          {
+            "bbox": [
+              2.2,
+              48.8,
+              2.5,
+              48.95
+            ],
+            "item_id": "S2A_1",
+            "tilejson_url": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=sentinel-2-l2a&item=S2A_1&assets=B04&assets=B03&assets=B02&rescale=0,3000&color_formula=gamma+RGB+2.7%2C+saturation+1.5%2C+sigmoidal+RGB+15+0.55"
+          }
+        ],
         "mosaic_tilejson": null,
         "original_query": "Show Sentinel-2 imagery of Paris",
         "stac_query": {
@@ -6424,6 +6672,12 @@
           ]
         },
         "translated_params": {
+          "bbox": [
+            2.2,
+            48.8,
+            2.5,
+            48.95
+          ],
           "collections": [
             "sentinel-2-l2a",
             "landsat-c2-l2"

@@ -627,20 +627,22 @@ def calls_named(result: Dict[str, Any], name: str) -> List[Any]:
 # --- intake and keyword mode ---------------------------------------------
 
 
-def test_keyword_mode_without_translator(harness: Harness, check: Callable) -> None:
-    """Current bug: search is skipped because determine_stac_source hits None."""
+def test_keyword_mode_searches_planetary_computer(
+    harness: Harness, check: Callable
+) -> None:
+    harness.stac_responses = [results(feature("S2A_1"))]
     result = harness.run(query="Show Sentinel-2 imagery of Paris")
-    assert result["response"]["success"] is True
-    assert calls_named(result, "stac_search") == []
+    (search,) = calls_named(result, "stac_search")
+    assert search["endpoint"] == "planetary_computer"
     check(result)
 
 
-def test_keyword_mode_quickstart_query_returns_500(
-    harness: Harness, check: Callable
-) -> None:
-    """Current bug: the fast path calls determine_stac_source on None."""
+def test_keyword_mode_quickstart_fast_path(harness: Harness, check: Callable) -> None:
+    harness.stac_responses = [
+        results(feature("S1_1", "sentinel-1-rtc", [-76.7, 39.2, -76.5, 39.4]))
+    ]
     result = harness.run(query="show sentinel 1 rtc for baltimore", session_id=SESSION)
-    assert result["response"] == SERVER_ERROR
+    assert result["response"]["debug"]["fast_path"] is True
     check(result)
 
 
