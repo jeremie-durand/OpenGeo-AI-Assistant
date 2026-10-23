@@ -728,44 +728,44 @@ CONTEXT:
 - AFTER: {after_date}
 - Time span: {_calculate_time_span(before_date, after_date)}
 - Focus area: {aspect_focus}
-- Data collection: {collection_id or 'N/A'}
-- User query: {user_query or 'Compare before and after imagery'}
+- Data collection: {collection_id or "N/A"}
+- User query: {user_query or "Compare before and after imagery"}
 
 {image_description}
 
 ANALYSIS INSTRUCTIONS:
 1. Compare the VISUAL changes in map screenshots (urban areas, land cover, etc.)
-2. {'Analyze QUANTITATIVE changes in raster data (intensity values, patterns, spatial distribution)' if before_raster_base64 and after_raster_base64 else 'Focus on visual patterns and changes'}
-3. {'Correlate visual observations with numerical raster measurements' if before_raster_base64 and after_raster_base64 else 'Provide detailed visual assessment'}
+2. {"Analyze QUANTITATIVE changes in raster data (intensity values, patterns, spatial distribution)" if before_raster_base64 and after_raster_base64 else "Focus on visual patterns and changes"}
+3. {"Correlate visual observations with numerical raster measurements" if before_raster_base64 and after_raster_base64 else "Provide detailed visual assessment"}
 4. Identify change hotspots and spatial patterns
 5. Focus on: {aspect_focus}
 
 Provide analysis in this format:
 
 **1. Change Summary**
-Brief overview of most significant changes observed (both visual and {'quantitative' if before_raster_base64 and after_raster_base64 else 'spatial'})
+Brief overview of most significant changes observed (both visual and {"quantitative" if before_raster_base64 and after_raster_base64 else "spatial"})
 
 **2. Specific Changes Detected**
-- Change 1: [description with spatial details and {'intensity values' if before_raster_base64 and after_raster_base64 else 'visual characteristics'}]
-- Change 2: [description with spatial details and {'intensity values' if before_raster_base64 and after_raster_base64 else 'visual characteristics'}]
-- Change 3: [description with spatial details and {'intensity values' if before_raster_base64 and after_raster_base64 else 'visual characteristics'}]
+- Change 1: [description with spatial details and {"intensity values" if before_raster_base64 and after_raster_base64 else "visual characteristics"}]
+- Change 2: [description with spatial details and {"intensity values" if before_raster_base64 and after_raster_base64 else "visual characteristics"}]
+- Change 3: [description with spatial details and {"intensity values" if before_raster_base64 and after_raster_base64 else "visual characteristics"}]
 
-{'**3. Quantitative Raster Analysis**' if before_raster_base64 and after_raster_base64 else '**3. Visual Pattern Analysis**'}
-{f'- Compare {raster_type} values between before and after' if before_raster_base64 and after_raster_base64 else '- Describe visual patterns and textures'}
-{'- Identify areas with highest/lowest values and changes' if before_raster_base64 and after_raster_base64 else '- Identify visual anomalies and features'}
-{'- Correlate raster intensity with visual map features' if before_raster_base64 and after_raster_base64 else '- Describe color and texture changes'}
+{"**3. Quantitative Raster Analysis**" if before_raster_base64 and after_raster_base64 else "**3. Visual Pattern Analysis**"}
+{f"- Compare {raster_type} values between before and after" if before_raster_base64 and after_raster_base64 else "- Describe visual patterns and textures"}
+{"- Identify areas with highest/lowest values and changes" if before_raster_base64 and after_raster_base64 else "- Identify visual anomalies and features"}
+{"- Correlate raster intensity with visual map features" if before_raster_base64 and after_raster_base64 else "- Describe color and texture changes"}
 
-**{'4' if before_raster_base64 and after_raster_base64 else '4'}. Analysis by Region**
+**{"4" if before_raster_base64 and after_raster_base64 else "4"}. Analysis by Region**
 Northeast: [observations]
 Southeast: [observations]
 Southwest: [observations]
 Northwest: [observations]
 Central: [observations]
 
-**{'5' if before_raster_base64 and after_raster_base64 else '5'}. Temporal Assessment**
+**{"5" if before_raster_base64 and after_raster_base64 else "5"}. Temporal Assessment**
 How the {aspect_focus} has evolved over the {_calculate_time_span(before_date, after_date)} period
 
-**{'6' if before_raster_base64 and after_raster_base64 else '6'}. Confidence & Limitations**
+**{"6" if before_raster_base64 and after_raster_base64 else "6"}. Confidence & Limitations**
 - Confidence level in change detection
 - Any limiting factors (clouds, resolution, data gaps, etc.)
 """

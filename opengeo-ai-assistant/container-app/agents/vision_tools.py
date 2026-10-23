@@ -279,9 +279,10 @@ def _compute_ndvi_sync(
         }
 
         with rasterio.Env(**env_options):
-            with rasterio.open(signed_red) as red_src, rasterio.open(
-                signed_nir
-            ) as nir_src:
+            with (
+                rasterio.open(signed_red) as red_src,
+                rasterio.open(signed_nir) as nir_src,
+            ):
                 if bbox:
                     # Reproject bbox from EPSG:4326 to raster's native CRS if needed
                     if red_src.crs and str(red_src.crs) != "EPSG:4326":

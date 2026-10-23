@@ -1293,7 +1293,7 @@ User asks an educational/factual question.
 - "Show me Athens" -> NAVIGATE_TO (no data concept, just a place)
 
 ## KNOWN LOCATIONS (sample):
-{', '.join(location_samples)}
+{", ".join(location_samples)}
 (Plus any geographic place name: cities, countries, regions, landmarks, etc.)
 
 Respond with ONLY valid JSON (no markdown):

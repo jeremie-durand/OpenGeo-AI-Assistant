@@ -210,10 +210,10 @@ async def run_tests(
         for loc_key in locations:
             loc = TEST_LOCATIONS[loc_key]
             lat, lng = loc["lat"], loc["lng"]
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"Location: {loc['name']} ({lat}, {lng})")
             print(f"Notes: {loc['notes']}")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
 
             for module in modules:
                 session_id = str(uuid.uuid4())
@@ -335,9 +335,9 @@ async def run_tests(
 
 def print_summary(results: list[TestResult]):
     """Print a summary table of all test results."""
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("SUMMARY")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     if HAS_RICH:
         table = Table(title="Pin-Drop Test Results")

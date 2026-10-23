@@ -300,10 +300,11 @@ class ChatVisionAnalyzer:
                     center_lat + radius_deg,
                 ]
 
-                image_bytes, sentinel_metadata = (
-                    await vision_analyzer._fetch_satellite_image(
-                        bbox, center_lat, center_lng
-                    )
+                (
+                    image_bytes,
+                    sentinel_metadata,
+                ) = await vision_analyzer._fetch_satellite_image(
+                    bbox, center_lat, center_lng
                 )
 
                 if image_bytes:

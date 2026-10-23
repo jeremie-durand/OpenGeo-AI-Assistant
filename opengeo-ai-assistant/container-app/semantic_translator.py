@@ -5729,7 +5729,6 @@ Location to analyze: {location_name}"""
                                                 and west < east
                                                 and south < north
                                             ):
-
                                                 logger.info(
                                                     f"[OK] Successfully resolved {location_name}: {bbox} (confidence: {confidence:.2f}, strategy: {strategy_name})"
                                                 )
