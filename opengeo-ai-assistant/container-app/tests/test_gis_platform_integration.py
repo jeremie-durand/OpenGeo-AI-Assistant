@@ -132,9 +132,7 @@ class TestStructuredFeatureDataRouting:
     async def test_routing_reason_is_structured_feature_data(self):
         """Pre-check must set routing_reason='structured_feature_data_context'."""
         agent = _agent_with_buggy_llm()
-        query = (
-            "Parcel ID: 4842\nRecorded attributes:\n  suphec: 8.2\n" "Please analyse."
-        )
+        query = "Parcel ID: 4842\nRecorded attributes:\n  suphec: 8.2\nPlease analyse."
         result = await agent.route_query(query, _SESSION_ID)
         assert result.get("routing_reason") == "structured_feature_data_context", (
             f"Got routing_reason='{result.get('routing_reason')}', "

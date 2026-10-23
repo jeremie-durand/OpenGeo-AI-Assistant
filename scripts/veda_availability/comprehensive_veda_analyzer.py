@@ -301,15 +301,15 @@ class VEDAAnalyzer:
         # Generate report
         report = f"""
 # VEDA Collection Analysis Report
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 ## Summary Statistics
 - **Total Collections Tested**: {total_collections}
-- **Excellent Collections**: {status_counts['excellent']} ({status_counts['excellent']/total_collections*100:.1f}%)
-- **Good Collections**: {status_counts['good']} ({status_counts['good']/total_collections*100:.1f}%)
-- **Limited Collections**: {status_counts['limited']} ({status_counts['limited']/total_collections*100:.1f}%)
-- **Unavailable Collections**: {status_counts['unavailable']} ({status_counts['unavailable']/total_collections*100:.1f}%)
-- **Error Collections**: {status_counts['error']} ({status_counts['error']/total_collections*100:.1f}%)
+- **Excellent Collections**: {status_counts["excellent"]} ({status_counts["excellent"] / total_collections * 100:.1f}%)
+- **Good Collections**: {status_counts["good"]} ({status_counts["good"] / total_collections * 100:.1f}%)
+- **Limited Collections**: {status_counts["limited"]} ({status_counts["limited"] / total_collections * 100:.1f}%)
+- **Unavailable Collections**: {status_counts["unavailable"]} ({status_counts["unavailable"] / total_collections * 100:.1f}%)
+- **Error Collections**: {status_counts["error"]} ({status_counts["error"] / total_collections * 100:.1f}%)
 
 ## Working Collections ({len(working_collections)} total)
 
@@ -386,7 +386,6 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         """Categorize collection based on ID and metadata"""
         collection_lower = collection_id.lower()
         title_lower = metadata.get("title", "").lower()
-        desc_lower = metadata.get("description", "").lower()
 
         # Category mapping based on keywords
         if any(

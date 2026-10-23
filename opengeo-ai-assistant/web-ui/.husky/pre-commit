@@ -7,7 +7,7 @@ if command -v pre-commit >/dev/null 2>&1; then
 fi
 #
 # Frontend hooks (prettier via lint-staged)
-(cd opengeo-ai-assistant/web-ui && npx lint-staged)
+(cd "$(git rev-parse --show-toplevel)/opengeo-ai-assistant/web-ui" && npx lint-staged)
 #
 # Review gate: staged changes must match an approved /review-opengaa run
 scripts/review-opengaa-stamp.sh check
