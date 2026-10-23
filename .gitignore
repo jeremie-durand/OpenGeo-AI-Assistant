@@ -443,7 +443,9 @@ FodyWeavers.xsd
 *.msp
 
 # AI code generation files
-.claude/
+.claude/*
+!.claude/agents/
+!.claude/commands/
 openspec/
 .github/prompts
 .github/skills

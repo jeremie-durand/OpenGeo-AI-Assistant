@@ -52,7 +52,10 @@ The project uses **Husky + lint-staged** (frontend) and **pre-commit** (backend)
 ```bash
 cd opengeo-ai-assistant/web-ui && npm install
 # Husky installs the git hook automatically via the `prepare` script.
-# The hook calls pre-commit (Python) first, then lint-staged (frontend).
+# Existing clones: re-run `npm install` after pulling the review gate, so the
+# hook path is updated. Otherwise no hook (and no gate) runs.
+# The hook calls pre-commit (Python) first, then lint-staged (frontend),
+# then the /review-opengaa approval gate (see "Code review before commit").
 
 pip install pre-commit
 # No need to run `pre-commit install` — Husky handles the hook.
@@ -70,7 +73,8 @@ cd opengeo-ai-assistant/web-ui && npm install
 ```bash
 pip install pre-commit
 # Run manually: pre-commit run --all-files
-# Or install as a standalone hook (only if you are NOT running npm install in web-ui):
+# Or install as a standalone hook (only if you are NOT running npm install in web-ui).
+# The standalone hook also enforces the /review-opengaa approval gate:
 pre-commit install
 ```
 
@@ -169,6 +173,35 @@ Use the following prefixes:
 | `chore:` | Build, config, dependency updates |
 
 Example: `feat: add cloud cover filter to STAC query`
+
+### Code review before commit
+
+Every commit has to pass a senior-developer review by the `opengaa-reviewer`
+agent, which you run with [Claude Code](https://claude.com/claude-code). The
+review covers tests, security, error handling, architecture fit, operability and
+performance. The commit hook (see [Git hooks setup](#git-hooks-setup)) rejects
+any commit whose staged changes have not been approved.
+
+```bash
+git add <files>
+# In Claude Code, from the repo root:
+/review-opengaa
+git commit -m "feat: ..."
+```
+
+- `/review-opengaa` runs the formatters first, then reviews **exactly the
+  staged changes**. Findings are ranked **Blocker**, **Should-fix** or **Nit**.
+- **VERDICT: APPROVE** means there are no Blockers. Approval is recorded for
+  the current staged diff and HEAD (in `.git/review-opengaa.stamp`, which is
+  never committed).
+- **VERDICT: REQUEST CHANGES** means at least one Blocker. Fix it, re-stage
+  and run `/review-opengaa` again.
+- Staging anything after approval needs a new review.
+- Merge commits are exempt, and so are commits with nothing staged (for
+  example `git commit --amend` that only changes the message).
+- **Bypass:** `git commit --no-verify` skips the gate and every other hook.
+  Use it deliberately, for example if you don't have Claude Code, and expect
+  the PR review to cover what the gate would have.
 
 ### Key rules
 

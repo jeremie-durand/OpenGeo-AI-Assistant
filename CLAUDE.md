@@ -178,6 +178,8 @@ RATE_LIMIT_SEARCH=30/minute
 
 - Agent orchestration uses `semantic_kernel` 1.36.2. Follow existing agent patterns in `geoint/` when adding new agents.
 
+- Before any `git commit`, run `/review-opengaa` on the staged changes. Never use `git commit --no-verify` unless the user explicitly asks.
+
 ### Python: Key Patterns to Follow
 
 - Type hints required for all code
