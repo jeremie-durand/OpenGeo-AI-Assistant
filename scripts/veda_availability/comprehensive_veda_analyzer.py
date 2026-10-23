@@ -386,7 +386,6 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         """Categorize collection based on ID and metadata"""
         collection_lower = collection_id.lower()
         title_lower = metadata.get("title", "").lower()
-        desc_lower = metadata.get("description", "").lower()
 
         # Category mapping based on keywords
         if any(

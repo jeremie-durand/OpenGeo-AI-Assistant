@@ -207,11 +207,6 @@ if __name__ == "__main__":
     print("=" * 60)
 
 
-def strip_emojis(text):
-    """Remove all emoji characters from text."""
-    return EMOJI_PATTERN.sub("", text)
-
-
 if __name__ == "__main__":
     print("=" * 60)
     print("Emoji Removal - Full Repo Scan")
