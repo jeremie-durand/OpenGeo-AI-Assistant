@@ -87,7 +87,7 @@ docker-compose.yml     # Two services: backend (port 8000) + frontend (port 3000
 ### Frontend (`web-ui/src/`)
 
 - Entry: `main.tsx` → `App.tsx`
-- Key components: `MapView` (Leaflet), `ChatPanel`, `CatalogPanel`, `GeointOverlay`, `ModelSelector`
+- Key components: `MapView` (Leaflet), `ChatPanel`, `CatalogPanel`, `GeointOverlay`, `ModelSelector`, `DashboardPanel` (`components/dashboard/`, data availability for the map view)
 - State: React hooks + TanStack Query for server state
 - API client: `services/api.ts` proxied to `localhost:8000` in dev (`vite.config.ts`)
 
@@ -105,6 +105,11 @@ docker-compose.yml     # Two services: backend (port 8000) + frontend (port 3000
    → STAC search → message → tile rendering → response. Stages share one
    `QueryState`; `tests/test_query_endpoint.py` snapshots the end-to-end behavior.
 3. GEOINT requests (`/api/geoint/*`) → `geoint/router_agent.py` → specialized agent
+4. Dashboard (`routers/dashboard.py`): `GET /api/dashboard/collections` serves the
+   cached renderable catalog (`services/dashboard_catalog.py`);
+   `POST /api/dashboard/stats` runs one trimmed STAC search for the focused
+   collection (`services/dashboard_stats.py`). `/api/query` accepts the
+   dashboard's `dashboard_context` (`services/query_pipeline/dashboard_context.py`)
 
 **LLM Abstraction:**
 
