@@ -1,8 +1,9 @@
 """Execute the STAC search, filter tiles and recover from empty results."""
 
 import logging
+import math
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import app_state
 from services.collection_detection import detect_collections
@@ -164,13 +165,53 @@ def select_features(state: QueryState, raw_features: List[Dict[str, Any]]) -> No
     state.stac_response["results"]["features"] = state.features
 
 
+def _contains(bbox: List[float], lon: float, lat: float) -> bool:
+    """True when the point lies in a [west, south, east, north] bbox."""
+    west, south, east, north = bbox
+    return west <= lon <= east and south <= lat <= north
+
+
+def _center(bbox: List[float]) -> Tuple[float, float]:
+    """Return the (lon, lat) center of a [west, south, east, north] bbox."""
+    west, south, east, north = bbox
+    return (west + east) / 2, (south + north) / 2
+
+
+def _tile_bbox(feature: Dict[str, Any]) -> Optional[List[float]]:
+    """Return the feature's 2D bbox, or None when it has none."""
+    bbox = feature.get("bbox")
+    return list(bbox[:4]) if bbox and len(bbox) >= 4 else None
+
+
+def _select_modis_tiles(
+    tiles: List[Dict[str, Any]], requested_bbox: List[float]
+) -> List[Dict[str, Any]]:
+    """Keep the tiles centered in the bbox, else the closest tile holding its center.
+
+    The fallback serves views smaller than a ~10 degree tile. Only one tile is
+    kept there because neighbouring sinusoidal tile bboxes overlap.
+    """
+    centered = [t for t in tiles if _contains(requested_bbox, *_center(_tile_bbox(t)))]
+    if centered:
+        return centered
+    lon, lat = _center(requested_bbox)
+    holding = [t for t in tiles if _contains(_tile_bbox(t), lon, lat)]
+    if not holding:
+        return []
+    closest = min(
+        holding,
+        key=lambda t: math.dist(_center(_tile_bbox(t)), (lon, lat)),
+    )
+    return [closest]
+
+
 def filter_modis_tiles(
     state: QueryState,
     raw_features: List[Dict[str, Any]],
     requested_bbox: Optional[List[float]],
     is_modis: bool,
 ) -> List[Dict[str, Any]]:
-    """Drop MODIS tiles whose center lies outside the requested bbox.
+    """Keep the MODIS tiles that cover the requested bbox (see _select_modis_tiles).
 
     The sinusoidal MODIS grid makes the STAC bbox filter loose (Arizona tiles
     for a California query).
@@ -183,29 +224,12 @@ def filter_modis_tiles(
             f"   Requested bbox: [{requested_bbox[0]:.2f}, {requested_bbox[1]:.2f}, {requested_bbox[2]:.2f}, {requested_bbox[3]:.2f}]"
         )
 
-        filtered_features = []
-        req_west, req_south, req_east, req_north = requested_bbox
+        if requested_bbox[0] > requested_bbox[2]:
+            logger.info("[MAP]  MODIS BBOX FILTER: skipped, bbox crosses 180")
+            return raw_features
 
-        for feature in raw_features:
-            tile_bbox = feature.get("bbox")
-            if not tile_bbox or len(tile_bbox) < 4:
-                continue
-
-            # Calculate tile center
-            tile_west, tile_south, tile_east, tile_north = tile_bbox[:4]
-            tile_center_lon = (tile_west + tile_east) / 2
-            tile_center_lat = (tile_south + tile_north) / 2
-
-            # Check if tile center is within requested bbox
-            if (
-                req_west <= tile_center_lon <= req_east
-                and req_south <= tile_center_lat <= req_north
-            ):
-                filtered_features.append(feature)
-            else:
-                logger.debug(
-                    f"   [FAIL] Filtered out tile with center ({tile_center_lon:.2f}, {tile_center_lat:.2f}) outside bbox"
-                )
+        with_bbox = [f for f in raw_features if _tile_bbox(f)]
+        filtered_features = _select_modis_tiles(with_bbox, requested_bbox)
 
         logger.info(
             f"[OK] MODIS BBOX FILTER: Kept {len(filtered_features)}/{len(raw_features)} tiles within requested bbox"

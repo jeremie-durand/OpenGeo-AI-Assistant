@@ -1,6 +1,10 @@
 """Pure helpers shared by the /api/query pipeline stages."""
 
+from types import SimpleNamespace
+from typing import List
+
 from services.query_pipeline.response import summarize_stac_items
+from services.query_pipeline.search import filter_modis_tiles
 from services.query_pipeline.tiles import (
     has_numeric_bbox,
     needs_optical_mosaic,
@@ -79,3 +83,42 @@ def test_summarize_stac_items_keeps_vision_fields() -> None:
 
 def test_summarize_stac_items_keeps_first_ten() -> None:
     assert len(summarize_stac_items([ITEM] * 12, include_cloud_cover_alias=True)) == 10
+
+
+SMALL_VIEW = [-72.0, 45.3, -71.8, 45.5]
+TILE_AROUND_VIEW = [-93.3, 40.0, -65.3, 50.0]
+
+
+def _kept_modis_tiles(tile_bboxes: List[List[float]], bbox: List[float]) -> List[str]:
+    state = SimpleNamespace(search_diagnostics={})
+    tiles = [{"id": str(i), "bbox": b} for i, b in enumerate(tile_bboxes)]
+    kept = filter_modis_tiles(state, tiles, bbox, True)
+    return [t["id"] for t in kept]
+
+
+def test_modis_filter_keeps_tile_containing_a_small_view() -> None:
+    assert _kept_modis_tiles([TILE_AROUND_VIEW], SMALL_VIEW) == ["0"]
+
+
+def test_modis_filter_drops_tile_not_containing_the_view_center() -> None:
+    assert _kept_modis_tiles([[10, 10, 11, 11]], SMALL_VIEW) == []
+
+
+def test_modis_filter_keeps_tiles_centered_in_a_large_view() -> None:
+    large = [-125.0, 32.0, -114.0, 42.0]
+    assert _kept_modis_tiles([[-122, 35, -118, 39], [-112, 30, -100, 40]], large) == [
+        "0"
+    ]
+
+
+def test_modis_filter_keeps_only_the_closest_overlapping_tile() -> None:
+    west_tile, east_tile = [-90.0, 40.0, -65.0, 50.0], [-75.0, 40.0, -52.0, 50.0]
+    assert _kept_modis_tiles([west_tile, east_tile], SMALL_VIEW) == ["0"]
+
+
+def test_modis_filter_skips_a_view_across_the_antimeridian() -> None:
+    fiji = [177.0, -19.0, -179.0, -16.0]
+    assert _kept_modis_tiles([[170, -20, 180, -10], [10, 10, 11, 11]], fiji) == [
+        "0",
+        "1",
+    ]
