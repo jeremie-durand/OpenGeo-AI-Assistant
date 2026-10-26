@@ -131,7 +131,11 @@ def summarize(
 
 
 async def search_features(body: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Run one search against Planetary Computer and return its features."""
+    """Run one search against Planetary Computer and return its features.
+
+    Always queries Planetary Computer, even when STAC_API_URL points
+    elsewhere, because the catalog's collections come from Planetary Computer.
+    """
     timeout = aiohttp.ClientTimeout(total=SEARCH_TIMEOUT_SECONDS)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(

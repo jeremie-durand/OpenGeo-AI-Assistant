@@ -41,3 +41,15 @@ def reset_llm_singleton():
     _lc._global_client = None
     yield
     _lc._global_client = None
+
+
+@pytest.fixture(autouse=True)
+def offline_dashboard_catalog(monkeypatch):
+    """Keep the startup catalog warm-up off the network; tests patch their own."""
+    import aiohttp
+    from services import dashboard_catalog
+
+    async def offline():
+        raise aiohttp.ClientConnectionError("network disabled in tests")
+
+    monkeypatch.setattr(dashboard_catalog, "fetch_upstream_collections", offline)

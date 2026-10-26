@@ -7,7 +7,10 @@ from typing import Any, Dict, Optional
 
 import app_state
 from services.pipeline_trace import log_pipeline_step
-from services.query_pipeline.dashboard_context import format_dashboard_hint
+from services.query_pipeline.dashboard_context import (
+    format_dashboard_hint,
+    is_dashboard_question,
+)
 from services.query_pipeline.state import QueryState
 from services.query_pipeline.vision import run_vision
 
@@ -154,7 +157,11 @@ async def answer_contextual(state: QueryState) -> Optional[Dict[str, Any]]:
                     f"[PIN] Enriched contextual query with location: {location_hint}"
                 )
 
-    dashboard_hint = format_dashboard_hint(state.req_body)
+    dashboard_hint = (
+        format_dashboard_hint(state.req_body)
+        if is_dashboard_question(state.req_body)
+        else None
+    )
     if dashboard_hint:
         logger.info("[CHART] Answering from the dashboard context")
 

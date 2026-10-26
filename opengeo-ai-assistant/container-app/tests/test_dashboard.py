@@ -448,7 +448,7 @@ def test_dashboard_hint_ignores_non_renderable_collection() -> None:
     assert _hint(_context(collection="not-renderable")) is None
 
 
-def test_contextual_answer_receives_dashboard_hint() -> None:
+def _contextual_call(query: str) -> Any:
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
 
@@ -460,18 +460,27 @@ def test_contextual_answer_receives_dashboard_hint() -> None:
         )
     )
     state = SimpleNamespace(
-        natural_query="why so few scenes in March?",
+        natural_query=query,
         session_id=None,
-        req_body={"dashboard_context": _context()},
+        req_body={"query": query, "dashboard_context": _context()},
         translator=translator,
         classification={},
         intent_type="contextual",
     )
     asyncio.run(intents.answer_contextual(state))
-    call = translator.generate_contextual_earth_science_response.call_args
+    return translator.generate_contextual_earth_science_response.call_args
+
+
+def test_contextual_answer_receives_dashboard_hint() -> None:
+    call = _contextual_call("why so few scenes in March?")
     assert call.args[0] == "why so few scenes in March?"
     assert call.kwargs["dashboard_hint"].startswith("[Dashboard shown")
     assert "2026-03: 3" in call.kwargs["dashboard_hint"]
+
+
+def test_unrelated_contextual_answer_gets_no_dashboard_hint() -> None:
+    call = _contextual_call("what is NDVI?")
+    assert "dashboard_hint" not in call.kwargs
 
 
 MAP_BOUNDS = {"west": -72.0, "south": 45.3, "east": -71.8, "north": 45.5}
