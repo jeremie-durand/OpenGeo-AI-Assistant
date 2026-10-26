@@ -37,6 +37,6 @@ azure-mgmt-apimanagement>=4.0.0
 # Development and testing
 pytest>=9.1.1
 pytest-asyncio>=1.4.0
-black>=26.5.1
+black>=26.10.1
 mypy>=1.0.0
 watchdog>=3.0.0
