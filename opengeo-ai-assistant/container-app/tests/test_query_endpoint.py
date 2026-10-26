@@ -1230,6 +1230,25 @@ def test_modis_tiles_outside_bbox_are_dropped(
     check(result)
 
 
+def test_modis_tile_containing_a_small_view_is_kept(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(
+        stac_params={**SENTINEL_PARAMS, "collections": ["modis-13Q1-061"]},
+        action=STAC_ACTION,
+    )
+    harness.stac_responses = [
+        results(
+            feature("MOD_AROUND", "modis-13Q1-061", [-3, 40, 12, 50], cloud=None),
+            feature("MOD_OUT", "modis-13Q1-061", [10, 10, 11, 11], cloud=None),
+        )
+    ]
+    result = harness.run(query="Show MODIS vegetation for Paris", session_id=SESSION)
+    features = result["response"]["data"]["stac_results"]["features"]
+    assert [f["id"] for f in features] == ["MOD_AROUND"]
+    check(result)
+
+
 def test_alternatives_used_when_search_empty(harness: Harness, check: Callable) -> None:
     harness.ai_mode(stac_params=SENTINEL_PARAMS, action=STAC_ACTION)
     harness.alternative_result = {

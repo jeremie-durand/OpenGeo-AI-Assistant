@@ -10314,6 +10314,473 @@
       }
     }
   },
+  "test_modis_tile_containing_a_small_view_is_kept": {
+    "calls": [
+      [
+        "translator.set_model",
+        "gpt-5"
+      ],
+      [
+        "translator.get_conversation_context",
+        "session-1"
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_screenshot": false
+          },
+          "session_id": "session-1"
+        }
+      ],
+      [
+        "router.route_query",
+        {
+          "has_screenshot": false,
+          "query": "Show MODIS vegetation for Paris"
+        }
+      ],
+      [
+        "translator.translate_query",
+        {
+          "pin": null,
+          "query": "Show MODIS vegetation for Paris",
+          "session_bbox": null
+        }
+      ],
+      [
+        "translator.determine_stac_source",
+        {
+          "entities": {
+            "bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "collections": [
+              "modis-13Q1-061"
+            ],
+            "datetime": "2024-06-01/2024-06-30",
+            "location_name": "Paris"
+          },
+          "query": "Show MODIS vegetation for Paris"
+        }
+      ],
+      [
+        "stac_search",
+        {
+          "endpoint": "planetary_computer",
+          "original_query": "Show MODIS vegetation for Paris",
+          "query": {
+            "bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "collections": [
+              "modis-13Q1-061"
+            ],
+            "datetime": "2024-06-01/2024-06-30",
+            "limit": 50,
+            "sortby": [
+              {
+                "direction": "desc",
+                "field": "datetime"
+              }
+            ]
+          }
+        }
+      ],
+      [
+        "translator.generate_contextual",
+        {
+          "classification": {
+            "confidence": 0.95,
+            "intent_type": "stac",
+            "needs_contextual_info": false,
+            "needs_satellite_data": true,
+            "needs_vision_analysis": false,
+            "reasoning": "RouterAgent routed to STAC search",
+            "router_action": {
+              "action_type": "stac_search"
+            }
+          },
+          "feature_ids": [
+            "MOD_AROUND"
+          ],
+          "features": 1,
+          "geoint_results": null,
+          "intent": "stac",
+          "query": "Show MODIS vegetation for Paris"
+        }
+      ],
+      [
+        "router.update_session_context",
+        {
+          "context": {
+            "has_rendered_map": true,
+            "last_bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "last_collections": [
+              "modis-13Q1-061"
+            ],
+            "last_location": "Paris",
+            "last_stac_items": [
+              {
+                "assets": {
+                  "tilejson": {
+                    "href": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=modis-13Q1-061&item=MOD_AROUND&assets=visual&asset_bidx=visual%7C1%2C2%2C3&nodata=0",
+                    "type": "application/json"
+                  },
+                  "visual": {
+                    "href": "https://data.test/MOD_AROUND.tif",
+                    "type": "image/tiff; application=geotiff"
+                  }
+                },
+                "bbox": [
+                  -3,
+                  40,
+                  12,
+                  50
+                ],
+                "collection": "modis-13Q1-061",
+                "id": "MOD_AROUND",
+                "properties": {
+                  "cloud_cover": null,
+                  "datetime": "2024-06-01T10:00:00Z",
+                  "eo:cloud_cover": null
+                }
+              }
+            ],
+            "query_count": 1
+          },
+          "session_id": "session-1"
+        }
+      ]
+    ],
+    "errors": [],
+    "response": {
+      "data": {
+        "query_classification": {
+          "confidence": 0.95,
+          "intent_type": "stac",
+          "needs_contextual_info": false,
+          "needs_satellite_data": true
+        },
+        "search_metadata": {
+          "collections_searched": [
+            "modis-13Q1-061"
+          ],
+          "search_timestamp": "<volatile>",
+          "spatial_extent": [
+            2.22,
+            48.81,
+            2.47,
+            48.9
+          ],
+          "temporal_range": "2024-06-01/2024-06-30",
+          "total_items": 1
+        },
+        "stac_results": {
+          "features": [
+            {
+              "assets": {
+                "tilejson": {
+                  "href": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=modis-13Q1-061&item=MOD_AROUND&assets=250m_16_days_NDVI&colormap_name=rdylgn&rescale=-2000,10000",
+                  "type": "application/json"
+                },
+                "visual": {
+                  "href": "https://data.test/MOD_AROUND.tif",
+                  "type": "image/tiff; application=geotiff"
+                }
+              },
+              "bbox": [
+                -3,
+                40,
+                12,
+                50
+              ],
+              "collection": "modis-13Q1-061",
+              "id": "MOD_AROUND",
+              "properties": {
+                "datetime": "2024-06-01T10:00:00Z",
+                "eo:cloud_cover": null
+              },
+              "type": "Feature"
+            }
+          ],
+          "type": "FeatureCollection"
+        }
+      },
+      "debug": {
+        "pipeline_trace": {
+          "session_id": "<pipeline>",
+          "steps": [
+            {
+              "data": {
+                "has_pin": false,
+                "pin_coords": null,
+                "query": "Show MODIS vegetation for Paris",
+                "session_id": "session-1"
+              },
+              "stage": "INPUT",
+              "step": "QUERY_RECEIVED",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "action_type": "stac_search",
+                "needs_stac": false,
+                "needs_vision": false
+              },
+              "stage": "OUTPUT",
+              "step": "ROUTER_AGENT",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "confidence": 0.95,
+                "intent_type": "stac",
+                "modules": [],
+                "needs_satellite_data": true,
+                "needs_vision": false,
+                "reasoning": "RouterAgent routed to STAC search"
+              },
+              "stage": "OUTPUT",
+              "step": "CLASSIFICATION",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "bbox": [
+                  2.22,
+                  48.81,
+                  2.47,
+                  48.9
+                ],
+                "collections": [
+                  "modis-13Q1-061"
+                ],
+                "datetime": "2024-06-01/2024-06-30",
+                "location_name": "Paris"
+              },
+              "stage": "OUTPUT",
+              "step": "SEMANTIC_TRANSLATION",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "bbox": [
+                  2.22,
+                  48.81,
+                  2.47,
+                  48.9
+                ],
+                "collections": [
+                  "modis-13Q1-061"
+                ],
+                "datetime": "2024-06-01/2024-06-30",
+                "filter": null
+              },
+              "stage": "INPUT",
+              "step": "STAC_SEARCH",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "feature_count": 2,
+                "first_feature_bbox": [
+                  -3,
+                  40,
+                  12,
+                  50
+                ],
+                "first_feature_id": "MOD_AROUND"
+              },
+              "stage": "OUTPUT",
+              "step": "STAC_SEARCH",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "has_more": false,
+                "skipped_invalid_bbox": 0,
+                "tile_count": 1,
+                "tile_ids": [
+                  "MOD_AROUND"
+                ]
+              },
+              "stage": "OUTPUT",
+              "step": "TILE_URLS",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "bbox": [
+                  -3,
+                  40,
+                  12,
+                  50
+                ],
+                "height_deg": 10,
+                "width_deg": 15
+              },
+              "stage": "OUTPUT",
+              "step": "UNION_BBOX",
+              "timestamp": "<volatile>"
+            },
+            {
+              "data": {
+                "collections": [
+                  "modis-13Q1-061"
+                ],
+                "has_mosaic": false,
+                "success": true,
+                "total_features": 1,
+                "total_tiles": 1
+              },
+              "stage": "OUTPUT",
+              "step": "RESPONSE",
+              "timestamp": "<volatile>"
+            }
+          ]
+        },
+        "semantic_translator": {
+          "available": true,
+          "location_info": {
+            "bbox": [
+              2.22,
+              48.81,
+              2.47,
+              48.9
+            ],
+            "location_name": "Show MODIS vegetation for Paris"
+          },
+          "query_processing": {
+            "original_query": "Show MODIS vegetation for Paris",
+            "processing_timestamp": "<volatile>",
+            "stac_parameters": {
+              "bbox": [
+                -3,
+                40,
+                12,
+                50
+              ],
+              "collections": [
+                "modis-13Q1-061"
+              ],
+              "datetime": "2024-06-01/2024-06-30",
+              "location_name": "Paris"
+            }
+          },
+          "selected_collections": [
+            "modis-13Q1-061"
+          ]
+        }
+      },
+      "response": "contextual answer for 1 features",
+      "success": true,
+      "translation_metadata": {
+        "all_tile_urls": [
+          {
+            "bbox": [
+              -3,
+              40,
+              12,
+              50
+            ],
+            "item_id": "MOD_AROUND",
+            "tilejson_url": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=modis-13Q1-061&item=MOD_AROUND&assets=250m_16_days_NDVI&colormap_name=rdylgn&rescale=-2000,10000"
+          }
+        ],
+        "mosaic_tilejson": null,
+        "original_query": "Show MODIS vegetation for Paris",
+        "stac_query": {
+          "bbox": [
+            2.22,
+            48.81,
+            2.47,
+            48.9
+          ],
+          "collections": [
+            "modis-13Q1-061"
+          ],
+          "datetime": "2024-06-01/2024-06-30",
+          "limit": 50,
+          "sortby": [
+            {
+              "direction": "desc",
+              "field": "datetime"
+            }
+          ]
+        },
+        "translated_params": {
+          "bbox": [
+            -3,
+            40,
+            12,
+            50
+          ],
+          "collections": [
+            "modis-13Q1-061"
+          ],
+          "datetime": "2024-06-01/2024-06-30",
+          "location_name": "Paris"
+        },
+        "translation_timestamp": "<volatile>"
+      }
+    },
+    "session_contexts": {
+      "session-1": {
+        "has_rendered_map": true,
+        "has_screenshot": false,
+        "last_bbox": [
+          2.22,
+          48.81,
+          2.47,
+          48.9
+        ],
+        "last_collections": [
+          "modis-13Q1-061"
+        ],
+        "last_location": "Paris",
+        "last_stac_items": [
+          {
+            "assets": {
+              "tilejson": {
+                "href": "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=modis-13Q1-061&item=MOD_AROUND&assets=visual&asset_bidx=visual%7C1%2C2%2C3&nodata=0",
+                "type": "application/json"
+              },
+              "visual": {
+                "href": "https://data.test/MOD_AROUND.tif",
+                "type": "image/tiff; application=geotiff"
+              }
+            },
+            "bbox": [
+              -3,
+              40,
+              12,
+              50
+            ],
+            "collection": "modis-13Q1-061",
+            "id": "MOD_AROUND",
+            "properties": {
+              "cloud_cover": null,
+              "datetime": "2024-06-01T10:00:00Z",
+              "eo:cloud_cover": null
+            }
+          }
+        ],
+        "query_count": 1
+      }
+    }
+  },
   "test_modis_tiles_outside_bbox_are_dropped": {
     "calls": [
       [
