@@ -4,6 +4,12 @@
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
 
 import { authenticatedFetch, getApiKey } from './authHelper';
+import type { Bbox } from '../components/dashboard/lib/bbox';
+import type {
+  CollectionStats,
+  DashboardCatalog,
+  DashboardContext,
+} from '../components/dashboard/types';
 
 //  BEST PRACTICE: Runtime Configuration for Cloud Apps
 // The frontend is configured to proxy /api/* requests to the backend in production
@@ -81,6 +87,9 @@ export interface MapContext {
   vision_mode?: boolean; // NEW: explicit vision analysis mode
   vision_pin?: { lat: number; lng: number } | null; // NEW: pin coordinates for vision analysis
   stac_items?: any[]; // STAC items currently rendered on the map
+  dashboard_context?: DashboardContext; // Focused dashboard collection and its stats
+  search_current_view?: boolean; // "Show on map": search over the map view if no place named
+  current_view_collection?: string; // "Show on map": collection id the backend searches as is
 }
 
 // Debug logging utility
@@ -317,6 +326,23 @@ class ApiService {
     }
   }
 
+  /** Renderable collections with extents, for the dashboard's viewport summary. */
+  async getDashboardCollections(): Promise<DashboardCatalog> {
+    if (!this.api) throw new Error('API service not initialized');
+    const response = await this.api.get<DashboardCatalog>('/api/dashboard/collections');
+    return response.data;
+  }
+
+  /** Availability stats of one collection over a bbox; errors keep their HTTP status. */
+  async getDashboardStats(collection: string, bbox: Bbox): Promise<CollectionStats> {
+    if (!this.api) throw new Error('API service not initialized');
+    const response = await this.api.post<CollectionStats>('/api/dashboard/stats', {
+      collection,
+      bbox,
+    });
+    return response.data;
+  }
+
   async sendChatMessage(
     message: string,
     datasetId?: string,
@@ -391,7 +417,8 @@ class ApiService {
           debugLog('Including collection', mapContext.current_collection);
         }
         if (mapContext.tile_urls && mapContext.tile_urls.length > 0) {
-          requestData.tile_urls = mapContext.tile_urls;
+          // QueryRequest.tile_urls is List[str]: send the tilejson URLs, not the objects
+          requestData.tile_urls = mapContext.tile_urls.map((tile) => tile.tilejson_url);
           debugLog('Including tile URLs', `${mapContext.tile_urls.length} tiles`);
         }
         // CRITICAL: Include has_satellite_data flag for router to know when to use vision
@@ -407,6 +434,16 @@ class ApiService {
         if (mapContext.vision_pin) {
           requestData.vision_pin = mapContext.vision_pin;
           debugLog('Including vision_pin', mapContext.vision_pin);
+        }
+        if (mapContext.dashboard_context) {
+          requestData.dashboard_context = mapContext.dashboard_context;
+          debugLog('Including dashboard context', mapContext.dashboard_context.collection);
+        }
+        if (mapContext.search_current_view) {
+          requestData.search_current_view = true;
+        }
+        if (mapContext.current_view_collection) {
+          requestData.current_view_collection = mapContext.current_view_collection;
         }
       }
 

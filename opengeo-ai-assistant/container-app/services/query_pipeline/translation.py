@@ -3,10 +3,11 @@
 import calendar as cal_mod
 import json
 import logging
+import math
 import re
 import traceback
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import app_state
 from services.collection_detection import detect_collections
@@ -129,6 +130,77 @@ def build_query_from_params(state: QueryState) -> None:
         )
 
 
+def _wrapped_longitudes(west: float, east: float) -> Tuple[float, float]:
+    """Shift Leaflet longitudes into [-180, 180], as normalizeViewport does.
+
+    A view across the antimeridian keeps its larger side, since a STAC bbox
+    cannot wrap.
+    """
+    if east - west >= 360:
+        return -180.0, 180.0
+    shift = 360 * math.floor((west + 180) / 360)
+    west, east = west - shift, east - shift
+    if east <= 180:
+        return west, east
+    if 180 - west >= east - 180:
+        return west, 180.0
+    return -180.0, east - 360
+
+
+def current_view_fallback_bbox(req_body: Dict[str, Any]) -> Optional[List[float]]:
+    """Return the map bounds as [west, south, east, north] for a current-view search.
+
+    None unless the request sets search_current_view and carries map bounds.
+    """
+    bounds = req_body.get("map_bounds") or {}
+    if not req_body.get("search_current_view"):
+        return None
+    try:
+        west, south, east, north = (
+            float(bounds[key]) for key in ("west", "south", "east", "north")
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+    west, east = _wrapped_longitudes(west, east)
+    return [west, max(south, -90.0), east, min(north, 90.0)]
+
+
+def current_view_search_params(req_body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Return STAC params for a dashboard "Show on map" of one collection.
+
+    The collection id and the map view come from the request, so no LLM
+    guesses them. None unless the flag, the collection and the bounds are set.
+    """
+    collection = req_body.get("current_view_collection")
+    bbox = current_view_fallback_bbox(req_body)
+    if not collection or not bbox:
+        return None
+    return {
+        "collections": [collection],
+        "bbox": bbox,
+        "datetime": None,
+        "location_name": "current map view",
+        "limit": 50,
+    }
+
+
+def start_current_view_search(state: QueryState) -> bool:
+    """Pre-route a "Show on map" request to STAC search with its fixed params.
+
+    Read before the session bbox override, so the user's view wins.
+    """
+    state.current_view_params = current_view_search_params(state.req_body)
+    if state.current_view_params is None:
+        return False
+    logger.info(f"[PIN] Current-view search: {state.current_view_params}")
+    state.router_action = {
+        "action_type": "stac_search",
+        "needs_stac_search": True,
+        "reasoning": "Dashboard current-view search",
+    }
+    return True
+
+
 async def translate_with_agents(state: QueryState) -> Optional[Dict[str, Any]]:
     """Translate with the multi-agent translator, session bbox as fallback.
 
@@ -165,6 +237,11 @@ async def translate_with_agents(state: QueryState) -> Optional[Dict[str, Any]]:
         # If router explicitly said use_current_location, prioritize it
         if state.router_action and state.router_action.get("use_current_location"):
             logger.info("[PIN] Router set use_current_location=True")
+
+        current_view_bbox = current_view_fallback_bbox(state.req_body)
+        if current_view_bbox:
+            logger.info(f"[PIN] Current-view search: map bbox={current_view_bbox}")
+            session_bbox = current_view_bbox
 
         logger.info("[SYNC] Translating natural language to STAC parameters...")
 
@@ -235,7 +312,11 @@ async def translate_to_stac(state: QueryState) -> Optional[Dict[str, Any]]:
                 f"[SKIP] Skipping collection mapping for {state.intent_type} query (no STAC search needed)"
             )
 
-    if not skip_collection_mapping:
+    if state.current_view_params:
+        state.stac_params = dict(state.current_view_params)
+        build_query_from_params(state)
+
+    elif not skip_collection_mapping:
         if not app_state.SEMANTIC_KERNEL_AVAILABLE:
             translate_with_keywords(state)
 

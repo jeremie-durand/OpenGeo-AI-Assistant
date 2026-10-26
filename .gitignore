@@ -18,6 +18,7 @@ opengeo-ai-assistant/mcp-server/
 *.zip
 dist/
 dist-check/
+.vite/
 
 # Test result files with deployment-specific data
 **/vision_results*.json

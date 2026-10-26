@@ -1,5 +1,6 @@
 """FastAPI application: startup lifespan, middleware and router registration."""
 
+import asyncio
 import logging
 import os
 import traceback
@@ -13,6 +14,7 @@ from fastapi.responses import JSONResponse
 from quickstart_cache import get_quickstart_stats  # [LAUNCH] Pre-computed cache
 from rate_limit_middleware import RateLimitMiddleware
 from routers import (
+    dashboard,
     geoint_analysis,
     geoint_climate,
     geoint_terrain,
@@ -22,6 +24,7 @@ from routers import (
     static_files,
     system,
 )
+from services.dashboard_catalog import warm_catalog
 
 logging.info("[OK] GEOINT endpoints available (lazy import mode)")
 
@@ -92,7 +95,11 @@ async def lifespan(app: FastAPI):
         f"[OK] OpenGeo AI Assistant CONTAINER READY (AI={'ENABLED' if app_state.SEMANTIC_KERNEL_AVAILABLE else 'DISABLED — keyword fallback'})"
     )
 
+    catalog_warmup = asyncio.create_task(warm_catalog())
+
     yield
+
+    catalog_warmup.cancel()
 
 
 # Initialize FastAPI app
@@ -149,6 +156,7 @@ app.include_router(geoint_vision.router)
 app.include_router(geoint_climate.router)
 app.include_router(geoint_analysis.router)
 app.include_router(query.router)
+app.include_router(dashboard.router)
 
 
 @app.exception_handler(Exception)

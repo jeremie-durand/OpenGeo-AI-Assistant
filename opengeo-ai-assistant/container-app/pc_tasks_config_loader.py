@@ -215,6 +215,8 @@ COLLECTION_ID_ALIASES = {
     "sentinel-2-l1c": "sentinel-2",
     # ASTER: STAC may use different naming
     "aster-l1t": "aster",
+    # USGS GAP: STAC uses "gap" but PC tasks uses "usgs-gap"
+    "gap": "usgs-gap",
     # Add more aliases as needed when STAC API names differ from PC repo names
 }
 

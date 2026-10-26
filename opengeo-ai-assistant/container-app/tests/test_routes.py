@@ -32,6 +32,8 @@ EXPECTED_ROUTES = {
     ("POST", "/api/geoint/animation"),
     ("POST", "/api/geoint/orchestrate"),
     ("GET", "/api/debug/location/{location}"),
+    ("GET", "/api/dashboard/collections"),
+    ("POST", "/api/dashboard/stats"),
 }
 
 

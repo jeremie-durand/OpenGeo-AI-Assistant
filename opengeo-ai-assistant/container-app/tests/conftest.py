@@ -1,5 +1,11 @@
-"""Shared fixtures: env patching and LLM singleton reset."""
+"""Shared fixtures: env patching and LLM singleton reset.
 
+STAC_API_URL is set before any app module is imported, because some modules
+(services/stac_search.py, geoint/mobility_tools.py) read it at import time.
+That keeps the tests independent of the STAC_API_URL in the developer's .env.
+"""
+
+import os
 import sys
 from pathlib import Path
 
@@ -17,7 +23,9 @@ FAKE_ENV = {
     "ENABLE_AUTH": "false",
     "RATE_LIMIT_LLM": "1000/minute",
     "RATE_LIMIT_SEARCH": "1000/minute",
+    "STAC_API_URL": "http://localhost:8081",
 }
+os.environ["STAC_API_URL"] = FAKE_ENV["STAC_API_URL"]
 
 
 @pytest.fixture(autouse=True)
@@ -33,3 +41,15 @@ def reset_llm_singleton():
     _lc._global_client = None
     yield
     _lc._global_client = None
+
+
+@pytest.fixture(autouse=True)
+def offline_dashboard_catalog(monkeypatch):
+    """Keep the startup catalog warm-up off the network; tests patch their own."""
+    import aiohttp
+    from services import dashboard_catalog
+
+    async def offline():
+        raise aiohttp.ClientConnectionError("network disabled in tests")
+
+    monkeypatch.setattr(dashboard_catalog, "fetch_upstream_collections", offline)

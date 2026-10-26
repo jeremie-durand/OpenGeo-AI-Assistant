@@ -13,6 +13,7 @@ class QueryState:
     session_id: Optional[str] = None
     pin: Optional[Dict[str, Any]] = None
     req_body: Dict[str, Any] = field(default_factory=dict)
+    current_view_params: Optional[Dict[str, Any]] = None
     pipeline_session_id: str = ""
     router_action: Optional[Dict[str, Any]] = None
     classification: Optional[Dict[str, Any]] = None

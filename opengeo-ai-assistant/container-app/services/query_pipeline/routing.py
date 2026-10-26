@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 import aiohttp
 import app_state
 from services.pipeline_trace import log_pipeline_step
+from services.query_pipeline.dashboard_context import is_dashboard_question
 from services.query_pipeline.state import QueryState
 from services.stac_search import _stac_base
 
@@ -237,6 +238,23 @@ async def handle_extreme_weather(state: QueryState) -> Optional[Dict[str, Any]]:
     except Exception as climate_error:
         logger.error(f"[STORM] Climate analysis failed: {climate_error}")
         # Fall through to STAC search as fallback
+
+
+def preroute_dashboard_question(state: QueryState) -> bool:
+    """Send a question about the dashboard's figures to the contextual answer.
+
+    The RouterAgent never sees the dashboard, so it reads "March" in "why so
+    few scenes in March?" as a place. Only requests with dashboard context
+    are pre-routed.
+    """
+    if not is_dashboard_question(state.req_body):
+        return False
+    logger.info("[CHART] Dashboard question -> contextual (RouterAgent skipped)")
+    state.router_action = {
+        "action_type": "contextual",
+        "routing_reason": "dashboard_question",
+    }
+    return True
 
 
 async def route_with_agent(state: QueryState) -> Optional[Dict[str, Any]]:
