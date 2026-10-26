@@ -1,5 +1,11 @@
-"""Shared fixtures: env patching and LLM singleton reset."""
+"""Shared fixtures: env patching and LLM singleton reset.
 
+STAC_API_URL is set before any app module is imported, because some modules
+(services/stac_search.py, geoint/mobility_tools.py) read it at import time.
+That keeps the tests independent of the STAC_API_URL in the developer's .env.
+"""
+
+import os
 import sys
 from pathlib import Path
 
@@ -17,7 +23,9 @@ FAKE_ENV = {
     "ENABLE_AUTH": "false",
     "RATE_LIMIT_LLM": "1000/minute",
     "RATE_LIMIT_SEARCH": "1000/minute",
+    "STAC_API_URL": "http://localhost:8081",
 }
+os.environ["STAC_API_URL"] = FAKE_ENV["STAC_API_URL"]
 
 
 @pytest.fixture(autouse=True)

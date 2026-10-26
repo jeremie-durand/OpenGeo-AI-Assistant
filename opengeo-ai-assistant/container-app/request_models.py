@@ -1,8 +1,15 @@
 """Pydantic request models for all POST endpoints in routers/."""
 
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Annotated, Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    model_validator,
+)
 from stac_pydantic.api import Search
 
 # ---------------------------------------------------------------------------
@@ -59,6 +66,10 @@ class QueryRequest(BaseModel):
     tile_urls: List[str] = Field(default_factory=list, max_length=100)
     conversation_history: List[Any] = Field(default_factory=list, max_length=100)
     messages: List[Any] = Field(default_factory=list, max_length=100)
+    # Dashboard context and "Show on map" flag (issue #2)
+    dashboard_context: Optional["DashboardContext"] = None
+    search_current_view: bool = False
+    current_view_collection: Optional["RenderableCollection"] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -240,3 +251,72 @@ class OrchestrateRequest(BaseModel):
     screenshot: Optional[str] = Field(None, max_length=5_000_000)
     user_query: Optional[str] = None
     radius_miles: float = Field(default=5.0)
+
+
+# ---------------------------------------------------------------------------
+# Dashboard endpoints
+# ---------------------------------------------------------------------------
+
+
+def _validate_bbox(bbox: List[float]) -> List[float]:
+    """Require [west, south, east, north] within lon/lat ranges, min < max."""
+    west, south, east, north = bbox
+    if not (-180 <= west < east <= 180):
+        raise ValueError("bbox longitudes must satisfy -180 <= west < east <= 180")
+    if not (-90 <= south < north <= 90):
+        raise ValueError("bbox latitudes must satisfy -90 <= south < north <= 90")
+    return bbox
+
+
+def _validate_renderable(collection: str) -> str:
+    """Reject collections the map cannot render."""
+    from services.dashboard_catalog import renderable_collection_ids
+
+    if collection not in renderable_collection_ids():
+        raise ValueError(f"collection '{collection}' is not renderable")
+    return collection
+
+
+Bbox = Annotated[
+    List[Annotated[float, Field(allow_inf_nan=False)]],
+    Field(min_length=4, max_length=4),
+    AfterValidator(_validate_bbox),
+]
+RenderableCollection = Annotated[
+    str, Field(max_length=100), AfterValidator(_validate_renderable)
+]
+
+
+class DashboardStatsRequest(BaseModel):
+    """POST /api/dashboard/stats — availability stats of one collection in a bbox."""
+
+    collection: RenderableCollection
+    bbox: Bbox
+
+
+class DashboardMonth(BaseModel):
+    """Scene count of one month in the dashboard context."""
+
+    month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    count: int = Field(ge=0)
+
+
+class DashboardContext(BaseModel):
+    """Focused collection and its stats as shown on the dashboard.
+
+    Every field is numeric, a date or a validated id, so no client free text
+    reaches the LLM prompt through this context.
+    """
+
+    collection: str = Field(max_length=100)
+    bbox: Bbox
+    scene_count: int = Field(ge=0)
+    capped: bool = False
+    monthly: List[DashboardMonth] = Field(default_factory=list, max_length=12)
+    cloud_cover: Optional[List[Annotated[int, Field(ge=0)]]] = Field(
+        default=None, max_length=5
+    )
+    latest_datetime: Optional[datetime] = None
+
+
+QueryRequest.model_rebuild()

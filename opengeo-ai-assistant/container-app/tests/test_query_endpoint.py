@@ -222,19 +222,20 @@ class FakeTranslator:
         classification: Dict[str, Any],
         stac_response: Optional[Dict[str, Any]] = None,
         geoint_results: Optional[Dict[str, Any]] = None,
+        dashboard_hint: Optional[str] = None,
     ) -> Dict[str, Any]:
         count = len((stac_response or {}).get("results", {}).get("features", []))
-        self._record(
-            "generate_contextual",
-            {
-                "query": natural_query,
-                "intent": classification.get("intent_type"),
-                "features": count,
-                "classification": classification,
-                "geoint_results": geoint_results,
-                "feature_ids": feature_ids(stac_response),
-            },
-        )
+        payload = {
+            "query": natural_query,
+            "intent": classification.get("intent_type"),
+            "features": count,
+            "classification": classification,
+            "geoint_results": geoint_results,
+            "feature_ids": feature_ids(stac_response),
+        }
+        if dashboard_hint is not None:
+            payload["dashboard_hint"] = dashboard_hint
+        self._record("generate_contextual", payload)
         if self.contextual_error:
             raise self.contextual_error
         return {"message": f"contextual answer for {count} features"}
@@ -957,6 +958,69 @@ def test_contextual_answer_with_map_bounds_hint(
     )
     (prompt,) = calls_named(result, "translator.generate_contextual")
     assert "48.855" in prompt["query"]
+    check(result)
+
+
+DASHBOARD_CONTEXT = {
+    "collection": "sentinel-2-l2a",
+    "bbox": PARIS_BBOX,
+    "scene_count": 42,
+    "capped": False,
+    "monthly": [{"month": "2024-03", "count": 3}, {"month": "2024-04", "count": 9}],
+    "latest_datetime": "2024-04-28T10:56:21Z",
+}
+
+
+def test_contextual_answer_with_dashboard_context(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(action=NAVIGATE_ACTION)
+    result = harness.run(
+        query="Why so few scenes in March?",
+        session_id=SESSION,
+        dashboard_context=DASHBOARD_CONTEXT,
+    )
+    assert calls_named(result, "router.route_query") == []
+    assert result["response"]["processing_type"] == "contextual_only"
+    (prompt,) = calls_named(result, "translator.generate_contextual")
+    assert "Dashboard shown" not in prompt["query"]
+    assert prompt["dashboard_hint"].startswith("[Dashboard shown to the user: sentinel")
+    assert "2024-03: 3" in prompt["dashboard_hint"]
+    check(result)
+
+
+def test_current_view_search_uses_map_bounds(harness: Harness, check: Callable) -> None:
+    harness.ai_mode(stac_params=SENTINEL_PARAMS, action=STAC_ACTION)
+    harness.stac_responses = [results(feature("S2A_1"))]
+    result = harness.run(
+        query="Show Sentinel-2 Level-2A over the current map view",
+        session_id=SESSION,
+        map_bounds=PARIS_BOUNDS,
+        search_current_view=True,
+    )
+    (translation,) = calls_named(result, "translator.translate_query")
+    assert translation["session_bbox"] == PARIS_BBOX
+    check(result)
+
+
+def test_current_view_search_forces_collection_and_view(
+    harness: Harness, check: Callable
+) -> None:
+    harness.ai_mode(stac_params=SENTINEL_PARAMS, action=CONTEXTUAL_ACTION)
+    harness.stac_responses = [results(feature("CHES_1", "chesapeake-lc-13"))]
+    result = harness.run(
+        query="Show Chesapeake Land Cover (13-class) over the current map view",
+        session_id=SESSION,
+        map_bounds=PARIS_BOUNDS,
+        search_current_view=True,
+        current_view_collection="chesapeake-lc-13",
+    )
+    assert calls_named(result, "router.route_query") == []
+    assert calls_named(result, "translator.translate_query") == []
+    (search,) = calls_named(result, "stac_search")
+    assert search["query"]["collections"] == ["chesapeake-lc-13"]
+    assert search["query"]["bbox"] == PARIS_BBOX
+    assert "datetime" not in search["query"]
     check(result)
 
 

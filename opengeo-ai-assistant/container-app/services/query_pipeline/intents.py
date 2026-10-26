@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 import app_state
 from services.pipeline_trace import log_pipeline_step
+from services.query_pipeline.dashboard_context import format_dashboard_hint
 from services.query_pipeline.state import QueryState
 from services.query_pipeline.vision import run_vision
 
@@ -153,6 +154,10 @@ async def answer_contextual(state: QueryState) -> Optional[Dict[str, Any]]:
                     f"[PIN] Enriched contextual query with location: {location_hint}"
                 )
 
+    dashboard_hint = format_dashboard_hint(state.req_body)
+    if dashboard_hint:
+        logger.info("[CHART] Answering from the dashboard context")
+
     try:
         contextual_response = await asyncio.wait_for(
             state.translator.generate_contextual_earth_science_response(
@@ -162,6 +167,7 @@ async def answer_contextual(state: QueryState) -> Optional[Dict[str, Any]]:
                     "success": True,
                     "results": {"features": []},
                 },  # Empty STAC response for contextual-only
+                **({"dashboard_hint": dashboard_hint} if dashboard_hint else {}),
             ),
             timeout=30.0,
         )

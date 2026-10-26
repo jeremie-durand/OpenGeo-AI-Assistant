@@ -28,11 +28,15 @@ from services.query_pipeline.response import (
 )
 from services.query_pipeline.routing import (
     classify_router_action,
+    preroute_dashboard_question,
     route_with_agent,
 )
 from services.query_pipeline.search import run_stac_search
 from services.query_pipeline.state import QueryState
-from services.query_pipeline.translation import translate_to_stac
+from services.query_pipeline.translation import (
+    start_current_view_search,
+    translate_to_stac,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -44,12 +48,16 @@ async def unified_query_processor(body: QueryRequest) -> Dict[str, Any]:
 
     Order: intake, quickstart fast path, RouterAgent, early intents (vision,
     contextual), translation, STAC search, message, tile rendering, response.
+    A dashboard current-view search or dashboard question skips the fast path
+    and the RouterAgent.
     """
     try:
         state = QueryState()
         start_query(body, state)
+        if not start_current_view_search(state):
+            preroute_dashboard_question(state)
 
-        if is_quickstart_query(state.natural_query):
+        if state.router_action is None and is_quickstart_query(state.natural_query):
             return await run_quickstart_fast_path(state)
 
         apply_session_bbox_override(state)
