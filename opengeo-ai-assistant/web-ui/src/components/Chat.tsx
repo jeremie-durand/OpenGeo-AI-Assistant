@@ -207,6 +207,8 @@ interface ChatProps {
   onClearVisionSession?: () => void; // Callback to clear vision session
   onComparisonResult?: (result: any) => void; // Callback for comparison analysis results (before/after data)
   selectedModel?: string; // Selected AI model (gpt-5)
+  dashboardQueryTrigger?: { query: string; collection: string; timestamp: number } | null; // "Show on map" from dashboard
+  onLoadingChange?: (loading: boolean) => void; // Reports whether a chat query is in flight
 }
 
 const Chat: React.FC<ChatProps> = ({
@@ -231,6 +233,8 @@ const Chat: React.FC<ChatProps> = ({
   onClearVisionSession,
   onComparisonResult,
   selectedModel,
+  dashboardQueryTrigger,
+  onLoadingChange,
 }) => {
   const { lang, t } = useI18n();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -630,8 +634,13 @@ const Chat: React.FC<ChatProps> = ({
     setFeedback((prev) => ({ ...prev, [messageIndex]: type }));
   };
 
+  // Collection of a dashboard "Show on map" query; consumed by the next send
+  const currentViewCollectionRef = useRef<string | null>(null);
+
   const chatMutation = useMutation({
     mutationFn: async (message: string) => {
+      const currentViewCollection = currentViewCollectionRef.current;
+      currentViewCollectionRef.current = null;
       try {
         // CRITICAL: Always read the latest map context from the ref.
         // The closure-captured `mapContext` prop can be stale after map navigation.
@@ -987,7 +996,13 @@ const Chat: React.FC<ChatProps> = ({
         // The closure-captured `mapContext` prop can be stale after navigate_to
         // because React state propagation (MapView -> MainApp -> Chat) takes
         // multiple render cycles. The ref is updated synchronously via useEffect.
-        const freshMapContext = mapContextRef.current;
+        const freshMapContext = currentViewCollection
+          ? {
+              ...mapContextRef.current,
+              search_current_view: true,
+              current_view_collection: currentViewCollection,
+            }
+          : mapContextRef.current;
         console.log(` Chat: Sending message with ${currentPin ? 'pin' : 'no pin'}:`, currentPin);
         console.log(` Chat: GEOINT mode is ${geointMode ? 'ON' : 'OFF'}`);
         console.log(` Chat: Map context for vision (from ref):`, {
@@ -1286,6 +1301,23 @@ const Chat: React.FC<ChatProps> = ({
       setInputValue('');
     }
   }, [pendingQuery]); // Remove chatMutation from dependencies to prevent re-triggering
+
+  // Dashboard "Show on map": append the query and search over the current map view
+  useEffect(() => {
+    if (!dashboardQueryTrigger) return;
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content: dashboardQueryTrigger.query,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    currentViewCollectionRef.current = dashboardQueryTrigger.collection;
+    chatMutation.mutate(dashboardQueryTrigger.query);
+  }, [dashboardQueryTrigger?.timestamp]); // Only a new trigger sends a query
+
+  useEffect(() => {
+    onLoadingChange?.(chatMutation.isPending);
+  }, [chatMutation.isPending, onLoadingChange]);
 
   // Handle private search triggers from sidebar (Updated to use main chat endpoint)
   useEffect(() => {
@@ -1633,6 +1665,24 @@ const Chat: React.FC<ChatProps> = ({
         </div>
 
         <div className="footer">
+          {mapContext?.dashboard_context && (
+            <div
+              className="dashboard-chip"
+              title={t('dashboard.chipHint')}
+              style={{
+                display: 'inline-block',
+                margin: '0 0 6px',
+                padding: '2px 10px',
+                borderRadius: 999,
+                background: '#f0f9ff',
+                border: '1px solid #bae6fd',
+                color: '#0369a1',
+                fontSize: 12,
+              }}
+            >
+              {t('dashboard.chip')}: {mapContext.dashboard_context.title}
+            </div>
+          )}
           <div className="footer-content">
             <textarea
               value={inputValue}

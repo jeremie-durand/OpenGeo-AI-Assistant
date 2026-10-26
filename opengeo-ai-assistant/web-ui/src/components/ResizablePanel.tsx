@@ -39,9 +39,8 @@ const ResizablePanel: React.FC<ResizablePanelProps> = ({
     document.body.style.userSelect = 'none';
   };
 
+  // Attached only between mousedown and mouseup, so no resizing guard is needed
   const handleMouseMove = (e: MouseEvent) => {
-    if (!isResizing) return;
-
     // Calculate new width (dragging left increases width, dragging right decreases width)
     const deltaX = startXRef.current - e.clientX;
     const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidthRef.current + deltaX));
