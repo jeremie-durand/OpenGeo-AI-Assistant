@@ -19,6 +19,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Changed
 
+- Upgraded Node from 20 to 24 in the frontend Dockerfile, CI and `.nvmrc`, because `lint-staged` requires Node 22.22.1 or later. Node 26 is not used yet: its built-in `localStorage` breaks the jsdom-based tests.
 - Rewrote `GeointModulesFlow.test.tsx` against the current `MapView` behavior and removed its exclusions from `tsconfig.json` and `vitest.config.ts`.
 - The chat greeting is rendered through `t()` and re-translates when the host switches language after mount, instead of being fixed to English at mount time.
 - Production minifier is now terser, configured with `drop_console` and `drop_debugger`. Vite 8's Rolldown default is oxc, but oxc exposes no way to drop console statements, and the app ships ~800 ungated `console` calls — some logging message content. `minify: 'esbuild'` is still a valid value but needs the `esbuild` package, which Vite 8 no longer installs.
