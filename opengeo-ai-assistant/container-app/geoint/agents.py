@@ -14,7 +14,7 @@ Architecture:
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 # LAZY IMPORTS: Agent singletons are created on first use via get_*_agent() functions.
@@ -964,13 +964,18 @@ How the {aspect_focus} has evolved over the {_calculate_time_span(before_date, a
         }
 
 
+def _parse_as_aware_datetime(value: datetime) -> datetime:
+    """Return value as timezone-aware, treating a naive datetime as UTC."""
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
 def _calculate_time_span(before_date: str, after_date: str) -> str:
     """Helper to calculate human-readable time span between dates"""
     try:
         from dateutil import parser
 
-        before_dt = parser.parse(before_date)
-        after_dt = parser.parse(after_date)
+        before_dt = _parse_as_aware_datetime(parser.parse(before_date))
+        after_dt = _parse_as_aware_datetime(parser.parse(after_date))
         delta = after_dt - before_dt
 
         if delta.days < 1:
