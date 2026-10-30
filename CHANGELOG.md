@@ -19,6 +19,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Changed
 
+- Rewrote `GeointModulesFlow.test.tsx` against the current `MapView` behavior and removed its exclusions from `tsconfig.json` and `vitest.config.ts`.
 - The chat greeting is rendered through `t()` and re-translates when the host switches language after mount, instead of being fixed to English at mount time.
 - Production minifier is now terser, configured with `drop_console` and `drop_debugger`. Vite 8's Rolldown default is oxc, but oxc exposes no way to drop console statements, and the app ships ~800 ungated `console` calls — some logging message content. `minify: 'esbuild'` is still a valid value but needs the `esbuild` package, which Vite 8 no longer installs.
 - The web UI package is `opengeo-ai-assistant-ui` at `0.2.0-alpha`, replacing the fork's `earth-copilot-ui` at `0.1.0`, which had never been bumped.
