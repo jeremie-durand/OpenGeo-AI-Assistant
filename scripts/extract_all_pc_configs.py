@@ -328,7 +328,6 @@ class UnifiedPCExtractor:
         """Classify collection data type"""
         cid_lower = collection_id.lower()
         desc_lower = metadata.get("description", "").lower()
-        keywords_lower = " ".join(metadata.get("keywords", [])).lower()
 
         # Fire detection
         if any(x in cid_lower for x in ["14a1", "14a2", "64a1", "fire", "burn"]):
@@ -439,8 +438,6 @@ class UnifiedPCExtractor:
     ) -> str:
         """Generate a description for collections missing description.md"""
 
-        # Extract collection name parts
-        parts = collection_id.split("-")
         title = metadata.get("title", collection_id.replace("-", " ").title())
 
         # Common patterns and descriptions

@@ -15,3 +15,12 @@ repos:
     hooks:
       - id: black
         language_version: python3
+  - repo: local
+    hooks:
+      - id: review-opengaa-gate
+        name: review-opengaa approval gate
+        entry: scripts/review-opengaa-stamp.sh check
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]

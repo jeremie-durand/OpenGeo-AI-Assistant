@@ -317,7 +317,7 @@ def get_aspect_analysis(
                         )
                     elif fav_ratio > 0.30:
                         sun_exposure = "moderate"
-                        sun_note = f"{fav_ratio*100:.0f}% south-facing slopes, {flat_pct:.0f}% flat terrain"
+                        sun_note = f"{fav_ratio * 100:.0f}% south-facing slopes, {flat_pct:.0f}% flat terrain"
                     elif unfav_ratio > 0.50:
                         sun_exposure = "limited"
                         sun_note = (
@@ -325,7 +325,7 @@ def get_aspect_analysis(
                         )
                     else:
                         sun_exposure = "moderate"
-                        sun_note = f"Mixed slope aspects ({flat_pct:.0f}% flat, {fav_ratio*100:.0f}% south-facing)"
+                        sun_note = f"Mixed slope aspects ({flat_pct:.0f}% flat, {fav_ratio * 100:.0f}% south-facing)"
                 else:
                     sun_exposure = "good"
                     sun_note = "Terrain is effectively flat — optimal for solar"

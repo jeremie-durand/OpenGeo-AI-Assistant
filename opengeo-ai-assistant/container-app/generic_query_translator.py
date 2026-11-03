@@ -5,7 +5,7 @@ A drop-in replacement for SemanticQueryTranslator that works with any LLM
 provider configured via LLM_PROVIDER / LLM_API_KEY / LLM_MODEL environment
 variables (openai or anthropic).
 
-Exposes the same public interface used by fastapi_app.py:
+Exposes the same public interface used by the API routers:
   - translate_query(query, pin_location, session_bbox)
   - collection_mapping_agent(query)
   - build_stac_query_agent(query, collections)
@@ -91,6 +91,20 @@ def _parse_json(text: str) -> Any:
         pass
 
     raise json.JSONDecodeError("Could not parse LLM output as JSON", text, 0)
+
+
+def _dashboard_answer_prompt(natural_query: str, dashboard_hint: str) -> str:
+    """Prompt answering a question about the dashboard from its figures."""
+    return f"""You are an Earth observation assistant. Provide a concise, helpful response (2-4 sentences) for the user's geospatial query.
+
+USER QUERY: "{natural_query}"
+DASHBOARD SHOWN TO THE USER: {dashboard_hint}
+
+Guidelines:
+- Answer from the dashboard figures and quote the relevant numbers.
+- Compare the period asked about with the other months. If the figures do not support the question's premise, say so plainly.
+- Only give causes the figures or the dataset's known properties support; the current month may be incomplete.
+- Be factual and concise. Do not repeat the query verbatim."""
 
 
 async def _llm_text(
@@ -403,7 +417,7 @@ Example: ["sentinel-2-l2a", "landsat-c2-l2"]"""
             logger.error(f"[GQT] collection_mapping_agent failed: {exc}")
 
         # Keyword fallback — always returns PC collection IDs.
-        from fastapi_app import detect_collections
+        from services.collection_detection import detect_collections
 
         return detect_collections(query)
 
@@ -577,8 +591,13 @@ Use ISO 8601 range format. If no date mentioned return null."""
         classification: Dict[str, Any],
         stac_response: Optional[Dict[str, Any]] = None,
         geoint_results: Optional[Dict[str, Any]] = None,
+        dashboard_hint: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Generate a natural language response describing the STAC results."""
+        """Generate a natural language response describing the STAC results.
+
+        With *dashboard_hint*, the answer comes from the dashboard figures,
+        given in their own prompt section instead of as STAC results.
+        """
         features = (
             (stac_response or {}).get("results", {}).get("features", [])
             if stac_response
@@ -596,7 +615,10 @@ Use ISO 8601 range format. If no date mentioned return null."""
             data_lines.append(f"  - {col} | {dt[:10] if dt else 'N/A'} | bbox={bbox}")
         data_summary = "\n".join(data_lines) if data_lines else "No results."
 
-        prompt = f"""You are an Earth observation assistant. Provide a concise, helpful response (2-4 sentences) for the user's geospatial query.
+        prompt = (
+            _dashboard_answer_prompt(natural_query, dashboard_hint)
+            if dashboard_hint
+            else f"""You are an Earth observation assistant. Provide a concise, helpful response (2-4 sentences) for the user's geospatial query.
 
 USER QUERY: "{natural_query}"
 RESULTS: {count} satellite data item(s) found.
@@ -607,6 +629,7 @@ Guidelines:
 - If results were found, briefly describe what data was loaded and its coverage/dates.
 - If no results, explain likely reasons and suggest what to try.
 - Be factual and concise. Do not repeat the query verbatim."""
+        )
 
         try:
             message = await _llm_text(

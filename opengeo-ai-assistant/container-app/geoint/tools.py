@@ -495,7 +495,7 @@ class GeospatialTools:
             )
 
             logger.info(
-                f" Land cover: water={water_pct:.1f}%, veg={dense_veg_pct+sparse_veg_pct:.1f}%"
+                f" Land cover: water={water_pct:.1f}%, veg={dense_veg_pct + sparse_veg_pct:.1f}%"
             )
 
             return {

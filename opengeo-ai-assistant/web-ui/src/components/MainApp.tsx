@@ -1,14 +1,24 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiService, Dataset } from '../services/api';
 import Sidebar from './Sidebar';
 import Chat from './Chat';
 import MapView from './MapView';
 import ResizablePanel from './ResizablePanel';
+import DashboardPanel from './dashboard/DashboardPanel';
+import { useDashboardCatalog } from './dashboard/hooks/useDashboardData';
+import type { CatalogCollection, DashboardContext } from './dashboard/types';
+import { useT } from '../i18n/I18nContext';
 import { AppState } from '../App';
+
+const DASHBOARD_DEFAULT_WIDTH = 340;
+const DASHBOARD_MIN_WIDTH = 280;
+const DASHBOARD_MAX_WIDTH = 560;
+const DASHBOARD_RAIL_WIDTH = 36;
+const DASHBOARD_OPEN_QUERY = '(min-width: 1440px)';
 
 interface MainAppProps {
   appState: AppState;
@@ -50,6 +60,20 @@ const MainApp: React.FC<MainAppProps> = ({
     lng: number;
   } | null>(null); // Terrain session for multi-turn chat
   const [comparisonResult, setComparisonResult] = useState<any>(null); // Comparison analysis result (before/after data)
+  const t = useT();
+  const [dashboardCollapsed, setDashboardCollapsed] = useState(
+    () => !window.matchMedia(DASHBOARD_OPEN_QUERY).matches
+  );
+  const [dashboardWidth, setDashboardWidth] = useState(DASHBOARD_DEFAULT_WIDTH);
+  const [dashboardFocus, setDashboardFocus] = useState<string | null>(null);
+  const [dashboardContext, setDashboardContext] = useState<DashboardContext | null>(null);
+  const [dashboardQueryTrigger, setDashboardQueryTrigger] = useState<{
+    query: string;
+    collection: string;
+    timestamp: number;
+  } | null>(null);
+  const [chatBusy, setChatBusy] = useState(false);
+  const dashboardCatalog = useDashboardCatalog();
 
   // Handle comparison result from Chat component
   const handleComparisonResult = useCallback((result: any) => {
@@ -282,6 +306,31 @@ const MainApp: React.FC<MainAppProps> = ({
     return false; // Message not intercepted, proceed normally
   };
 
+  // Chat -> dashboard: a renderable collection shown on the map becomes the focus
+  const mapCollection = mapContext?.current_collection as string | undefined;
+  useEffect(() => {
+    const renderable = dashboardCatalog.data?.collections.some((c) => c.id === mapCollection);
+    if (mapCollection && renderable) setDashboardFocus(mapCollection);
+  }, [mapCollection, dashboardCatalog.data]);
+
+  // Dashboard -> chat: the focused stats travel with each query inside mapContext
+  const chatMapContext = useMemo(
+    () => (dashboardContext ? { ...mapContext, dashboard_context: dashboardContext } : mapContext),
+    [mapContext, dashboardContext]
+  );
+
+  // Dashboard -> map: "Show on map" sends a current-view query through the chat
+  const handleShowOnMap = useCallback(
+    (collection: CatalogCollection) => {
+      setDashboardQueryTrigger({
+        query: t('dashboard.showOnMapQuery').replace('{title}', collection.title),
+        collection: collection.id,
+        timestamp: Date.now(),
+      });
+    },
+    [t]
+  );
+
   // Handle chat responses for map integration
   const handleChatResponse = (responseData: any) => {
     console.log('MainApp: Received chat response for map integration:', responseData);
@@ -352,6 +401,11 @@ const MainApp: React.FC<MainAppProps> = ({
     root.style.setProperty('--chat-panel-width', `${chatPanelWidth}px`);
   }, [sidebarOpen, chatPanelWidth]);
 
+  useEffect(() => {
+    const width = dashboardCollapsed ? DASHBOARD_RAIL_WIDTH : dashboardWidth;
+    document.documentElement.style.setProperty('--dashboard-width', `${width}px`);
+  }, [dashboardCollapsed, dashboardWidth]);
+
   const handleToggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
@@ -400,6 +454,19 @@ const MainApp: React.FC<MainAppProps> = ({
     });
   };
 
+  const dashboardPanel = (
+    <DashboardPanel
+      mapBounds={mapContext?.bounds}
+      focusedId={dashboardFocus}
+      onFocus={setDashboardFocus}
+      onShowOnMap={handleShowOnMap}
+      showOnMapDisabled={chatBusy}
+      onContextChange={setDashboardContext}
+      collapsed={dashboardCollapsed}
+      onToggleCollapsed={() => setDashboardCollapsed((collapsed) => !collapsed)}
+    />
+  );
+
   return (
     <div className="app">
       <Sidebar
@@ -435,6 +502,20 @@ const MainApp: React.FC<MainAppProps> = ({
         />
       </div>
 
+      {dashboardCollapsed ? (
+        <div className="resizable-panel dashboard-column">{dashboardPanel}</div>
+      ) : (
+        <ResizablePanel
+          defaultWidth={dashboardWidth}
+          minWidth={DASHBOARD_MIN_WIDTH}
+          maxWidth={DASHBOARD_MAX_WIDTH}
+          onWidthChange={setDashboardWidth}
+          className="dashboard-column"
+        >
+          {dashboardPanel}
+        </ResizablePanel>
+      )}
+
       <ResizablePanel
         defaultWidth={420}
         minWidth={300}
@@ -455,7 +536,7 @@ const MainApp: React.FC<MainAppProps> = ({
           mobilityAnalysisResult={mobilityAnalysisResult}
           mobilityPinCoords={mobilityPinCoords}
           selectedModule={selectedModule || undefined}
-          mapContext={mapContext}
+          mapContext={chatMapContext}
           systemMessage={systemMessage}
           onUserMessage={handleUserMessage}
           terrainSession={terrainSession}
@@ -463,6 +544,8 @@ const MainApp: React.FC<MainAppProps> = ({
           onClearTerrainSession={clearTerrainSession}
           onComparisonResult={handleComparisonResult}
           selectedModel={selectedModel}
+          dashboardQueryTrigger={dashboardQueryTrigger}
+          onLoadingChange={setChatBusy}
         />
       </ResizablePanel>
     </div>

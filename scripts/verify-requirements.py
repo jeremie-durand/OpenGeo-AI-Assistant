@@ -44,7 +44,10 @@ def test_semantic_kernel_imports():
     print("\n Testing Semantic Kernel imports...")
 
     try:
-        from semantic_kernel.functions import KernelArguments, KernelFunction
+        from semantic_kernel.functions import (  # noqa: F401
+            KernelArguments,
+            KernelFunction,
+        )
 
         print(" KernelFunction, KernelArguments import successful")
     except ImportError as e:
@@ -54,7 +57,7 @@ def test_semantic_kernel_imports():
     try:
         from semantic_kernel import Kernel
 
-        kernel = Kernel()
+        Kernel()
         print(" Kernel creation successful")
     except Exception as e:
         print(f" Kernel creation failed: {e}")

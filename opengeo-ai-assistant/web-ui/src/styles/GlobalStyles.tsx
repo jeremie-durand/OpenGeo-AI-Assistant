@@ -13,6 +13,7 @@ export const GlobalStyles = () => (
       --side: 420px;
       --side-left: var(--side);
       --chat-panel-width: 420px;
+      --dashboard-width: 340px;
     }
 
     html, body {
@@ -60,7 +61,7 @@ export const GlobalStyles = () => (
 
     .app {
       display: grid;
-      grid-template-columns: var(--side-left) 1fr var(--chat-panel-width);
+      grid-template-columns: var(--side-left) 1fr var(--dashboard-width) var(--chat-panel-width);
       gap: 0;
       height: calc(100vh - 64px);
     }

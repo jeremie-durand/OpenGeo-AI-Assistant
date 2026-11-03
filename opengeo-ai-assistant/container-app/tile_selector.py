@@ -431,7 +431,7 @@ class TileSelector:
 
             # Extract key metadata
             tile_id = feature.get("id", "unknown")
-            datetime_str = feature.get("properties", {}).get("datetime", "unknown")
+            datetime_str = cls._acquisition_datetime(feature) or "unknown"
             cloud_cover = feature.get("properties", {}).get("eo:cloud_cover", "N/A")
 
             logger.info(f"  #{i} [{tile['total_score']:.2f}/100] {tile_id}")
@@ -446,6 +446,12 @@ class TileSelector:
 
         # Return just the features (not the scoring metadata)
         return [tile["feature"] for tile in selected]
+
+    @staticmethod
+    def _acquisition_datetime(feature: Dict[str, Any]) -> Optional[str]:
+        """Return properties.datetime, or start_datetime for range items like MODIS."""
+        properties = feature.get("properties") or {}
+        return properties.get("datetime") or properties.get("start_datetime")
 
     @classmethod
     def _group_tiles_by_acquisition_date(
@@ -462,7 +468,7 @@ class TileSelector:
         tiles_by_date = defaultdict(list)
 
         for feature in features:
-            datetime_str = feature.get("properties", {}).get("datetime", "")
+            datetime_str = cls._acquisition_datetime(feature)
 
             if datetime_str:
                 try:
@@ -572,8 +578,8 @@ class TileSelector:
             # Only "unknown" dates available
             return ("unknown", tiles_by_date.get("unknown", []))
 
-        # Sort by score (highest first)
-        date_scores.sort(key=lambda x: x["score"], reverse=True)
+        # Sort by score (highest first); on a tie the newer date wins
+        date_scores.sort(key=lambda x: (x["score"], x["date"]), reverse=True)
 
         best = date_scores[0]
         logger.info(
@@ -752,7 +758,7 @@ class TileSelector:
         # DIMENSION 1: RECENCY (normalized 0-100, then weighted)
         # =================================================================
         recency_raw = 0.0
-        datetime_str = properties.get("datetime")
+        datetime_str = cls._acquisition_datetime(feature)
         if datetime_str:
             try:
                 tile_date = datetime.fromisoformat(datetime_str.replace("Z", "+00:00"))

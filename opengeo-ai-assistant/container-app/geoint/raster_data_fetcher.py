@@ -230,7 +230,8 @@ class RasterDataFetcher:
 
                 # Calculate slope and aspect
                 slope, aspect = self._calculate_slope_aspect(
-                    elevation, src.res[0]  # pixel resolution in meters
+                    elevation,
+                    src.res[0],  # pixel resolution in meters
                 )
 
                 slope_stats = {
@@ -342,7 +343,6 @@ class RasterDataFetcher:
         Fetch spectral band data and calculate vegetation indices.
         """
         try:
-
             band_mapping = SPECTRAL_BAND_MAPPINGS.get(collection_id, {})
             if not band_mapping:
                 return {"indices": {}, "source": "unsupported_collection"}

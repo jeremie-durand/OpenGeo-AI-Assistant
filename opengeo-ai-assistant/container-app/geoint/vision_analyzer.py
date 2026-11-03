@@ -384,9 +384,9 @@ class VisionAnalyzer:
         base_context = f"""Analyze this satellite image centered at coordinates ({latitude}, {longitude}) covering approximately {radius_miles} miles radius.
 
 Image metadata:
-- Source: {image_metadata.get('source', 'Unknown')}
-- Date: {image_metadata.get('date', 'Unknown')}
-- Resolution: {image_metadata.get('resolution', 'Unknown')}
+- Source: {image_metadata.get("source", "Unknown")}
+- Date: {image_metadata.get("date", "Unknown")}
+- Resolution: {image_metadata.get("resolution", "Unknown")}
 """
 
         if module_type == "terrain":

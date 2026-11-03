@@ -56,6 +56,16 @@ docker compose run --rm -u root \
 ```
 
 ```bash
+# Re-record /api/query snapshots after an intended behavior change (from repo root).
+# Refactors must not change tests/snapshots/query_endpoint.json; review its diff.
+
+docker compose run --rm -u root -e UPDATE_QUERY_SNAPSHOTS=1 \
+  -v "$(pwd)/opengeo-ai-assistant/container-app/tests:/app/tests" \
+  backend \
+  sh -c "pip install --no-cache-dir pytest pytest-asyncio && pytest tests/test_query_endpoint.py -p no:cacheprovider"
+```
+
+```bash
 #Run frontend tests (from repo root)
 
 cd opengeo-ai-assistant/web-ui && npm run test:run
@@ -77,7 +87,7 @@ docker-compose.yml     # Two services: backend (port 8000) + frontend (port 3000
 ### Frontend (`web-ui/src/`)
 
 - Entry: `main.tsx` → `App.tsx`
-- Key components: `MapView` (Leaflet), `ChatPanel`, `CatalogPanel`, `GeointOverlay`, `ModelSelector`
+- Key components: `MapView` (Leaflet), `ChatPanel`, `CatalogPanel`, `GeointOverlay`, `ModelSelector`, `DashboardPanel` (`components/dashboard/`, data availability for the map view)
 - State: React hooks + TanStack Query for server state
 - API client: `services/api.ts` proxied to `localhost:8000` in dev (`vite.config.ts`)
 
@@ -85,9 +95,21 @@ docker-compose.yml     # Two services: backend (port 8000) + frontend (port 3000
 
 **Request Flow:**
 
-1. `fastapi_app.py` — Main FastAPI app, all routes defined here (large file ~323KB)
-2. `POST /api/query` → `semantic_translator.py` / `generic_query_translator.py` → `location_resolver.py` → `collection_name_mapper.py` → tile selection/rendering
+1. `fastapi_app.py` — App factory: lifespan, middleware, router registration
+   - `routers/` — one `APIRouter` per endpoint family (query, search, system, geoint_*)
+   - `services/` — shared helpers (STAC search, tile URLs/dedup, pipeline trace)
+   - `app_state.py` — runtime components set at startup (translator, router agent)
+2. `POST /api/query` (`routers/query.py`) → stages in `services/query_pipeline/`:
+   intake → quickstart fast path → RouterAgent routing → early intents (vision,
+   contextual) → translation (`generic_query_translator.py`, `location_resolver.py`)
+   → STAC search → message → tile rendering → response. Stages share one
+   `QueryState`; `tests/test_query_endpoint.py` snapshots the end-to-end behavior.
 3. GEOINT requests (`/api/geoint/*`) → `geoint/router_agent.py` → specialized agent
+4. Dashboard (`routers/dashboard.py`): `GET /api/dashboard/collections` serves the
+   cached renderable catalog (`services/dashboard_catalog.py`);
+   `POST /api/dashboard/stats` runs one trimmed STAC search for the focused
+   collection (`services/dashboard_stats.py`). `/api/query` accepts the
+   dashboard's `dashboard_context` (`services/query_pipeline/dashboard_context.py`)
 
 **LLM Abstraction:**
 
@@ -160,6 +182,8 @@ RATE_LIMIT_SEARCH=30/minute
 - Satellite data discovery uses standard STAC API endpoints (Planetary Computer, VEDA, or local).
 
 - Agent orchestration uses `semantic_kernel` 1.36.2. Follow existing agent patterns in `geoint/` when adding new agents.
+
+- Before any `git commit`, run `/review-opengaa` on the staged changes. Never use `git commit --no-verify` unless the user explicitly asks.
 
 ### Python: Key Patterns to Follow
 

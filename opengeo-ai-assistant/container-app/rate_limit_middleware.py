@@ -23,6 +23,7 @@ _SEARCH_EXACT = {
     "/api/structured-search",
     "/api/sign-mosaic-url",
     "/api/session-reset",
+    "/api/dashboard/stats",
 }
 
 _storage = MemoryStorage()

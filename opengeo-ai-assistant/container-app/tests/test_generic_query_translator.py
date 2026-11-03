@@ -8,10 +8,10 @@ Covers:
   - build_stac_query_agent requests JSON mode and anchors the result
 """
 
+import sys
 from unittest.mock import AsyncMock
 
 import pytest
-
 from generic_query_translator import (
     _KNOWN_BBOXES,
     _anchor_bbox,
@@ -136,3 +136,56 @@ class TestBuildStacQueryAgent:
         )
         result = await translator.build_stac_query_agent("Sherbrooke", ["sentinel-2"])
         assert result["bbox"] == _KNOWN_BBOXES["sherbrooke"]
+
+
+# ===========================================================================
+# collection_mapping_agent — keyword fallback must not import fastapi_app
+# ===========================================================================
+
+
+class TestCollectionMappingFallback:
+    @pytest.mark.asyncio
+    async def test_fallback_works_without_fastapi_app(self, monkeypatch) -> None:
+        """The keyword fallback must not depend on the web app module."""
+        from generic_query_translator import GenericQueryTranslator
+
+        monkeypatch.setitem(sys.modules, "fastapi_app", None)
+        translator = GenericQueryTranslator()
+        translator._llm = _fake_client("not json")
+        translator._discover_stac_collections = AsyncMock(return_value=[])
+        result = await translator.collection_mapping_agent("wildfire near Sherbrooke")
+        assert result == ["landsat-c2-l2", "sentinel-2-l2a", "modis-14A1-061"]
+
+
+# ===========================================================================
+# generate_contextual_earth_science_response — dashboard figures section
+# ===========================================================================
+
+
+class TestContextualDashboardPrompt:
+    HINT = "[Dashboard shown to the user: modis-10A2-061; scenes per month: ...]"
+
+    async def _prompt(self, **kwargs) -> str:
+        from generic_query_translator import GenericQueryTranslator
+
+        translator = GenericQueryTranslator()
+        translator._llm = _fake_client("answer")
+        await translator.generate_contextual_earth_science_response(
+            "why so few scenes in March?", {}, **kwargs
+        )
+        return translator._llm.chat.call_args.args[0][0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_dashboard_figures_get_their_own_section(self) -> None:
+        """The figures must not be read as the user's words or as 0 results."""
+        prompt = await self._prompt(dashboard_hint=self.HINT)
+        assert 'USER QUERY: "why so few scenes in March?"' in prompt
+        assert f"DASHBOARD SHOWN TO THE USER: {self.HINT}" in prompt
+        assert "quote the relevant numbers" in prompt
+        assert "RESULTS:" not in prompt
+
+    @pytest.mark.asyncio
+    async def test_prompt_without_dashboard_is_unchanged(self) -> None:
+        prompt = await self._prompt()
+        assert "RESULTS: 0 satellite data item(s) found." in prompt
+        assert "DASHBOARD" not in prompt
