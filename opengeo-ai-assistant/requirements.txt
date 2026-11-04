@@ -11,7 +11,7 @@ openai==2.53.0
 anthropic==2.3.0
 semantic-kernel==1.45.0
 planetary-computer==1.0.0
-pystac-client==0.9.0
+pystac-client==0.9.1
 stac-pydantic==3.7.1
 rasterio==1.5.2
 xarray==2026.9.0
