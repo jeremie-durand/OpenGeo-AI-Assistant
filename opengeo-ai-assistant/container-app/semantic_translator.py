@@ -1517,12 +1517,15 @@ Query: "{query}"
             logger.info(f"   Base URL: {self.llm_base_url}")
 
             # Primary service
+            from llm_client import create_openai_async_client
             from semantic_kernel.connectors.ai.open_ai import OpenAIChatCompletion
 
+            openai_client = create_openai_async_client(
+                self.llm_api_key, self.llm_base_url or None
+            )
             chat_service = OpenAIChatCompletion(
                 ai_model_id=active_model,
-                api_key=self.llm_api_key,
-                base_url=self.llm_base_url,
+                async_client=openai_client,
                 service_id="chat-completion",
             )
             self.kernel.add_service(chat_service)
@@ -1533,8 +1536,7 @@ Query: "{query}"
             try:
                 chat_service_fast = OpenAIChatCompletion(
                     ai_model_id=fast_model,
-                    api_key=self.llm_api_key,
-                    base_url=self.llm_base_url,
+                    async_client=openai_client,
                     service_id="chat-completion-4o",
                 )
                 self.kernel.add_service(chat_service_fast)
