@@ -5,8 +5,19 @@ from llm_client import (
     LLMClient,
     LLMConfigurationError,
     OpenAICompatClient,
+    create_openai_async_client,
     get_llm_client,
 )
+
+
+def test_create_openai_async_client_uses_base_url() -> None:
+    client = create_openai_async_client("fake", "http://localhost:11434/v1/")
+    assert str(client.base_url) == "http://localhost:11434/v1/"
+
+
+def test_create_openai_async_client_rejects_unsafe_base_url() -> None:
+    with pytest.raises(LLMConfigurationError, match="non-local host"):
+        create_openai_async_client("fake", "http://example.com/v1")
 
 
 def test_openai_client_instantiation() -> None:

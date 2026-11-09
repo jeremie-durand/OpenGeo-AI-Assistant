@@ -32,6 +32,17 @@ def _validate_base_url(base_url: str) -> None:
 logger = logging.getLogger(__name__)
 
 
+def create_openai_async_client(
+    api_key: str, base_url: Optional[str] = None
+) -> AsyncOpenAI:
+    """Build an AsyncOpenAI client for SDKs that take one, e.g. Semantic Kernel."""
+    client_kwargs: Dict[str, Any] = {"api_key": api_key}
+    if base_url:
+        _validate_base_url(base_url)
+        client_kwargs["base_url"] = base_url
+    return AsyncOpenAI(**client_kwargs)
+
+
 # ---------------------------------------------------------------------------
 # OpenAI-compatible shim for Anthropic responses
 # ---------------------------------------------------------------------------
