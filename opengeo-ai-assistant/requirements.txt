@@ -1,4 +1,4 @@
-cachetools==7.2.8
+cachetools==8.0.0
 fastapi==0.162.5
 uvicorn[standard]==0.54.0
 pydantic==2.11.9
