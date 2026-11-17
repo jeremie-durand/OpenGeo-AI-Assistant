@@ -15,6 +15,7 @@ from quickstart_cache import get_quickstart_stats  # [LAUNCH] Pre-computed cache
 from rate_limit_middleware import RateLimitMiddleware
 from routers import (
     dashboard,
+    datasets,
     geoint_analysis,
     geoint_climate,
     geoint_terrain,
@@ -160,6 +161,7 @@ app.include_router(geoint_climate.router)
 app.include_router(geoint_analysis.router)
 app.include_router(query.router)
 app.include_router(dashboard.router)
+app.include_router(datasets.router)
 
 
 @app.exception_handler(Exception)

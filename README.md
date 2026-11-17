@@ -74,6 +74,38 @@ second run with no catalog change re-embeds nothing. An exported file follows th
 Parquet contract below and can be served with `VECTOR_SEARCH_URL=file://...` and
 `VECTOR_SEARCH_MODE=external`.
 
+### Dataset search API
+
+`POST /api/datasets/search` finds collections by meaning without calling the LLM.
+It is rate limited like the other search routes (`RATE_LIMIT_SEARCH`) and needs
+the `X-Api-Key` header when `ENABLE_AUTH=true`.
+
+```bash
+curl -X POST http://localhost:8000/api/datasets/search \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "intensité des feux de forêt", "k": 5,
+       "bbox": [-125.0, 24.0, -66.0, 50.0], "datetime": "2020-01-01/.."}'
+```
+
+```json
+{"results": [
+  {"id": "mtbs", "title": "MTBS: Monitoring Trends in Burn Severity",
+   "score": 0.78, "renderable": true, "source": "planetary_computer"}
+]}
+```
+
+- `query`: 1 to 500 characters (required); `k`: 1 to 50, default 10.
+- `bbox`: `[west, south, east, north]` in EPSG:4326, with west < east (split a
+  search across the antimeridian into two requests); only collections whose extent
+  intersects it are returned.
+- `datetime`: an RFC 3339 instant or interval, `..` for an open end; only
+  collections whose time range overlaps it are returned.
+- `renderable` says whether the map can display the collection; `source` is
+  `planetary_computer`, `private_stac` or `external`.
+- Invalid input returns 422. While vector search is disabled, building or degraded,
+  the endpoint returns 503 with the reason; when the backend fails during a
+  request it returns 503 with a generic message and logs the details.
+
 ### Parquet contract
 
 | Column | Type | Notes |
