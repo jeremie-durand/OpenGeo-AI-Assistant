@@ -9,24 +9,31 @@ from openai import AsyncOpenAI
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
 
 
-def _validate_base_url(base_url: str) -> None:
-    """Raise LLMConfigurationError if LLM_BASE_URL is not a safe endpoint."""
+def base_url_problem(base_url: str, setting: str = "LLM_BASE_URL") -> Optional[str]:
+    """Return why *base_url* is not a safe endpoint, or None when it is."""
     parsed = urlparse(base_url)
     if parsed.scheme == "https":
-        return
+        return None
     if parsed.scheme == "http":
         host = parsed.hostname or ""
         if host in _LOCAL_HOSTS:
-            return
-        raise LLMConfigurationError(
-            f"LLM_BASE_URL uses http:// with non-local host '{host}'. "
+            return None
+        return (
+            f"{setting} uses http:// with non-local host '{host}'. "
             "Use https:// for remote endpoints, or http://localhost / "
             "http://host.docker.internal for local models."
         )
-    raise LLMConfigurationError(
-        f"LLM_BASE_URL has unsupported scheme '{parsed.scheme}'. "
+    return (
+        f"{setting} has unsupported scheme '{parsed.scheme}'. "
         "Only https:// (remote) and http://localhost (local) are allowed."
     )
+
+
+def _validate_base_url(base_url: str, setting: str = "LLM_BASE_URL") -> None:
+    """Raise LLMConfigurationError if *base_url* is not a safe endpoint."""
+    problem = base_url_problem(base_url, setting)
+    if problem:
+        raise LLMConfigurationError(problem)
 
 
 logger = logging.getLogger(__name__)
@@ -260,6 +267,39 @@ class LLMClient:
             response = await self._client.chat(messages, **kwargs)
             return response
         raise LLMConfigurationError(f"Unsupported provider '{self.provider}'")
+
+
+class EmbeddingClient:
+    """Client for an OpenAI-compatible `/embeddings` endpoint."""
+
+    def __init__(self, client: AsyncOpenAI, model: str) -> None:
+        self._client = client
+        self.model = model
+
+    async def embed(self, texts: List[str]) -> List[List[float]]:
+        """Return one embedding per text, in input order."""
+        response = await self._client.embeddings.create(model=self.model, input=texts)
+        ordered = sorted(response.data, key=lambda item: item.index)
+        return [list(item.embedding) for item in ordered]
+
+
+def create_embedding_client(
+    api_key: str,
+    model: str,
+    base_url: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> EmbeddingClient:
+    """Build an embeddings client bounded by *timeout* seconds, with no retries.
+
+    The base URL gets the same checks as LLM_BASE_URL.
+    """
+    client_kwargs: Dict[str, Any] = {"api_key": api_key, "max_retries": 0}
+    if base_url:
+        _validate_base_url(base_url, "EMBEDDING_BASE_URL")
+        client_kwargs["base_url"] = base_url
+    if timeout is not None:
+        client_kwargs["timeout"] = timeout
+    return EmbeddingClient(AsyncOpenAI(**client_kwargs), model)
 
 
 # Convenience module-level helper used by the app
