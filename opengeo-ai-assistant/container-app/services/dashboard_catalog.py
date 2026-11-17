@@ -24,6 +24,7 @@ GLOBAL_MIN_WIDTH = 350.0
 GLOBAL_MIN_HEIGHT = 160.0
 
 _cache: Optional[Dict[str, Any]] = None
+_intervals: Dict[str, List[Optional[str]]] = {}
 _lock = asyncio.Lock()
 
 
@@ -38,6 +39,11 @@ def _stac_id_by_config_id() -> Dict[str, str]:
         if config_id in mapping:
             mapping[config_id] = stac_id
     return mapping
+
+
+def renderable_collections() -> Dict[str, str]:
+    """Map each rendering-config id to the STAC id of a renderable collection."""
+    return dict(_stac_id_by_config_id())
 
 
 def renderable_collection_ids() -> List[str]:
@@ -67,6 +73,21 @@ def is_global_bbox(bbox: List[float]) -> bool:
     width = bbox[2] - bbox[0]
     height = bbox[3] - bbox[1]
     return width >= GLOBAL_MIN_WIDTH and height >= GLOBAL_MIN_HEIGHT
+
+
+def build_intervals(upstream: List[Dict[str, Any]]) -> Dict[str, List[Optional[str]]]:
+    """Map each upstream collection id to its overall [start, end] interval."""
+    intervals: Dict[str, List[Optional[str]]] = {}
+    for collection in upstream:
+        values = collection.get("extent", {}).get("temporal", {}).get("interval")
+        if values and len(values[0]) == 2:
+            intervals[collection.get("id")] = list(values[0])
+    return intervals
+
+
+def collection_intervals() -> Dict[str, List[Optional[str]]]:
+    """Return the temporal intervals fetched with the cached catalog."""
+    return dict(_intervals)
 
 
 def build_catalog(upstream: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -110,7 +131,7 @@ async def get_catalog() -> Dict[str, Any]:
     A failed refresh keeps serving the stale catalog; with nothing cached it
     raises CatalogUnavailableError.
     """
-    global _cache
+    global _cache, _intervals
     if _is_fresh(_cache):
         return _cache
     async with _lock:
@@ -126,6 +147,7 @@ async def get_catalog() -> Dict[str, Any]:
                 "Dataset catalog is unavailable right now"
             ) from e
         _cache = {"collections": build_catalog(upstream), "fetched_at": time.time()}
+        _intervals = build_intervals(upstream)
         logger.info(
             f"[OK] Dashboard catalog built: {len(_cache['collections'])} collections"
         )
@@ -142,6 +164,7 @@ async def warm_catalog() -> None:
 
 def reset_cache() -> None:
     """Drop the cached catalog and its lock (used by tests)."""
-    global _cache, _lock
+    global _cache, _intervals, _lock
     _cache = None
+    _intervals = {}
     _lock = asyncio.Lock()

@@ -25,6 +25,7 @@ from routers import (
     system,
 )
 from services.dashboard_catalog import warm_catalog
+from services.vector_search.index import get_index as get_vector_index
 
 logging.info("[OK] GEOINT endpoints available (lazy import mode)")
 
@@ -96,10 +97,12 @@ async def lifespan(app: FastAPI):
     )
 
     catalog_warmup = asyncio.create_task(warm_catalog())
+    vector_index = asyncio.create_task(get_vector_index().run())
 
     yield
 
     catalog_warmup.cancel()
+    vector_index.cancel()
 
 
 # Initialize FastAPI app

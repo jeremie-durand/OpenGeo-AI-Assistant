@@ -57,7 +57,22 @@ multilingual embedding model and builds a Parquet index at startup. Set
 
 In `managed` mode (the default) the assistant builds and refreshes its own index.
 In `external` mode it only reads documents you maintain, which must follow the
-contract below.
+contract below. `/api/health` shows the `vector_search` status (`ready`,
+`building`, `degraded` or `disabled`) without affecting the overall health.
+
+The index builds in the background at startup and refreshes every 24 hours. To
+build it, export it or check it by hand:
+
+```bash
+docker compose run --rm backend python -m services.vector_search.cli build
+docker compose run --rm backend python -m services.vector_search.cli export --out /app/data/index.parquet
+docker compose run --rm backend python -m services.vector_search.cli status
+```
+
+`build` prints how many documents were added, updated, unchanged and removed, and a
+second run with no catalog change re-embeds nothing. An exported file follows the
+Parquet contract below and can be served with `VECTOR_SEARCH_URL=file://...` and
+`VECTOR_SEARCH_MODE=external`.
 
 ### Parquet contract
 
