@@ -48,7 +48,9 @@ The `opengeo-ai-assistant/mcp-server` directory contains code and configuration 
 
 ## License
 
-See [LICENSE.txt](LICENSE.txt)
+See [LICENSE.txt](LICENSE.txt). Third-party material bundled in the Docker images,
+such as the vector search embedding model, is listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Credits & Acknowledgments
 

@@ -25,6 +25,28 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+RUN groupadd --system appuser && useradd --system --no-create-home --gid appuser appuser
+
+ENV VECTOR_SEARCH_MODEL_DIR=/opt/models
+ENV DUCKDB_EXTENSION_DIR=/opt/duckdb_extensions
+ARG MODEL_SNAPSHOTS=/opt/models/models--Qdrant--paraphrase-multilingual-MiniLM-L12-v2-onnx-Q/snapshots
+ARG MODEL_REVISION=faf4aa4225822f3bc6376869cb1164e8e3feedd0
+
+RUN set -e; \
+    python -c "from fastembed import TextEmbedding; \
+TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2', \
+cache_dir='/opt/models')"; \
+    if [ ! -d "${MODEL_SNAPSHOTS}/${MODEL_REVISION}" ]; then \
+        echo "Embedding model revision is not ${MODEL_REVISION}" >&2; exit 1; \
+    fi; \
+    python -c "import duckdb; \
+duckdb.connect(config={'extension_directory': '/opt/duckdb_extensions'})\
+.install_extension('httpfs')"; \
+    chown -R appuser:appuser /opt/models
+
+COPY --chown=appuser:appuser licenses/paraphrase-multilingual-MiniLM-L12-v2-LICENSE \
+    /opt/models/
+
 COPY container-app/*.py ./
 COPY container-app/*.json ./
 COPY container-app/agents/ ./agents/
@@ -32,10 +54,9 @@ COPY container-app/geoint/ ./geoint/
 COPY container-app/services/ ./services/
 COPY container-app/routers/ ./routers/
 
-RUN mkdir -p /app/uploads
+RUN mkdir -p /app/uploads /app/data
 
-RUN groupadd --system appuser && useradd --system --no-create-home --gid appuser appuser \
-    && chown -R appuser:appuser /app
+RUN chown -R appuser:appuser /app
 USER appuser
 
 ENV PYTHONPATH=/app
