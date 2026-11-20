@@ -8,7 +8,7 @@ updates:
     allow:
       - dependency-type: "all"
     commit-message:
-      prefix: "feat"
+      prefix: "chore"
 
   - package-ecosystem: "npm"
     directory: "/opengeo-ai-assistant/web-ui/"
@@ -18,4 +18,4 @@ updates:
     allow:
       - dependency-type: "all"
     commit-message:
-      prefix: "feat"
+      prefix: "chore"
