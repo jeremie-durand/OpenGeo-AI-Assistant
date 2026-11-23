@@ -6,7 +6,6 @@ import DOMPurify from 'dompurify';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiService, Dataset, ChatMessage, MapContext } from '../services/api';
 import { enhanceMessageForMapVisualization, hasVisualizableData } from './OpenGeoMapIntegration';
-import vedaSearchService from '../services/vedaSearchService';
 import { useI18n } from '../i18n/I18nContext';
 
 // Enhanced function to extract text from complex response objects
@@ -252,8 +251,6 @@ const Chat: React.FC<ChatProps> = ({
   //  Local vision session ID tracking (for first message -> follow-ups)
   const [localVisionSessionId, setLocalVisionSessionId] = useState<string | null>(null);
 
-  // VEDA search mode state
-  const [isVedaMode, setIsVedaMode] = useState(false);
   const [currentCollectionId, setCurrentCollectionId] = useState<string | null>(null);
 
   // State for pending query from GetStartedButton
@@ -1202,59 +1199,6 @@ const Chat: React.FC<ChatProps> = ({
     },
   });
 
-  // Private search mutation for VEDA AI Search (Direct Service)
-  const privateSearchMutation = useMutation({
-    mutationFn: async ({ query, collection_id }: { query: string; collection_id?: string }) => {
-      try {
-        console.log(' Using direct VEDA search service:', { query, collection_id });
-        const result = await vedaSearchService.search(query, collection_id);
-        return result;
-      } catch (error) {
-        console.error('VEDA search error:', error);
-        throw new Error(
-          'Failed to search VEDA datasets. Please check your configuration and try again.'
-        );
-      }
-    },
-    onSuccess: (responseData) => {
-      console.log(' VEDA Search: Complete responseData received:', responseData);
-
-      // Extract the answer from the VEDA AI Search response
-      const textResponse = responseData?.answer || 'VEDA search completed successfully.';
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: textResponse,
-          timestamp: new Date(),
-          source: 'veda_ai_search',
-        },
-      ]);
-
-      // Pass the response data to map for visualization
-      if (onResponseReceived) {
-        onResponseReceived({
-          message: textResponse,
-          collections: responseData?.collections || [],
-          source: 'veda_ai_search',
-        });
-      }
-    },
-    onError: (error) => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content:
-            error?.message ||
-            'Sorry, I encountered an error with the private search. Please try again.',
-          timestamp: new Date(),
-        },
-      ]);
-    },
-  });
-
   // Handle initial query from landing page
   useEffect(() => {
     if (initialQuery && chatMode && !initialQueryRef.current) {
@@ -1695,11 +1639,9 @@ const Chat: React.FC<ChatProps> = ({
                     ? 'Ask a follow-up question about this terrain...'
                     : selectedModule === 'extreme_weather'
                       ? 'Ask about climate projections, temperature trends, extreme heat days...'
-                      : isVedaMode
-                        ? 'Ask about climate data, earth observations, or environmental datasets...'
-                        : selectedDataset
-                          ? `Ask about ${selectedDataset.title}...`
-                          : 'Ask about Earth data...'
+                      : selectedDataset
+                        ? `Ask about ${selectedDataset.title}...`
+                        : 'Ask about Earth data...'
               }
               disabled={chatMutation.isPending}
             />
