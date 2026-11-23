@@ -181,7 +181,7 @@ RATE_LIMIT_SEARCH=30/minute
 
 - Satellite data discovery uses standard STAC API endpoints (Planetary Computer, VEDA, or local).
 
-- Agent orchestration uses `semantic_kernel` 1.36.2. Follow existing agent patterns in `geoint/` when adding new agents.
+- Agent orchestration uses `semantic_kernel`. Follow existing agent patterns in `geoint/` when adding new agents.
 
 - Before any `git commit`, run `/review-opengaa` on the staged changes. Never use `git commit --no-verify` unless the user explicitly asks.
 
