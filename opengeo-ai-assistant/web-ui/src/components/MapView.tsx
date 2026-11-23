@@ -4133,8 +4133,7 @@ const MapView: React.FC<MapViewProps> = ({
         datetime: satelliteData?.items?.[0]?.datetime || null,
         // Azure Maps was removed, so the `atlas` types are gone; this branch only
         // runs for a non-Leaflet provider, of which there is currently none.
-        zoom_level:
-          mapProvider === 'leaflet' ? map.getZoom() : (map as any).getCamera().zoom,
+        zoom_level: mapProvider === 'leaflet' ? map.getZoom() : (map as any).getCamera().zoom,
         has_satellite_data: !!satelliteData, // Flag to indicate if STAC imagery is loaded
         vision_mode: visionMode, // explicit vision mode flag
         vision_pin: visionMode ? visionPin : null, // pin coordinates for vision analysis
