@@ -200,3 +200,17 @@ def test_same_origin_url() -> None:
     assert sources.same_origin_url(base, "https://stac:8081/x") is None
     assert sources.same_origin_url(base, "http://evil:8081/x") is None
     assert sources.same_origin_url(base, "file:///etc/passwd") is None
+
+
+def test_placeholder_descriptions_are_replaced(monkeypatch) -> None:
+    _offline(monkeypatch)
+    documents, _ = asyncio.run(sources.planetary_computer_documents())
+    by_id = {doc.id: doc for doc in documents}
+    overrides = sources._description_overrides()
+    assert set(overrides) <= set(by_id)
+    for collection_id in overrides:
+        assert "geospatial dataset from Microsoft Planetary Computer" not in (
+            by_id[collection_id].description
+        )
+    assert by_id["jrc-gsw"].title == "JRC Global Surface Water"
+    assert "Lakes" in by_id["jrc-gsw"].keywords

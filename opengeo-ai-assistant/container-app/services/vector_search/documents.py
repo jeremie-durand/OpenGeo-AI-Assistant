@@ -1,6 +1,7 @@
 """Collection document contract, indexed text, and extent/datetime helpers."""
 
 import hashlib
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timezone
 from typing import List, Optional, Sequence, Tuple
@@ -12,6 +13,8 @@ WORLD_BBOX: Bbox = (-180.0, -90.0, 180.0, 90.0)
 OPEN_START = datetime(1, 1, 1, tzinfo=timezone.utc)
 OPEN_END = datetime(9999, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
 OPEN_END_MARKER = ".."
+
+MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 
 SOURCE_PLANETARY_COMPUTER = "planetary_computer"
 SOURCE_PRIVATE_STAC = "private_stac"
@@ -34,8 +37,12 @@ class CollectionDocument:
 
     @property
     def text(self) -> str:
-        """Return the text that is embedded for this collection."""
-        parts = [self.title, self.description, ", ".join(self.keywords)]
+        """Return the text that is embedded for this collection.
+
+        Keywords come before the description, and markdown links are reduced
+        to their label, because the model only reads the first 128 tokens.
+        """
+        parts = [self.title, ", ".join(self.keywords), plain_text(self.description)]
         return "\n".join(part for part in parts if part)
 
     @property
@@ -48,6 +55,11 @@ class CollectionDocument:
         values = {name: getattr(self, name) for name in self.__dataclass_fields__}
         values["embedding"] = embedding
         return CollectionDocument(**values)
+
+
+def plain_text(markdown: str) -> str:
+    """Reduce markdown links to their label and collapse whitespace."""
+    return " ".join(MARKDOWN_LINK.sub(r"\1", markdown).split())
 
 
 def lon_ranges(minx: float, maxx: float) -> List[Tuple[float, float]]:

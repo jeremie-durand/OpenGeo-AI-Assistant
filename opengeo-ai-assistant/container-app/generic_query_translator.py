@@ -25,7 +25,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from llm_client import LLMClient
@@ -251,6 +251,78 @@ def _keyword_extract_stac_params(query: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+FALLBACK_COLLECTION_LIST = (
+    "sentinel-2-l2a : Sentinel-2 optical imagery (10 m)\n"
+    "landsat-c2-l2 : Landsat Collection 2 Level-2 (30 m)\n"
+    "hls2-s30 : Harmonized Landsat-Sentinel (Sentinel) 30 m\n"
+    "hls2-l30 : Harmonized Landsat-Sentinel (Landsat) 30 m\n"
+    "naip : NAIP aerial imagery (US, <1 m)\n"
+    "modis-09A1-061 : MODIS surface reflectance 8-day 500 m\n"
+    "modis-09Q1-061 : MODIS surface reflectance 8-day 250 m\n"
+    "cop-dem-glo-30 : Copernicus DEM 30 m\n"
+    "cop-dem-glo-90 : Copernicus DEM 90 m\n"
+    "alos-dem : ALOS DEM 30 m\n"
+    "3dep-lidar-hag : USGS 3DEP LiDAR height above ground\n"
+    "sentinel-1-rtc : Sentinel-1 SAR RTC\n"
+    "sentinel-1-grd : Sentinel-1 SAR GRD\n"
+    "modis-14A1-061 : MODIS thermal anomalies / fire daily\n"
+    "modis-14A2-061 : MODIS fire 8-day\n"
+    "modis-64A1-061 : MODIS burned area monthly\n"
+    "modis-10A1-061 : MODIS snow cover daily\n"
+    "modis-10A2-061 : MODIS snow cover 8-day\n"
+    "modis-13Q1-061 : MODIS NDVI/EVI 250 m 16-day\n"
+    "modis-13A1-061 : MODIS NDVI/EVI 500 m 16-day\n"
+    "modis-11A1-061 : MODIS land surface temperature daily\n"
+    "modis-11A2-061 : MODIS land surface temperature 8-day\n"
+    "esa-worldcover : ESA WorldCover land cover 10 m\n"
+    "io-lulc-9-class : IO/Esri land use land cover\n"
+    "usda-cdl : USDA cropland data layer\n"
+    "jrc-gsw-occurrence : JRC global surface water\n"
+    "noaa-cdr-sea-surface-temp-whoi : NOAA sea surface temperature\n"
+    "noaa-mrms-qpe-1h-pass1 : NOAA MRMS hourly precipitation\n"
+    "nasa-nex-gddp-cmip6 : NASA NEX GDDP CMIP6 climate projections\n"
+    "chloris-biomass : Chloris above-ground biomass"
+)
+DEFAULT_CANDIDATES = ("sentinel-2-l2a", "landsat-c2-l2")
+RETRIEVAL_CANDIDATES = 12
+RETRIEVAL_FETCH = 3 * RETRIEVAL_CANDIDATES
+MAX_SELECTED_COLLECTIONS = 3
+
+
+async def _retrieval_hits(query: str, index: Any = None) -> Optional[List[Any]]:
+    """Return the top renderable vector search hits, or None for the fixed list.
+
+    *index* defaults to the process-wide index; the evaluation CLI passes its own.
+    """
+    try:
+        from services.vector_search import retriever
+        from services.vector_search.index import get_index
+
+        index = index or get_index()
+        if not index.ready:
+            return None
+        hits = await retriever.search(query, RETRIEVAL_FETCH, index=index)
+    except Exception as exc:
+        logger.warning(f"[GQT] vector search unavailable, using fixed list: {exc}")
+        return None
+    return [hit for hit in hits if hit.renderable][:RETRIEVAL_CANDIDATES]
+
+
+def _candidate_titles(hits: List[Any]) -> List[Tuple[str, str]]:
+    """Return (id, title) candidates: retrieval hits plus the safe defaults."""
+    from pc_tasks_config_loader import get_collection_title
+    from services.dashboard_catalog import renderable_collections
+
+    config_ids = {stac: config for config, stac in renderable_collections().items()}
+    candidates = [(hit.id, hit.title) for hit in hits]
+    offered = {cid for cid, _ in candidates}
+    for default in DEFAULT_CANDIDATES:
+        if default not in offered:
+            title = get_collection_title(config_ids.get(default, default))
+            candidates.append((default, title or default))
+    return candidates
+
+
 class GenericQueryTranslator:
     """Provider-agnostic query translator used when LLM_PROVIDER is set to "generic"."""
 
@@ -339,57 +411,28 @@ class GenericQueryTranslator:
         return None
 
     async def collection_mapping_agent(self, query: str) -> List[str]:
-        """Return a list of PC-compatible STAC collection IDs relevant to *query*.
+        """Return STAC collection IDs relevant to *query*.
 
-        The query pipeline always uses Planetary Computer collection IDs (e.g.
-        "sentinel-2-l2a").  Local STAC discovery is stored separately in
-        _local_collection_ids and used ONLY by determine_stac_source to decide
-        whether to route to the local endpoint — and only when the local STAC
-        uses the exact same collection ID as PC (e.g. "sentinel-2-l2a").
-        Collections with non-PC IDs (e.g. "sentinel2_eo_products") never match
-        and the query goes to Planetary Computer automatically.
+        When vector search is ready, the LLM chooses among the top renderable
+        retrieval hits plus the Sentinel-2 and Landsat defaults, keeping at most
+        3 offered ids that go to one STAC API. The best hits, or the keyword
+        rules when there are none, replace an unusable LLM answer. Otherwise
+        (disabled, building, degraded, or a retrieval error for this request)
+        the fixed list and keyword rules apply as before.
+        Local STAC discovery still fills _local_collection_ids for
+        determine_stac_source.
         """
-        # Discover local collections for routing purposes only — not for prompting.
         discovered = await self._discover_stac_collections()
         self._local_collection_ids = (
             {c["id"] for c in discovered} if discovered else None
         )
+        hits = await _retrieval_hits(query)
+        if hits is None:
+            return await self._fixed_list_selection(query)
+        return await self._candidate_selection(query, hits)
 
-        # Always prompt the LLM with PC collection IDs so the returned IDs are
-        # always valid for Planetary Computer regardless of local STAC state.
-        collection_list = (
-            "sentinel-2-l2a : Sentinel-2 optical imagery (10 m)\n"
-            "landsat-c2-l2 : Landsat Collection 2 Level-2 (30 m)\n"
-            "hls2-s30 : Harmonized Landsat-Sentinel (Sentinel) 30 m\n"
-            "hls2-l30 : Harmonized Landsat-Sentinel (Landsat) 30 m\n"
-            "naip : NAIP aerial imagery (US, <1 m)\n"
-            "modis-09A1-061 : MODIS surface reflectance 8-day 500 m\n"
-            "modis-09Q1-061 : MODIS surface reflectance 8-day 250 m\n"
-            "cop-dem-glo-30 : Copernicus DEM 30 m\n"
-            "cop-dem-glo-90 : Copernicus DEM 90 m\n"
-            "alos-dem : ALOS DEM 30 m\n"
-            "3dep-lidar-hag : USGS 3DEP LiDAR height above ground\n"
-            "sentinel-1-rtc : Sentinel-1 SAR RTC\n"
-            "sentinel-1-grd : Sentinel-1 SAR GRD\n"
-            "modis-14A1-061 : MODIS thermal anomalies / fire daily\n"
-            "modis-14A2-061 : MODIS fire 8-day\n"
-            "modis-64A1-061 : MODIS burned area monthly\n"
-            "modis-10A1-061 : MODIS snow cover daily\n"
-            "modis-10A2-061 : MODIS snow cover 8-day\n"
-            "modis-13Q1-061 : MODIS NDVI/EVI 250 m 16-day\n"
-            "modis-13A1-061 : MODIS NDVI/EVI 500 m 16-day\n"
-            "modis-11A1-061 : MODIS land surface temperature daily\n"
-            "modis-11A2-061 : MODIS land surface temperature 8-day\n"
-            "esa-worldcover : ESA WorldCover land cover 10 m\n"
-            "io-lulc-9-class : IO/Esri land use land cover\n"
-            "usda-cdl : USDA cropland data layer\n"
-            "jrc-gsw-occurrence : JRC global surface water\n"
-            "noaa-cdr-sea-surface-temp-whoi : NOAA sea surface temperature\n"
-            "noaa-mrms-qpe-1h-pass1 : NOAA MRMS hourly precipitation\n"
-            "nasa-nex-gddp-cmip6 : NASA NEX GDDP CMIP6 climate projections\n"
-            "chloris-biomass : Chloris above-ground biomass"
-        )
-
+    async def _ask_collections(self, query: str, collection_list: str) -> Any:
+        """Ask the LLM for collection ids from *collection_list*; may raise."""
         prompt = f"""You are a geospatial data assistant. Given a user query, return the most relevant STAC satellite/geospatial collection IDs from the list below.
 
 AVAILABLE COLLECTIONS (ID : description):
@@ -401,15 +444,18 @@ USER QUERY: "{query}"
 
 Return ONLY a JSON array of collection IDs (max 3), most relevant first.
 Example: ["sentinel-2-l2a", "landsat-c2-l2"]"""
+        raw = await _llm_text(
+            self._llm,
+            [{"role": "user", "content": prompt}],
+            max_tokens=128,
+            temperature=0.0,
+        )
+        return _parse_json(raw)
 
+    async def _fixed_list_selection(self, query: str) -> List[str]:
+        """Pre-vector-search behaviour: fixed list, then keyword rules."""
         try:
-            raw = await _llm_text(
-                self._llm,
-                [{"role": "user", "content": prompt}],
-                max_tokens=128,
-                temperature=0.0,
-            )
-            result = _parse_json(raw)
+            result = await self._ask_collections(query, FALLBACK_COLLECTION_LIST)
             if isinstance(result, list):
                 return [str(c) for c in result]
             logger.warning(f"[GQT] collection_mapping_agent unexpected shape: {result}")
@@ -420,6 +466,37 @@ Example: ["sentinel-2-l2a", "landsat-c2-l2"]"""
         from services.collection_detection import detect_collections
 
         return detect_collections(query)
+
+    async def _candidate_selection(self, query: str, hits: List[Any]) -> List[str]:
+        """Let the LLM pick among retrieval candidates; fall back to the best hits."""
+        candidates = _candidate_titles(hits)
+        offered = {cid for cid, _ in candidates}
+        collection_list = "\n".join(f"{cid} : {title}" for cid, title in candidates)
+        selected: List[str] = []
+        try:
+            result = await self._ask_collections(query, collection_list)
+            if isinstance(result, list):
+                selected = [str(c) for c in result if str(c) in offered]
+            else:
+                logger.warning(f"[GQT] collection_mapping_agent unexpected: {result}")
+        except Exception as exc:
+            logger.error(f"[GQT] collection_mapping_agent failed: {exc}")
+        if not selected:
+            selected = [hit.id for hit in hits]
+        if not selected:
+            from services.collection_detection import detect_collections
+
+            return detect_collections(query)
+        unique = list(dict.fromkeys(selected))
+        return self._same_stac_api(unique)[:MAX_SELECTED_COLLECTIONS]
+
+    def _same_stac_api(self, ids: List[str]) -> List[str]:
+        """Keep only the ids searched on the same STAC API as the first one."""
+        if not ids or not os.getenv("STAC_API_URL", "").strip():
+            return ids
+        local = self._local_collection_ids or set()
+        first_is_local = ids[0] in local
+        return [cid for cid in ids if (cid in local) == first_is_local]
 
     # ------------------------------------------------------------------
     # Agent 2 — STAC query builder (location + datetime extraction)

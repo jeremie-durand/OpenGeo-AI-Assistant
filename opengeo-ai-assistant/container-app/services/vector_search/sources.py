@@ -1,9 +1,12 @@
 """Collection sources: renderable Planetary Computer collections and private STAC."""
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import quote, urljoin, urlsplit
 
@@ -27,6 +30,7 @@ from .settings import mask_url
 
 logger = logging.getLogger(__name__)
 
+DESCRIPTIONS_FILE = Path(__file__).with_name("collection_descriptions.json")
 PROBE_CONCURRENCY = 8
 MAX_COLLECTION_PAGES = 20
 STAC_TIMEOUT_SECONDS = 15
@@ -86,12 +90,13 @@ async def planetary_computer_documents() -> Tuple[List[CollectionDocument], str]
         dashboard_catalog.renderable_collections().items(), key=lambda item: item[1]
     ):
         start, end = _interval(intervals.get(stac_id))
+        text = _search_text(config_id, stac_id)
         documents.append(
             CollectionDocument(
                 id=stac_id,
-                title=get_collection_title(config_id) or stac_id,
-                description=get_collection_description(config_id) or "",
-                keywords=tuple(get_collection_keywords(config_id) or ()),
+                title=text["title"],
+                description=text["description"],
+                keywords=tuple(text["keywords"]),
                 bbox=normalize_bbox(bboxes.get(stac_id)),
                 start=start,
                 end=end,
@@ -99,6 +104,25 @@ async def planetary_computer_documents() -> Tuple[List[CollectionDocument], str]
             )
         )
     return documents, reason
+
+
+@lru_cache(maxsize=1)
+def _description_overrides() -> Dict[str, Dict[str, Any]]:
+    """Load vetted search text for collections with placeholder descriptions."""
+    data = json.loads(DESCRIPTIONS_FILE.read_text(encoding="utf-8"))
+    return {key: value for key, value in data.items() if not key.startswith("_")}
+
+
+def _search_text(config_id: str, stac_id: str) -> Dict[str, Any]:
+    """Return title, description and keywords, preferring the vetted overrides."""
+    override = _description_overrides().get(stac_id)
+    if override:
+        return override
+    return {
+        "title": get_collection_title(config_id) or stac_id,
+        "description": get_collection_description(config_id) or "",
+        "keywords": get_collection_keywords(config_id) or [],
+    }
 
 
 def private_document(collection: Dict[str, Any]) -> CollectionDocument:

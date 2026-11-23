@@ -189,3 +189,195 @@ class TestContextualDashboardPrompt:
         prompt = await self._prompt()
         assert "RESULTS: 0 satellite data item(s) found." in prompt
         assert "DASHBOARD" not in prompt
+
+
+# ===========================================================================
+# collection_mapping_agent — candidates from vector search (add-vector-search)
+# ===========================================================================
+
+
+class _HitsBackend:
+    """Vector backend returning fixed hits, optionally slow."""
+
+    read_only = True
+
+    def __init__(self, ids, delay: float = 0.0) -> None:
+        self.ids = ids
+        self.delay = delay
+
+    async def search(self, query):
+        import asyncio
+
+        from services.vector_search.backends.base import BackendHit
+
+        await asyncio.sleep(self.delay)
+        return [
+            BackendHit(id=cid, score=1.0 - i / 100, title=cid.upper())
+            for i, cid in enumerate(self.ids)
+        ]
+
+
+def _ready_index(ids, delay: float = 0.0, private=None, timeout: str = "5"):
+    """Install a ready vector index (HTTP retriever) returning *ids*."""
+    from services.vector_search import index as vector_index
+    from services.vector_search.index import STATUS_READY, VectorIndex
+    from services.vector_search.settings import VectorSearchSettings
+
+    settings = VectorSearchSettings.from_env(
+        {
+            "VECTOR_SEARCH_URL": "https://retriever.example/search",
+            "VECTOR_SEARCH_TIMEOUT_SECONDS": timeout,
+        }
+    )
+    index = VectorIndex(settings, backend=_HitsBackend(ids, delay), stac_api_url="")
+    index.status = STATUS_READY
+    index.private_renderable = set(private or ())
+    vector_index._index = index
+    return index
+
+
+def _translator(llm_content: str, local_ids=None):
+    from generic_query_translator import GenericQueryTranslator
+
+    translator = GenericQueryTranslator()
+    translator._llm = _fake_client(llm_content)
+    discovered = [{"id": cid, "title": cid} for cid in (local_ids or [])]
+    translator._discover_stac_collections = AsyncMock(return_value=discovered)
+    return translator
+
+
+def _prompt(translator) -> str:
+    return translator._llm.chat.call_args.args[0][0]["content"]
+
+
+SPREAD = ["ms-buildings", "mtbs", "naip", "esa-worldcover"]
+
+
+class TestCollectionSelectionWithVectorSearch:
+    @pytest.mark.asyncio
+    async def test_retrieved_collection_is_offered(self) -> None:
+        _ready_index(SPREAD)
+        translator = _translator('["ms-buildings"]')
+        result = await translator.collection_mapping_agent(
+            "show me building footprints in Denver"
+        )
+        prompt = _prompt(translator)
+        assert result == ["ms-buildings"]
+        assert "ms-buildings : MS-BUILDINGS" in prompt
+        assert "hls2-s30" not in prompt
+
+    @pytest.mark.asyncio
+    async def test_defaults_always_offered(self) -> None:
+        _ready_index(["esa-worldcover"])
+        translator = _translator('["sentinel-2-l2a"]')
+        assert await translator.collection_mapping_agent("show me Paris") == [
+            "sentinel-2-l2a"
+        ]
+        prompt = _prompt(translator)
+        assert "sentinel-2-l2a : " in prompt and "landsat-c2-l2 : " in prompt
+
+    @pytest.mark.asyncio
+    async def test_only_renderable_hits_offered_and_max_twelve(self) -> None:
+        from services.dashboard_catalog import renderable_collection_ids
+
+        ids = ["private-unrenderable"] + renderable_collection_ids()[:20]
+        _ready_index(ids)
+        translator = _translator('["private-unrenderable"]')
+        result = await translator.collection_mapping_agent("anything")
+        offered = [
+            line
+            for line in _prompt(translator).splitlines()
+            if " : " in line and not line.startswith("AVAILABLE")
+        ]
+        assert "private-unrenderable" not in _prompt(translator)
+        assert len(offered) == 14  # 12 hits plus the two defaults
+        assert "private-unrenderable" not in result
+
+    @pytest.mark.asyncio
+    async def test_unoffered_ids_discarded_and_max_three(self) -> None:
+        _ready_index(SPREAD)
+        translator = _translator(
+            '["jrc-gsw-occurrence", "mtbs", "naip", "esa-worldcover", "ms-buildings"]'
+        )
+        result = await translator.collection_mapping_agent("fires")
+        assert result == ["mtbs", "naip", "esa-worldcover"]
+
+    @pytest.mark.asyncio
+    async def test_nothing_usable_falls_back_to_best_hits(self) -> None:
+        _ready_index(SPREAD)
+        translator = _translator('["jrc-gsw-occurrence"]')
+        result = await translator.collection_mapping_agent("water")
+        assert result == ["ms-buildings", "mtbs", "naip"]
+
+    @pytest.mark.asyncio
+    async def test_llm_error_uses_top_three_hits(self) -> None:
+        _ready_index(SPREAD)
+        translator = _translator("")
+        translator._llm.chat.side_effect = RuntimeError("LLM down")
+        result = await translator.collection_mapping_agent("burn severity")
+        assert result == ["ms-buildings", "mtbs", "naip"]
+
+    @pytest.mark.asyncio
+    async def test_no_hits_and_llm_error_uses_keyword_rules(self) -> None:
+        _ready_index([])
+        translator = _translator("")
+        translator._llm.chat.side_effect = RuntimeError("LLM down")
+        result = await translator.collection_mapping_agent("wildfire near Sherbrooke")
+        assert result == ["landsat-c2-l2", "sentinel-2-l2a", "modis-14A1-061"]
+
+    @pytest.mark.asyncio
+    async def test_disabled_uses_fixed_list(self) -> None:
+        from generic_query_translator import FALLBACK_COLLECTION_LIST
+
+        translator = _translator('["hls2-s30"]')
+        assert await translator.collection_mapping_agent("q") == ["hls2-s30"]
+        assert FALLBACK_COLLECTION_LIST in _prompt(translator)
+
+    @pytest.mark.asyncio
+    async def test_building_and_llm_failure_uses_keyword_rules(self) -> None:
+        index = _ready_index(SPREAD)
+        index.status = "building"
+        translator = _translator("not json")
+        result = await translator.collection_mapping_agent("wildfire near Sherbrooke")
+        assert result == ["landsat-c2-l2", "sentinel-2-l2a", "modis-14A1-061"]
+
+    @pytest.mark.asyncio
+    async def test_retrieval_timeout_uses_fixed_list_without_status_change(
+        self,
+    ) -> None:
+        from generic_query_translator import FALLBACK_COLLECTION_LIST
+
+        index = _ready_index(SPREAD, delay=1.0, timeout="0.05")
+        translator = _translator('["naip"]')
+        assert await translator.collection_mapping_agent("aerial") == ["naip"]
+        assert FALLBACK_COLLECTION_LIST in _prompt(translator)
+        assert index.status == "ready"
+
+    @pytest.mark.asyncio
+    async def test_private_collection_routed_to_private_stac(self) -> None:
+        _ready_index(
+            ["orthophotos-sherbrooke-2024", "naip"],
+            private={"orthophotos-sherbrooke-2024"},
+        )
+        translator = _translator(
+            '["orthophotos-sherbrooke-2024"]', local_ids=["orthophotos-sherbrooke-2024"]
+        )
+        result = await translator.collection_mapping_agent(
+            "aerial photos of Sherbrooke"
+        )
+        assert result == ["orthophotos-sherbrooke-2024"]
+        assert translator.determine_stac_source("q", {"collections": result}) == (
+            "local_stac"
+        )
+
+    @pytest.mark.asyncio
+    async def test_mixed_sources_keep_first_api_only(self) -> None:
+        _ready_index(
+            ["orthophotos-sherbrooke-2024"], private={"orthophotos-sherbrooke-2024"}
+        )
+        translator = _translator(
+            '["orthophotos-sherbrooke-2024", "sentinel-2-l2a"]',
+            local_ids=["orthophotos-sherbrooke-2024"],
+        )
+        result = await translator.collection_mapping_agent("aerial photos")
+        assert result == ["orthophotos-sherbrooke-2024"]

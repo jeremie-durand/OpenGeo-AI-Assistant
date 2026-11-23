@@ -1,6 +1,7 @@
 """CLI: idempotent builds, Parquet export reusable as an external index."""
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Any
 
@@ -82,3 +83,95 @@ def test_status_does_not_build(tmp_path: Path, capsys) -> None:
     assert cli.main(["status"], lambda: index) == 0
     assert embedder.embedded == []
     assert '"status": "ready"' in capsys.readouterr().out
+
+
+class FakeTranslator:
+    """Answers from fixed per-path tables instead of an LLM."""
+
+    def __init__(self, fixed: dict, retrieval: dict) -> None:
+        self.fixed, self.retrieval = fixed, retrieval
+
+    async def _fixed_list_selection(self, query: str) -> list:
+        return self.fixed[query]
+
+    async def _candidate_selection(self, query: str, hits: list) -> list:
+        return self.retrieval[query]
+
+
+def _questions(path: Path) -> Path:
+    path.write_text(
+        json.dumps(
+            {
+                "questions": [
+                    {"lang": "en", "question": "fires", "acceptable": ["mtbs"]},
+                    {"lang": "fr", "question": "feux", "acceptable": ["mtbs"]},
+                ]
+            }
+        )
+    )
+    return path
+
+
+def _evaluate(tmp_path: Path, translator: FakeTranslator) -> int:
+    index = managed_index(tmp_path / "i.parquet", Sources(), FakeEmbedder())
+    questions = str(_questions(tmp_path / "q.json"))
+    return cli.main(
+        ["evaluate", "--questions", questions], lambda: index, lambda: translator
+    )
+
+
+def test_evaluate_passes_when_retrieval_is_at_least_as_good(
+    tmp_path: Path, capsys
+) -> None:
+    translator = FakeTranslator(
+        fixed={"fires": ["mtbs"], "feux": ["naip"]},
+        retrieval={"fires": ["mtbs"], "feux": ["mtbs", "naip"]},
+    )
+    assert _evaluate(tmp_path, translator) == 0
+    out = capsys.readouterr().out
+    assert "en    1/1 (1.00)      1/1 (1.00)" in out
+    assert "fr    0/1 (0.00)      1/1 (1.00)" in out
+    assert "MISS fixed     feux -> ['naip']" in out
+    assert out.rstrip().endswith("PASS")
+
+
+def test_evaluate_fails_when_retrieval_loses_in_one_language(
+    tmp_path: Path, capsys
+) -> None:
+    translator = FakeTranslator(
+        fixed={"fires": ["mtbs"], "feux": ["mtbs"]},
+        retrieval={"fires": ["mtbs"], "feux": []},
+    )
+    assert _evaluate(tmp_path, translator) == 1
+    assert "FAIL" in capsys.readouterr().out
+
+
+def test_evaluate_refuses_when_index_is_disabled(tmp_path: Path, capsys) -> None:
+    index = VectorIndex(
+        VectorSearchSettings.from_env({"VECTOR_SEARCH_ENABLED": "false"})
+    )
+    questions = str(_questions(tmp_path / "q.json"))
+    status = cli.main(
+        ["evaluate", "--questions", questions], lambda: index, lambda: None
+    )
+    assert status == 2
+    assert "not ready" in capsys.readouterr().err
+
+
+def test_evaluate_reports_missing_questions(tmp_path: Path, capsys) -> None:
+    index = managed_index(tmp_path / "i.parquet", Sources(), FakeEmbedder())
+    status = cli.main(
+        ["evaluate", "--questions", str(tmp_path / "absent.json")],
+        lambda: index,
+        lambda: None,
+    )
+    assert status == 2
+    assert "Evaluation set not found" in capsys.readouterr().err
+
+
+def test_default_evaluation_set_ships_with_the_package() -> None:
+    from services.vector_search import evaluation
+
+    questions = evaluation.load_questions(evaluation.DEFAULT_QUESTIONS)
+    assert len(questions) >= 30
+    assert {item["lang"] for item in questions} == {"en", "fr"}

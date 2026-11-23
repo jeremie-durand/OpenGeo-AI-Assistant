@@ -4,6 +4,7 @@ Usage (inside the backend container):
     python -m services.vector_search.cli build
     python -m services.vector_search.cli export --out /app/data/export.parquet
     python -m services.vector_search.cli status
+    python -m services.vector_search.cli evaluate [--questions FILE]
 """
 
 import argparse
@@ -11,18 +12,28 @@ import asyncio
 import json
 import os
 import sys
-from typing import Callable, List, Optional
+from pathlib import Path
+from typing import Any, Callable, List, Optional
 
+from . import evaluation
 from .backends.parquet import ParquetBackend
 from .index import VectorIndex
 from .settings import MODE_EXTERNAL, VectorSearchSettings
 
 IndexFactory = Callable[[], VectorIndex]
+TranslatorFactory = Callable[[], Any]
 
 
 def _default_index() -> VectorIndex:
     """Return an index configured from the environment."""
     return VectorIndex(VectorSearchSettings.from_env())
+
+
+def _default_translator() -> Any:
+    """Return the query translator configured from the environment's LLM."""
+    from generic_query_translator import GenericQueryTranslator
+
+    return GenericQueryTranslator()
 
 
 def _usable(index: VectorIndex) -> Optional[str]:
@@ -77,8 +88,28 @@ async def status(index: VectorIndex) -> int:
     return 0
 
 
+async def evaluate(index: VectorIndex, translator: Any, questions: Path) -> int:
+    """Compare the fixed list with retrieval candidates using a real LLM.
+
+    Exits 1 when retrieval scores below the fixed list in any language.
+    """
+    if not questions.is_file():
+        print(f"Evaluation set not found: {questions}", file=sys.stderr)
+        return 2
+    await index.start()
+    if not index.ready:
+        print(f"Vector search is not ready: {index.reason}", file=sys.stderr)
+        return 2
+    items = evaluation.load_questions(questions)
+    report = await evaluation.evaluate(translator, index, items)
+    print("\n".join(report.lines()))
+    return 0 if report.passes() else 1
+
+
 def main(
-    argv: Optional[List[str]] = None, factory: IndexFactory = _default_index
+    argv: Optional[List[str]] = None,
+    factory: IndexFactory = _default_index,
+    translator_factory: TranslatorFactory = _default_translator,
 ) -> int:
     """Parse *argv* and run one command; returns the process exit code."""
     parser = argparse.ArgumentParser(prog="python -m services.vector_search.cli")
@@ -89,12 +120,23 @@ def main(
     commands.add_parser(
         "status", help="check the backend without building and print its status"
     )
+    evaluate_parser = commands.add_parser(
+        "evaluate", help="compare the fixed list with retrieval using the LLM"
+    )
+    evaluate_parser.add_argument(
+        "--questions",
+        type=Path,
+        default=evaluation.DEFAULT_QUESTIONS,
+        help="evaluation set (JSON)",
+    )
     args = parser.parse_args(argv)
     index = factory()
     if args.command == "build":
         return asyncio.run(build(index))
     if args.command == "export":
         return asyncio.run(export(index, args.out))
+    if args.command == "evaluate":
+        return asyncio.run(evaluate(index, translator_factory(), args.questions))
     return asyncio.run(status(index))
 
 
