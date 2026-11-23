@@ -381,3 +381,16 @@ class TestCollectionSelectionWithVectorSearch:
         )
         result = await translator.collection_mapping_agent("aerial photos")
         assert result == ["orthophotos-sherbrooke-2024"]
+
+
+FIXED_LIST_UNRENDERABLE = {"nasa-nex-gddp-cmip6"}
+
+
+def test_fixed_list_ids_are_renderable_collections() -> None:
+    from generic_query_translator import FALLBACK_COLLECTION_LIST
+    from services.dashboard_catalog import renderable_collection_ids
+
+    ids = {line.split(" : ")[0] for line in FALLBACK_COLLECTION_LIST.splitlines()}
+    unknown = ids - set(renderable_collection_ids()) - FIXED_LIST_UNRENDERABLE
+    assert unknown == set()
+    assert {"jrc-gsw", "noaa-cdr-sea-surface-temperature-whoi"} <= ids
