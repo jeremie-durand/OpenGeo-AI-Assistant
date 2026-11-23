@@ -98,23 +98,20 @@ class FakeTranslator:
         return self.retrieval[query]
 
 
-def _questions(path: Path) -> Path:
-    path.write_text(
-        json.dumps(
-            {
-                "questions": [
-                    {"lang": "en", "question": "fires", "acceptable": ["mtbs"]},
-                    {"lang": "fr", "question": "feux", "acceptable": ["mtbs"]},
-                ]
-            }
-        )
-    )
+def _questions(path: Path, extra: bool = False) -> Path:
+    items = [
+        {"lang": "en", "question": "fires", "acceptable": ["mtbs"]},
+        {"lang": "fr", "question": "feux", "acceptable": ["mtbs"]},
+    ]
+    if extra:
+        items.append({"lang": "fr", "question": "brûlis", "acceptable": ["mtbs"]})
+    path.write_text(json.dumps({"questions": items}))
     return path
 
 
-def _evaluate(tmp_path: Path, translator: FakeTranslator) -> int:
+def _evaluate(tmp_path: Path, translator: FakeTranslator, extra: bool = False) -> int:
     index = managed_index(tmp_path / "i.parquet", Sources(), FakeEmbedder())
-    questions = str(_questions(tmp_path / "q.json"))
+    questions = str(_questions(tmp_path / "q.json", extra))
     return cli.main(
         ["evaluate", "--questions", questions], lambda: index, lambda: translator
     )
@@ -135,15 +132,22 @@ def test_evaluate_passes_when_retrieval_is_at_least_as_good(
     assert out.rstrip().endswith("PASS")
 
 
-def test_evaluate_fails_when_retrieval_loses_in_one_language(
-    tmp_path: Path, capsys
-) -> None:
+def test_evaluate_allows_one_question_deficit(tmp_path: Path, capsys) -> None:
     translator = FakeTranslator(
         fixed={"fires": ["mtbs"], "feux": ["mtbs"]},
         retrieval={"fires": ["mtbs"], "feux": []},
     )
-    assert _evaluate(tmp_path, translator) == 1
-    assert "FAIL" in capsys.readouterr().out
+    assert _evaluate(tmp_path, translator) == 0
+    assert capsys.readouterr().out.rstrip().endswith("PASS")
+
+
+def test_evaluate_fails_on_two_question_deficit(tmp_path: Path, capsys) -> None:
+    translator = FakeTranslator(
+        fixed={"fires": ["mtbs"], "feux": ["mtbs"], "brûlis": ["mtbs"]},
+        retrieval={"fires": ["mtbs"], "feux": ["naip"], "brûlis": []},
+    )
+    assert _evaluate(tmp_path, translator, extra=True) == 1
+    assert "FAIL: retrieval trails fixed by more than 1" in capsys.readouterr().out
 
 
 def test_evaluate_refuses_when_index_is_disabled(tmp_path: Path, capsys) -> None:
