@@ -9,7 +9,7 @@ python-dotenv==1.2.4
 numpy==2.5.5
 openai==3.57.0
 anthropic==2.3.0
-semantic-kernel==1.45.0
+semantic-kernel==1.47.0
 planetary-computer==1.0.0
 pystac-client==0.9.1
 stac-pydantic==3.7.2
