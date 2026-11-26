@@ -24,6 +24,7 @@ FAKE_ENV = {
     "RATE_LIMIT_LLM": "1000/minute",
     "RATE_LIMIT_SEARCH": "1000/minute",
     "STAC_API_URL": "http://localhost:8081",
+    "VECTOR_SEARCH_ENABLED": "false",
 }
 os.environ["STAC_API_URL"] = FAKE_ENV["STAC_API_URL"]
 
@@ -53,3 +54,13 @@ def offline_dashboard_catalog(monkeypatch):
         raise aiohttp.ClientConnectionError("network disabled in tests")
 
     monkeypatch.setattr(dashboard_catalog, "fetch_upstream_collections", offline)
+
+
+@pytest.fixture(autouse=True)
+def reset_vector_index():
+    """Rebuild the vector search index from each test's environment."""
+    from services.vector_search import index as vector_index
+
+    vector_index.reset_index()
+    yield
+    vector_index.reset_index()

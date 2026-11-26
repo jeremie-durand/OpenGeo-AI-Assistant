@@ -10,6 +10,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Added
 
+- Vector search over STAC collections. The backend embeds every renderable Planetary Computer collection and every collection of your `STAC_API_URL`, in French or English, and keeps the index fresh in the background. `/api/query` now lets the LLM choose among the closest collections instead of a fixed list of 30, falling back to that list whenever the index is disabled, still building or unavailable.
+- Vector backends chosen by `VECTOR_SEARCH_URL`: a built-in Parquet index (default, no setup), a local or remote Parquet file (`file://`, `s3://`, `https://`), PostgreSQL with pgvector, MongoDB `$vectorSearch`, or your own HTTP retriever.
+- New settings in `.env.example`: `VECTOR_SEARCH_ENABLED`, `VECTOR_SEARCH_URL`, `VECTOR_SEARCH_MODE`, `VECTOR_SEARCH_TIMEOUT_SECONDS`, `VECTOR_SEARCH_TABLE`, `VECTOR_SEARCH_COLLECTION`, `VECTOR_SEARCH_MONGO_INDEX`, `VECTOR_SEARCH_API_KEY`, and `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION`, `AWS_ENDPOINT_URL` for `s3://` Parquet files. The image also sets `VECTOR_SEARCH_MODEL_DIR` and `DUCKDB_EXTENSION_DIR` to the bundled model and extension.
+- `POST /api/datasets/search`: finds collections by meaning, with optional bbox and date filters, without calling the LLM. Rate limited by `RATE_LIMIT_SEARCH`.
+- `/api/health` reports the vector search status (`disabled`, `building`, `ready` or `degraded`) and the number of indexed collections.
+- `python -m services.vector_search.cli` with `build`, `export`, `status` and `evaluate`, the last comparing the fixed list with retrieval candidates using the configured LLM.
+- The backend image bundles the `paraphrase-multilingual-MiniLM-L12-v2` embedding model (Apache License 2.0) and the DuckDB `httpfs` extension, so the default vector search works offline. See `THIRD_PARTY_NOTICES.md`.
+
 - `chat.welcome` translation key (EN/FR) for the chat greeting, which was the last hardcoded English string in the chat UI.
 - `isWelcome` flag on `ChatMessage`, marking the mount-time greeting so it can be re-translated in place.
 - `src/i18n/__tests__/translations.test.tsx` covering catalog key parity between languages and the host language contract (`sdss-lang` + `sdss-lang-change`, including the cross-tab `storage` path).
@@ -35,6 +43,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Removed
 
+- `opengeo-ai-assistant/ai-search/`, the unused Azure AI Search scripts inherited from Earth Copilot, replaced by the built-in vector search.
+- The dead VEDA search code in the web UI: `src/services/vedaSearchService.ts` and, in `Chat.tsx`, `privateSearchMutation` and the `isVedaMode` state. It called an Azure search endpoint configured by `VITE_SEARCH_*` variables that no deployment sets.
 - `esbuild: { drop: ['console', 'debugger'] }` — the option needs the esbuild transform, which Vite 8 no longer installs, so it was dead configuration. Console stripping is preserved through terser instead (see Changed).
 - `src/components/IntelligentLandingPage.tsx` — nothing imported it, and it called an `apiService.routeQuery()` that does not exist.
 

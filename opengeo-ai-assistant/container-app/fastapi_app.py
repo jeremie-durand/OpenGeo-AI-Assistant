@@ -15,6 +15,7 @@ from quickstart_cache import get_quickstart_stats  # [LAUNCH] Pre-computed cache
 from rate_limit_middleware import RateLimitMiddleware
 from routers import (
     dashboard,
+    datasets,
     geoint_analysis,
     geoint_climate,
     geoint_terrain,
@@ -25,6 +26,7 @@ from routers import (
     system,
 )
 from services.dashboard_catalog import warm_catalog
+from services.vector_search.index import get_index as get_vector_index
 
 logging.info("[OK] GEOINT endpoints available (lazy import mode)")
 
@@ -96,10 +98,12 @@ async def lifespan(app: FastAPI):
     )
 
     catalog_warmup = asyncio.create_task(warm_catalog())
+    vector_index = asyncio.create_task(get_vector_index().run())
 
     yield
 
     catalog_warmup.cancel()
+    vector_index.cancel()
 
 
 # Initialize FastAPI app
@@ -157,6 +161,7 @@ app.include_router(geoint_climate.router)
 app.include_router(geoint_analysis.router)
 app.include_router(query.router)
 app.include_router(dashboard.router)
+app.include_router(datasets.router)
 
 
 @app.exception_handler(Exception)

@@ -15,6 +15,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _vector_search_check() -> dict:
+    """Return the vector search status; problems never fail the health check."""
+    try:
+        from services.vector_search.index import get_index
+
+        return get_index().describe()
+    except Exception as e:
+        logger.warning(f"[VS] vector search health check failed: {type(e).__name__}")
+        return {"status": "degraded", "reason": type(e).__name__}
+
+
 @router.get("/api/health")
 async def health_check():
     """Lightweight health check — no GPT calls, no verbose logging."""
@@ -72,6 +83,9 @@ async def health_check():
                 }
         else:
             checks["private_stac_api"] = {"status": "not_configured"}
+
+        # 4. Vector search — reported only; never changes the overall status
+        checks["vector_search"] = _vector_search_check()
 
         overall = "healthy" if all_healthy else "degraded"
         logger.info(

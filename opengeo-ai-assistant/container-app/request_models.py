@@ -319,4 +319,53 @@ class DashboardContext(BaseModel):
     latest_datetime: Optional[datetime] = None
 
 
+def _validate_query_text(value: str) -> str:
+    """Reject queries that are blank once trimmed."""
+    if not value.strip():
+        raise ValueError("query must not be blank")
+    return value
+
+
+def _validate_datetime_filter(value: str) -> str:
+    """Require an RFC 3339 instant or interval (`..` for an open end)."""
+    from services.vector_search.documents import parse_datetime_filter
+
+    parse_datetime_filter(value)
+    return value
+
+
+DatetimeFilter = Annotated[
+    str, Field(max_length=100), AfterValidator(_validate_datetime_filter)
+]
+
+
+class DatasetSearchRequest(BaseModel):
+    """POST /api/datasets/search — find STAC collections by meaning."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: Annotated[
+        str, Field(min_length=1, max_length=500), AfterValidator(_validate_query_text)
+    ]
+    k: int = Field(default=10, ge=1, le=50)
+    bbox: Optional[Bbox] = None
+    datetime: Optional[DatetimeFilter] = None
+
+
+class DatasetSearchResult(BaseModel):
+    """One collection ranked by meaning."""
+
+    id: str
+    title: str
+    score: float
+    renderable: bool
+    source: str
+
+
+class DatasetSearchResponse(BaseModel):
+    """Ranked collections, best first."""
+
+    results: List[DatasetSearchResult]
+
+
 QueryRequest.model_rebuild()

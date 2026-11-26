@@ -1,0 +1,33 @@
+{
+  "_comment": "Search text for renderable Planetary Computer collections whose entry in pc_rendering_config.json is only a placeholder. Used by vector search instead of that placeholder; edit here, not in the generated config.",
+  "esa-cci-lc": {
+    "title": "ESA Climate Change Initiative Land Cover",
+    "description": "Global annual land cover maps at 300 m from the ESA Climate Change Initiative, 1992 to 2020, with 22 classes following the UN Land Cover Classification System, including cropland, forest, grassland, wetland, urban areas, bare areas and water bodies.",
+    "keywords": ["Land Cover", "ESA", "CCI", "Global", "Annual", "Climate Change"]
+  },
+  "hgb": {
+    "title": "Harmonized Global Biomass",
+    "description": "Global maps of aboveground and belowground biomass carbon density for the year 2010 at 300 m, harmonizing woody, grassland, cropland and tundra biomass estimates.",
+    "keywords": ["Biomass", "Carbon", "Vegetation", "Forest", "Global"]
+  },
+  "hrea": {
+    "title": "HREA: High Resolution Electricity Access",
+    "description": "Settlement-level estimates of electricity access, reliability and usage derived from VIIRS nighttime lights, yearly from 2012 to 2020.",
+    "keywords": ["Electricity", "Energy", "Night lights", "VIIRS", "Settlements", "Infrastructure"]
+  },
+  "jrc-gsw": {
+    "title": "JRC Global Surface Water",
+    "description": "Location and temporal distribution of surface water from 1984 to 2021 mapped from Landsat imagery at 30 m by the European Commission Joint Research Centre: water occurrence, change, seasonality, recurrence, transitions and maximum extent of lakes, rivers and reservoirs.",
+    "keywords": ["Surface water", "Water", "Lakes", "Rivers", "Floods", "JRC", "Landsat", "Global"]
+  },
+  "mobi": {
+    "title": "MoBI: Map of Biodiversity Importance",
+    "description": "Maps of species richness and range-size rarity for imperiled species across the contiguous United States at 990 m, from NatureServe, used to identify areas of biodiversity importance for conservation.",
+    "keywords": ["Biodiversity", "Species", "Conservation", "Habitat", "United States"]
+  },
+  "noaa-c-cap": {
+    "title": "NOAA C-CAP Regional Land Cover",
+    "description": "NOAA Coastal Change Analysis Program land cover for the coastal United States at 30 m from 1975 to 2016, mapping wetlands, developed areas, forest, agriculture and coastal change over time.",
+    "keywords": ["Land Cover", "Coastal", "Wetlands", "NOAA", "United States", "Change"]
+  }
+}

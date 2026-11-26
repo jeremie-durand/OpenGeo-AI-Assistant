@@ -11,6 +11,7 @@ EXPECTED_ROUTES = {
     ("GET", "/api/config"),
     ("GET", "/api/stac/collections"),
     ("POST", "/api/query"),
+    ("POST", "/api/datasets/search"),
     ("POST", "/api/sign-mosaic-url"),
     ("POST", "/api/stac-search"),
     ("POST", "/api/veda-search"),

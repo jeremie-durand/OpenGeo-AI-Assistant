@@ -24,6 +24,7 @@ _SEARCH_EXACT = {
     "/api/sign-mosaic-url",
     "/api/session-reset",
     "/api/dashboard/stats",
+    "/api/datasets/search",
 }
 
 _storage = MemoryStorage()
